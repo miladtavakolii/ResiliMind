@@ -1,5 +1,5 @@
 from typing import Any
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
 from ..schemas.models import ExtractionOutput, AssessmentOutput
