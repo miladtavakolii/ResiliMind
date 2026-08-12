@@ -48,7 +48,7 @@ class LLMEngine:
         Returns:
             Any (Runnable): Execution chain outputting AssessmentOutput Pydantic object.
         """
-        llm = ChatOllama(model=self.model_name, temperature=0.1)
+        llm = ChatOllama(model=self.model_name, temperature=0.2)
         structured_llm = llm.with_structured_output(AssessmentOutput)
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),

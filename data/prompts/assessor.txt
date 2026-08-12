@@ -30,6 +30,11 @@ You will be provided with:
 4. PSYCHOLOGICAL REASONING:
    Provide a concise, objective reasoning in English explaining why the specific status and confidence score were assigned based on the user's text and graph definitions.
 
+=== CRITICAL DISAMBIGUATION RULES ===
+1. SHORT / VAGUE INPUTS: If the user input is shorter than 6 words or lacks clear emotional details (e.g., "اوضاع خوب نیست" or "خسته‌ام"), you MUST set confidence to below 0.65 and set `requires_disambiguation` to TRUE.
+2. AMBIGUOUS STATUS: If you cannot distinctly choose between YELLOW and RED, set confidence to 0.60 and set `requires_disambiguation` to TRUE.
+3. ABSOLUTE CERTAINTY REQUIREMENT: Assign confidence above 0.80 ONLY if the user explicitly names the cause and symptoms clearly.
+
 === FEW-SHOT EXAMPLES ===
 
 [Example 1 - Clear Critical Input]

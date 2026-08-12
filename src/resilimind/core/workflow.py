@@ -14,20 +14,27 @@ from .agents import (
 
 def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"]:
     """
-    Conditional edge router that determines the next step after the resilience assessment.
-    
-    Args:
-        state (AgentState): The current state dictionary of the workflow.
-        
-    Returns:
-        Literal["questioner", "advisor"]: The exact string identifier of the next node to execute.
+    Conditional edge router that determines whether to ask a clarifying question
+    or to provide final psychological advice.
     """
-    # Route to the 'questioner' node if the assessor flagged the input as ambiguous 
-    # or if the confidence score fell below the required threshold.
+    # 1. Check explicit flag set by Assessor
     if state.get("requires_disambiguation", False):
         return "questioner"
     
-    # Otherwise, route to the 'advisor' node to generate psychological interventions.
+    # 2. Check individual confidence scores in assessments
+    assessments = state.get("assessments", [])
+    
+    # If no nodes were extracted or active, ask for clarification
+    if not assessments:
+        return "questioner"
+
+    # If any confidence score is below 0.70 threshold, force disambiguation
+    for item in assessments:
+        confidence = item.get("confidence", 1.0)
+        if confidence < 0.70:
+            print(f"Low confidence detected ({confidence}). Routing to Questioner...")
+            return "questioner"
+            
     return "advisor"
 
 
