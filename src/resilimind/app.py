@@ -1,9 +1,9 @@
 from typing import Dict, Any, List, Optional
 import streamlit as st
+from langchain_core.messages import HumanMessage
 
-# Import the workflow factory function from the core layer
+# Import core workflow and database authentication modules
 from resilimind.core.workflow import build_workflow
-# Import database authentication modules
 from resilimind.core.database import init_db, register_user, authenticate_user
 
 # -----------------------------------------------------------------------------
@@ -120,13 +120,12 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 # 3. Session State & Authentication UI
 # -----------------------------------------------------------------------------
-# Initialize authentication variables
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "username" not in st.session_state:
     st.session_state.username = None
 
-# Block rendering the main chat interface if the user is unauthenticated
+# Render login/registration interface if unauthenticated
 if st.session_state.user_id is None:
     st.markdown("<h2 style='text-align: center; margin-top: 50px;'>ورود به سامانه ResiliMind</h2>", unsafe_allow_html=True)
     
@@ -135,7 +134,7 @@ if st.session_state.user_id is None:
         st.markdown("<div class='auth-box'>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["ورود", "ثبت‌نام"])
         
-        # Login Tab
+        # Login Form
         with tab1:
             login_user: str = st.text_input("نام کاربری", key="log_user")
             login_pass: str = st.text_input("رمز عبور", type="password", key="log_pass")
@@ -153,7 +152,7 @@ if st.session_state.user_id is None:
                 else:
                     st.warning("لطفاً همه فیلدها را پر کنید.")
                     
-        # Registration Tab
+        # Registration Form
         with tab2:
             reg_user: str = st.text_input("نام کاربری جدید", key="reg_user")
             reg_pass: str = st.text_input("رمز عبور", type="password", key="reg_pass")
@@ -169,19 +168,18 @@ if st.session_state.user_id is None:
                     
         st.markdown("</div>", unsafe_allow_html=True)
         
-    # Halt execution here; do not proceed to the chat app until logged in
-    st.stop() 
+    st.stop()
 
 
 # =============================================================================
-# 4. Main Application Logic (Executes ONLY for authenticated users)
+# 4. Main Application Logic & Persistent State Synchronization
 # =============================================================================
 
 @st.cache_resource
 def load_graph_application() -> Any:
     """
     Builds and caches the compiled LangGraph execution graph instance.
-    
+
     Returns:
         Any (CompiledStateGraph): The runnable state machine.
     """
@@ -189,18 +187,32 @@ def load_graph_application() -> Any:
 
 app: Any = load_graph_application()
 
-# Initialize chat history uniquely for the logged-in user session
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": f"سلام {st.session_state.username} عزیز 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری روانی.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
-        }
-    ]
+# Configure thread_id specific to the authenticated user ID
+config: Dict[str, Any] = {"configurable": {"thread_id": str(st.session_state.user_id)}}
 
-# Initialize last execution state for real-time sidebar diagnostics
-if "last_state" not in st.session_state:
-    st.session_state.last_state = None
+# Sync and fetch existing conversation checkpoint state from SQLite database
+current_graph_state: Any = app.get_state(config)
+
+# Populate or restore session chat history from SQLite checkpoint if available
+if "messages" not in st.session_state or not st.session_state.messages:
+    stored_messages: List[Any] = current_graph_state.values.get("messages", [])
+    if stored_messages:
+        # Convert LangGraph Message objects to Streamlit chat format
+        st.session_state.messages = []
+        for msg in stored_messages:
+            role = "user" if msg.type == "human" else "assistant"
+            st.session_state.messages.append({"role": role, "content": msg.content})
+    else:
+        # Default welcome message for first-time users
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": f"سلام {st.session_state.username} عزیز 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری روانی.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
+            }
+        ]
+
+# Restore last graph execution state for dashboard metrics rendering
+st.session_state.last_state = current_graph_state.values if current_graph_state.values else None
 
 
 # -----------------------------------------------------------------------------
@@ -276,14 +288,6 @@ with st.sidebar:
     else:
         st.info("با ارسال اولین پیام، لایه‌های پردازشی گراف و وضعیت ارزیابی در این پنل قرار می‌گیرند.")
 
-    st.divider()
-
-    # Reset Session Action (Clears current chat history, keeps user logged in)
-    if st.button("🔄 شروع گفتگو جدید", use_container_width=True):
-        st.session_state.messages = [st.session_state.messages[0]]
-        st.session_state.last_state = None
-        st.rerun()
-
 
 # -----------------------------------------------------------------------------
 # 6. Main Interactive Chat Interface
@@ -310,7 +314,7 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # 2. Process message through LangGraph state machine
+    # 2. Process message through LangGraph state machine with persistent thread config
     with st.chat_message("assistant"):
         with st.spinner("در حال تحلیل پیام، واکشی از گراف دانش و ارزیابی روانی..."):
 
@@ -321,11 +325,12 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
                 "subgraph_context": "",
                 "assessments": [],
                 "requires_disambiguation": False,
-                "final_response": ""
+                "final_response": "",
+                "messages": [HumanMessage(content=user_input)]
             }
 
-            # Invoke state machine pipeline
-            final_state: Dict[str, Any] = app.invoke(initial_state)
+            # Invoke state machine pipeline with user-specific thread configuration
+            final_state: Dict[str, Any] = app.invoke(initial_state, config=config)
 
             # Save state context for diagnostics sidebar rendering
             st.session_state.last_state = final_state
