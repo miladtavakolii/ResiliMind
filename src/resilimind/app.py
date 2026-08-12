@@ -1,11 +1,13 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import streamlit as st
 
 # Import the workflow factory function from the core layer
 from resilimind.core.workflow import build_workflow
+# Import database authentication modules
+from resilimind.core.database import init_db, register_user, authenticate_user
 
 # -----------------------------------------------------------------------------
-# 1. Streamlit Page Configuration
+# 1. Streamlit Page Configuration & Initialization
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="ResiliMind | AI Resilience Platform",
@@ -13,6 +15,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize the SQLite database tables on application startup
+init_db()
 
 # -----------------------------------------------------------------------------
 # 2. Custom CSS Injection (RTL Support, Typography, & Modern UI Components)
@@ -97,26 +102,99 @@ st.markdown("""
         margin-bottom: 24px;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
+    
+    /* Authentication Container Styling */
+    .auth-box {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 30px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.02);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 
 
 # -----------------------------------------------------------------------------
-# 3. Application State & Workflow Initialization
+# 3. Session State & Authentication UI
 # -----------------------------------------------------------------------------
+# Initialize authentication variables
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+# Block rendering the main chat interface if the user is unauthenticated
+if st.session_state.user_id is None:
+    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>ورود به سامانه ResiliMind</h2>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<div class='auth-box'>", unsafe_allow_html=True)
+        tab1, tab2 = st.tabs(["ورود", "ثبت‌نام"])
+        
+        # Login Tab
+        with tab1:
+            login_user: str = st.text_input("نام کاربری", key="log_user")
+            login_pass: str = st.text_input("رمز عبور", type="password", key="log_pass")
+            
+            if st.button("ورود به حساب", use_container_width=True):
+                if login_user and login_pass:
+                    user_id: Optional[int] = authenticate_user(login_user, login_pass)
+                    if user_id:
+                        st.session_state.user_id = user_id
+                        st.session_state.username = login_user
+                        st.success("ورود موفقیت‌آمیز بود!")
+                        st.rerun()
+                    else:
+                        st.error("نام کاربری یا رمز عبور اشتباه است.")
+                else:
+                    st.warning("لطفاً همه فیلدها را پر کنید.")
+                    
+        # Registration Tab
+        with tab2:
+            reg_user: str = st.text_input("نام کاربری جدید", key="reg_user")
+            reg_pass: str = st.text_input("رمز عبور", type="password", key="reg_pass")
+            
+            if st.button("ایجاد حساب کاربری", use_container_width=True):
+                if reg_user and reg_pass:
+                    if register_user(reg_user, reg_pass):
+                        st.success("حساب کاربری ایجاد شد. اکنون می‌توانید وارد شوید.")
+                    else:
+                        st.error("این نام کاربری قبلاً ثبت شده است.")
+                else:
+                    st.warning("لطفاً همه فیلدها را پر کنید.")
+                    
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    # Halt execution here; do not proceed to the chat app until logged in
+    st.stop() 
+
+
+# =============================================================================
+# 4. Main Application Logic (Executes ONLY for authenticated users)
+# =============================================================================
+
 @st.cache_resource
-def load_graph_application():
-    """Builds and caches the compiled LangGraph execution graph instance."""
+def load_graph_application() -> Any:
+    """
+    Builds and caches the compiled LangGraph execution graph instance.
+    
+    Returns:
+        Any (CompiledStateGraph): The runnable state machine.
+    """
     return build_workflow()
 
-app = load_graph_application()
+app: Any = load_graph_application()
 
-# Initialize chat history state
+# Initialize chat history uniquely for the logged-in user session
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "سلام 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری روانی.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
+            "content": f"سلام {st.session_state.username} عزیز 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری روانی.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
         }
     ]
 
@@ -126,23 +204,34 @@ if "last_state" not in st.session_state:
 
 
 # -----------------------------------------------------------------------------
-# 4. Sidebar Diagnostics Dashboard
+# 5. Sidebar Diagnostics & Profile Dashboard
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.title("🌱 ResiliMind Dashboard")
-    st.caption("سامانه تحلیل تاب‌آوری روان‌شناختی مبتنی بر LangGraph & RAG")
+    # User Profile Section
+    st.markdown("### 👤 پروفایل کاربری")
+    st.markdown(f"کاربر فعلی: **{st.session_state.username}**")
+    
+    # Logout action handler
+    if st.button("🚪 خروج از حساب", use_container_width=True):
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.session_state.messages = []
+        st.session_state.last_state = None
+        st.rerun()
+        
     st.divider()
 
+    # Diagnostics Section
     st.markdown("### 📊 تحلیل زنده گراف دانش")
 
     if st.session_state.last_state:
-        state = st.session_state.last_state
+        state: Dict[str, Any] = st.session_state.last_state
 
         # Display Extracted Active Graph Nodes
         active_nodes: List[str] = state.get("active_nodes", [])
         st.markdown("**نودهای فعال استخراج‌شده:**")
         if active_nodes:
-            chips_html = "".join([f"<span class='node-chip'>{node}</span>" for node in active_nodes])
+            chips_html: str = "".join([f"<span class='node-chip'>{node}</span>" for node in active_nodes])
             st.markdown(f"<div style='margin-bottom: 12px;'>{chips_html}</div>", unsafe_allow_html=True)
         else:
             st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
@@ -154,12 +243,12 @@ with st.sidebar:
         st.markdown("**وضعیت تاب‌آوری ارزیابی‌شده:**")
         if assessments:
             for item in assessments:
-                node_id = item.get("node_id", "N/A")
-                status = item.get("status", "YELLOW").upper()
-                confidence = int(item.get("confidence", 0.0) * 100)
-                reasoning = item.get("reasoning", "")
+                node_id: str = item.get("node_id", "N/A")
+                status: str = item.get("status", "YELLOW").upper()
+                confidence: int = int(item.get("confidence", 0.0) * 100)
+                reasoning: str = item.get("reasoning", "")
 
-                badge_class = f"badge-{status.lower()}"
+                badge_class: str = f"badge-{status.lower()}"
                 
                 st.markdown(f"""
                 <div class="metric-card">
@@ -177,7 +266,7 @@ with st.sidebar:
         st.markdown("---")
 
         # Display Dynamic Agent Routing Status
-        requires_disambiguation = state.get("requires_disambiguation", False)
+        requires_disambiguation: bool = state.get("requires_disambiguation", False)
         st.markdown("**مسیر اجرای ایجنت‌ها (Router):**")
         if requires_disambiguation:
             st.warning("⚠️ **دستور اجرا:** هدایت به ایجنت Questioner (نیازمند شفاف‌سازی)")
@@ -189,7 +278,7 @@ with st.sidebar:
 
     st.divider()
 
-    # Reset Session Action
+    # Reset Session Action (Clears current chat history, keeps user logged in)
     if st.button("🔄 شروع گفتگو جدید", use_container_width=True):
         st.session_state.messages = [st.session_state.messages[0]]
         st.session_state.last_state = None
@@ -197,7 +286,7 @@ with st.sidebar:
 
 
 # -----------------------------------------------------------------------------
-# 5. Main Interactive Chat Interface
+# 6. Main Interactive Chat Interface
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="main-header">
@@ -236,13 +325,13 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
             }
 
             # Invoke state machine pipeline
-            final_state = app.invoke(initial_state)
+            final_state: Dict[str, Any] = app.invoke(initial_state)
 
             # Save state context for diagnostics sidebar rendering
             st.session_state.last_state = final_state
 
             # Extract response string generated by the terminal agent
-            response_text = final_state.get("final_response", "پاسخی از سمت سیستم دریافت نشد.")
+            response_text: str = final_state.get("final_response", "پاسخی از سمت سیستم دریافت نشد.")
 
             # Render assistant message
             st.markdown(response_text)
