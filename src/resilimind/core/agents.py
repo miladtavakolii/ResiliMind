@@ -1,8 +1,10 @@
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate
 
 from .state import AgentState
+from .database import get_user_latest_node_statuses
 from ..graph.ingestion import load_resilience_graph
 from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
@@ -117,28 +119,49 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
         "messages": [AIMessage(content=question_text)]
     }
 
+
 def advisor_node(state: AgentState) -> Dict[str, Any]:
     """
-    Generates tailored psychological advice and interventions using active graph guidance.
+    Generates tailored psychological advice and interventions using active graph guidance
+    combined with the user's historical resilience profile fetched from SQLite database.
 
     Args:
-        state (AgentState): Current state with 'user_message', 'subgraph_context', and 'assessments'.
+        state (AgentState): Current state with 'user_id', 'user_message', 'subgraph_context', and 'assessments'.
 
     Returns:
-        Dict[str, Any]: Updated state dict with 'final_response'.
+        Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
-    print("[Node] Advisor Agent is generating psychological interventions...")
+    print("[Node] Advisor Agent is generating psychological interventions with historical profile awareness...")
+    user_id: int = state.get("user_id", 0)
     user_msg: str = state.get("user_message", "")
-    context: str = state.get("subgraph_context", "")
+    subgraph_context: str = state.get("subgraph_context", "")
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
     
+    # Fetch user's historical resilience node statuses from SQLite database
+    history_logs: List[Dict[str, Any]] = get_user_latest_node_statuses(user_id) if user_id else []
+    
+    # Format historical profile into a readable context block
+    history_context: str = "No prior historical profile recorded."
+    if history_logs:
+        formatted_logs: List[str] = [
+            f"- Node {log['node_id']}: Previous Status = {log['status']} (Recorded: {str(log['created_at'])[:16]})"
+            for log in history_logs
+        ]
+        history_context = "\n".join(formatted_logs)
+    
+    # Combine real-time graph context with the user's historical profile
+    full_context: str = (
+        f"=== CURRENT GRAPH KNOWLEDGE ===\n{subgraph_context}\n\n"
+        f"=== USER HISTORICAL RESILIENCE PROFILE ===\n{history_context}"
+    )
+
     conversational_llm = llm_engine.get_conversational_llm()
     prompt_template = prompts.get_advisor_prompt()
     
     chain = prompt_template | conversational_llm
     response = chain.invoke({
         "user_message": user_msg,
-        "subgraph_context": context,
+        "subgraph_context": full_context,
         "assessments": str(assessments)
     })
     
