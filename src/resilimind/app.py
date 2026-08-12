@@ -2,9 +2,15 @@ from typing import Dict, Any, List, Optional
 import streamlit as st
 from langchain_core.messages import HumanMessage
 
-# Import core workflow and database authentication modules
+# Import core workflow and database management modules
 from resilimind.core.workflow import build_workflow
-from resilimind.core.database import init_db, register_user, authenticate_user
+from resilimind.core.database import (
+    init_db, 
+    register_user, 
+    authenticate_user, 
+    save_resilience_log, 
+    get_user_resilience_history
+)
 
 # -----------------------------------------------------------------------------
 # 1. Streamlit Page Configuration & Initialization
@@ -233,60 +239,75 @@ with st.sidebar:
         
     st.divider()
 
-    # Diagnostics Section
-    st.markdown("### 📊 تحلیل زنده گراف دانش")
+    # Sidebar Tabs for Real-Time Analysis vs. Historical Logs
+    sidebar_tab1, sidebar_tab2 = st.tabs(["📊 تحلیل نشست جاری", "📜 سوابق تاب‌آوری"])
 
-    if st.session_state.last_state:
-        state: Dict[str, Any] = st.session_state.last_state
+    # Tab 1: Current Session State
+    with sidebar_tab1:
+        if st.session_state.last_state:
+            state: Dict[str, Any] = st.session_state.last_state
 
-        # Display Extracted Active Graph Nodes
-        active_nodes: List[str] = state.get("active_nodes", [])
-        st.markdown("**نودهای فعال استخراج‌شده:**")
-        if active_nodes:
-            chips_html: str = "".join([f"<span class='node-chip'>{node}</span>" for node in active_nodes])
-            st.markdown(f"<div style='margin-bottom: 12px;'>{chips_html}</div>", unsafe_allow_html=True)
+            # Display Extracted Active Graph Nodes
+            active_nodes: List[str] = state.get("active_nodes", [])
+            st.markdown("**نودهای فعال:**")
+            if active_nodes:
+                chips_html: str = "".join([f"<span class='node-chip'>{node}</span>" for node in active_nodes])
+                st.markdown(f"<div style='margin-bottom: 12px;'>{chips_html}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
+
+            st.markdown("---")
+
+            # Display Current Assessment Statuses
+            assessments: List[Dict[str, Any]] = state.get("assessments", [])
+            st.markdown("**ارزیابی نشست:**")
+            if assessments:
+                for item in assessments:
+                    node_id: str = item.get("node_id", "N/A")
+                    status: str = item.get("status", "YELLOW").upper()
+                    confidence: int = int(item.get("confidence", 0.0) * 100)
+                    reasoning: str = item.get("reasoning", "")
+
+                    badge_class: str = f"badge-{status.lower()}"
+                    
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-weight: 700; font-family: monospace; direction: ltr;">{node_id}</span>
+                            <span class="{badge_class}">{status}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #94a3b8;">درصد اطمینان: {confidence}%</div>
+                        <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px;">{reasoning}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.caption("ارزیابی جدیدی ثبت نشده است.")
         else:
-            st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
+            st.info("با ارسال پیام، جزئیات نشست در این بخش قرار می‌گیرد.")
 
-        st.markdown("---")
-
-        # Display Evaluated Node Statuses
-        assessments: List[Dict[str, Any]] = state.get("assessments", [])
-        st.markdown("**وضعیت تاب‌آوری ارزیابی‌شده:**")
-        if assessments:
-            for item in assessments:
-                node_id: str = item.get("node_id", "N/A")
-                status: str = item.get("status", "YELLOW").upper()
-                confidence: int = int(item.get("confidence", 0.0) * 100)
-                reasoning: str = item.get("reasoning", "")
-
+    # Tab 2: Historical Resilience Log Profile from Database
+    with sidebar_tab2:
+        st.markdown("**تاریخچه ارزیابی‌های اخیر:**")
+        history_logs: List[Dict[str, Any]] = get_user_resilience_history(st.session_state.user_id, limit=15)
+        
+        if history_logs:
+            for log in history_logs:
+                node_id: str = log.get("node_id", "N/A")
+                status: str = log.get("status", "YELLOW").upper()
+                created_at: str = str(log.get("created_at", ""))[:16]
                 badge_class: str = f"badge-{status.lower()}"
                 
                 st.markdown(f"""
                 <div class="metric-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: 700; font-family: monospace; direction: ltr;">{node_id}</span>
                         <span class="{badge_class}">{status}</span>
                     </div>
-                    <div style="font-size: 0.8rem; color: #94a3b8;">درصد اطمینان: {confidence}%</div>
-                    <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px;">{reasoning}</div>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px; direction: ltr; text-align: left;">{created_at}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.caption("ارزیابی جدیدی ثبت نشده است.")
-
-        st.markdown("---")
-
-        # Display Dynamic Agent Routing Status
-        requires_disambiguation: bool = state.get("requires_disambiguation", False)
-        st.markdown("**مسیر اجرای ایجنت‌ها (Router):**")
-        if requires_disambiguation:
-            st.warning("⚠️ **دستور اجرا:** هدایت به ایجنت Questioner (نیازمند شفاف‌سازی)")
-        else:
-            st.success("✅ **دستور اجرا:** هدایت به ایجنت Advisor (ارائه راهکار درمانی)")
-
-    else:
-        st.info("با ارسال اولین پیام، لایه‌های پردازشی گراف و وضعیت ارزیابی در این پنل قرار می‌گیرند.")
+            st.caption("هنوز سابقه ارزیابی برای حساب شما ثبت نشده است.")
 
 
 # -----------------------------------------------------------------------------
@@ -331,6 +352,17 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
 
             # Invoke state machine pipeline with user-specific thread configuration
             final_state: Dict[str, Any] = app.invoke(initial_state, config=config)
+
+            # Automatically persist new assessments into SQLite resilience_logs table
+            new_assessments: List[Dict[str, Any]] = final_state.get("assessments", [])
+            for assessment in new_assessments:
+                save_resilience_log(
+                    user_id=st.session_state.user_id,
+                    node_id=assessment.get("node_id", ""),
+                    status=assessment.get("status", "YELLOW"),
+                    confidence=float(assessment.get("confidence", 0.0)),
+                    reasoning=assessment.get("reasoning", "")
+                )
 
             # Save state context for diagnostics sidebar rendering
             st.session_state.last_state = final_state
