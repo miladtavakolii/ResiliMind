@@ -1,5 +1,6 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Annotated
 from typing_extensions import TypedDict
+from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict):
     """
@@ -22,3 +23,6 @@ class AgentState(TypedDict):
     
     # 5. Final Output (from Advisor or Questioner)
     final_response: str
+
+    # 6. Conversation message history managed incrementally by LangGraph reducer
+    messages: Annotated[list, add_messages]
