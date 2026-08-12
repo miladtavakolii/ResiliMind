@@ -87,7 +87,7 @@ def render_domain_resilience_chart(user_id: int) -> None:
         hoverinfo='label+value'
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig, width="stretch", config={'displayModeBar': False})
 
 # -----------------------------------------------------------------------------
 # 1. Streamlit Page Configuration & Initialization
@@ -279,7 +279,7 @@ if st.session_state.user_id is None:
             login_pass: str = st.text_input("🔒 رمز عبور", type="password", key="log_pass")
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("ورود به سامانه", use_container_width=True):
+            if st.button("ورود به سامانه", width="stretch"):
                 if login_user and login_pass:
                     user_id: Optional[int] = authenticate_user(login_user, login_pass)
                     if user_id:
@@ -299,7 +299,7 @@ if st.session_state.user_id is None:
             reg_pass: str = st.text_input("🔒 رمز عبور", type="password", key="reg_pass")
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("ایجاد حساب کاربری", use_container_width=True):
+            if st.button("ایجاد حساب کاربری", width="stretch"):
                 if reg_user and reg_pass:
                     if register_user(reg_user, reg_pass):
                         st.success("حساب کاربری با موفقیت ایجاد شد! اکنون می‌توانید از تب ورود استفاده کنید.")
@@ -364,7 +364,7 @@ with st.sidebar:
     st.markdown(f"کاربر فعلی: **{st.session_state.username}**")
     
     # Logout action handler
-    if st.button("🚪 خروج از حساب", use_container_width=True):
+    if st.button("🚪 خروج از حساب", width="stretch"):
         st.session_state.user_id = None
         st.session_state.username = None
         st.session_state.messages = []
