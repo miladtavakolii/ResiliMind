@@ -36,12 +36,21 @@ class NodeAssessment(BaseModel):
         ..., 
         description="Assessed resilience status: GREEN (High), YELLOW (Moderate), RED (Critical)."
     )
+    category: Literal[
+        "Personal_Resilience", 
+        "Political_Resilience", 
+        "Economic_Resilience", 
+        "Physical_Resilience", 
+        "Social_Resilience", 
+        "Spiritual_Cultural_Resilience"
+    ] = Field(description="The exact domain string of the node as provided in the graph context.")
     confidence: float = Field(
         ..., 
         ge=0.0, 
         le=1.0, 
         description="Confidence score of the assessment between 0.0 and 1.0."
     )
+    score: int = Field(ge=0, le=100, description="Exact numerical score representing resilience capacity (0 to 100)")
     reasoning: str = Field(..., description="Psychological reasoning behind this status assessment.")
 
 class AssessmentOutput(BaseModel):

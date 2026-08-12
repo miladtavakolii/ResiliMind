@@ -110,14 +110,14 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
     conversational_llm = llm_engine.get_conversational_llm()
     system_prompt_text = prompts.get_questioner_prompt()
     
-    # Combine system instructions, graph context, and the dynamic message history
     prompt = ChatPromptTemplate.from_messages([
-        ("system", f"{system_prompt_text}\n\n=== GRAPH CONTEXT ===\n{{subgraph_context}}"),
+        ("system", "{system_instructions}\n\n=== GRAPH CONTEXT ===\n{subgraph_context}"),
         MessagesPlaceholder(variable_name="messages")
     ])
     
     chain = prompt | conversational_llm
     response = chain.invoke({
+        "system_instructions": system_prompt_text,
         "subgraph_context": context,
         "messages": messages_history
     })
@@ -169,14 +169,14 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     conversational_llm = llm_engine.get_conversational_llm()
     system_prompt_text = prompts.get_advisor_prompt()
     
-    # Combine system instructions, historical/graph contexts, assessments, and message history
     prompt = ChatPromptTemplate.from_messages([
-        ("system", f"{system_prompt_text}\n\n{{subgraph_context}}\n\n=== ASSESSMENTS ===\n{{assessments}}"),
+        ("system", "{system_instructions}\n\n{subgraph_context}\n\n=== ASSESSMENTS ===\n{assessments}"),
         MessagesPlaceholder(variable_name="messages")
     ])
     
     chain = prompt | conversational_llm
     response = chain.invoke({
+        "system_instructions": system_prompt_text,
         "subgraph_context": full_context,
         "assessments": str(assessments),
         "messages": messages_history

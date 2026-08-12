@@ -1,6 +1,8 @@
 from typing import Dict, Any, List, Optional
 import streamlit as st
 from langchain_core.messages import HumanMessage
+import pandas as pd
+import plotly.express as px
 
 # Import core workflow and database management modules
 from resilimind.core.workflow import build_workflow
@@ -9,8 +11,83 @@ from resilimind.core.database import (
     register_user, 
     authenticate_user, 
     save_resilience_log, 
-    get_user_resilience_history
+    get_user_resilience_history,
+    get_user_latest_node_statuses
 )
+
+def render_domain_resilience_chart(user_id: int) -> None:
+    """
+    Renders an interactive donut chart showing resilience score distribution across the 6 core domains.
+    Translates English backend domains to Persian UI labels.
+    """
+    logs = get_user_latest_node_statuses(user_id)
+    if not logs:
+        st.caption("هنوز ارزیابی کافی برای محاسبه نمودار ثبت نشده است.")
+        return
+
+    df = pd.DataFrame(logs)
+    
+    if 'category' not in df.columns or 'score' not in df.columns:
+        st.caption("لطفاً پیام جدیدی ارسال کنید تا داده‌های ساختاریافته در دیتابیس قرار گیرند.")
+        return
+
+    domain_translation = {
+        "Personal_Resilience": "فردی",
+        "Political_Resilience": "سیاسی",
+        "Economic_Resilience": "اقتصادی",
+        "Physical_Resilience": "جسمانی",
+        "Social_Resilience": "اجتماعی",
+        "Spiritual_Cultural_Resilience": "معنوی"
+    }
+
+    df['category_fa'] = df['category'].map(domain_translation)
+
+    all_categories_fa = ["فردی", "سیاسی", "اقتصادی", "جسمانی", "اجتماعی", "معنوی"]
+    
+    category_avg = df.groupby('category_fa')['score'].mean().reindex(all_categories_fa, fill_value=0).reset_index()
+    category_avg.columns = ['دسته', 'امتیاز']
+
+    custom_colors = {
+        "فردی": "#38bdf8",     
+        "سیاسی": "#a855f7",    
+        "اقتصادی": "#f59e0b",  
+        "جسمانی": "#10b981",   
+        "اجتماعی": "#ec4899",  
+        "معنوی": "#6366f1"     
+    }
+
+    fig = px.pie(
+        category_avg,
+        values='امتیاز',
+        names='دسته',
+        hole=0.55,
+        color='دسته',
+        color_discrete_map=custom_colors
+    )
+
+    fig.update_layout(
+        showlegend=True,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=280,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5,
+            font=dict(color="#cbd5e1", size=12)
+        )
+    )
+
+    fig.update_traces(
+        textposition='inside',
+        textinfo='label+percent',
+        hoverinfo='label+value'
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 # -----------------------------------------------------------------------------
 # 1. Streamlit Page Configuration & Initialization
@@ -344,6 +421,12 @@ with st.sidebar:
 
     # Tab 2: Historical Resilience Log Profile from Database
     with sidebar_tab2:
+        st.markdown("**📊 خلاصه وضعیت تاب‌آوری:**")
+        
+        render_domain_resilience_chart(st.session_state.user_id)
+        
+        st.divider()
+
         st.markdown("**تاریخچه ارزیابی‌های اخیر:**")
         history_logs: List[Dict[str, Any]] = get_user_resilience_history(st.session_state.user_id, limit=15)
         
@@ -417,7 +500,9 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
                 save_resilience_log(
                     user_id=st.session_state.user_id,
                     node_id=assessment.get("node_id", ""),
+                    category=assessment.get("category", "Personal_Resilience"), # مقدار انگلیسی خام
                     status=assessment.get("status", "YELLOW"),
+                    score=int(assessment.get("score", 50)),
                     confidence=float(assessment.get("confidence", 0.0)),
                     reasoning=assessment.get("reasoning", "")
                 )

@@ -31,7 +31,9 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 node_id TEXT NOT NULL,
+                category TEXT NOT NULL,
                 status TEXT NOT NULL,
+                score INTEGER NOT NULL,
                 confidence REAL NOT NULL,
                 reasoning TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -104,7 +106,9 @@ def authenticate_user(username: str, password: str) -> Optional[int]:
 def save_resilience_log(
     user_id: int, 
     node_id: str, 
+    category: str,
     status: str, 
+    score: int,
     confidence: float, 
     reasoning: Optional[str] = None
 ) -> None:
@@ -122,10 +126,10 @@ def save_resilience_log(
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO resilience_logs (user_id, node_id, status, confidence, reasoning)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO resilience_logs (user_id, node_id, category, status, score, confidence, reasoning)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, node_id, status.upper(), confidence, reasoning)
+            (user_id, node_id, category, status.upper(), score, confidence, reasoning)
         )
         conn.commit()
 
@@ -173,16 +177,15 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT rl.node_id, rl.status, rl.confidence, rl.reasoning, rl.created_at
-            FROM resilience_logs rl
+            SELECT r1.node_id, r1.category, r1.status, r1.score, r1.confidence, r1.reasoning, r1.created_at
+            FROM resilience_logs r1
             INNER JOIN (
                 SELECT node_id, MAX(created_at) as max_date
                 FROM resilience_logs
                 WHERE user_id = ?
                 GROUP BY node_id
-            ) latest ON rl.node_id = latest.node_id AND rl.created_at = latest.max_date
-            WHERE rl.user_id = ?
-            ORDER BY rl.created_at DESC
+            ) r2 ON r1.node_id = r2.node_id AND r1.created_at = r2.max_date
+            WHERE r1.user_id = ?
             """,
             (user_id, user_id)
         )
