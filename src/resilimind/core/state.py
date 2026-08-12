@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     """
     
     # 1. User Input
+    user_id: int
     user_message: str
     
     # 2. Extractor Agent Outputs
