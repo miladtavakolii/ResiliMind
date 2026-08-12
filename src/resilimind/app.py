@@ -341,6 +341,7 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
 
             # Construct execution initial state payload
             initial_state: Dict[str, Any] = {
+                "user_id": st.session_state.user_id,
                 "user_message": user_input,
                 "active_nodes": [],
                 "subgraph_context": "",
