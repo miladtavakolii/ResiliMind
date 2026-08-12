@@ -17,8 +17,7 @@ from resilimind.core.database import (
 
 def render_domain_resilience_chart(user_id: int) -> None:
     """
-    Renders an interactive donut chart showing resilience score distribution across the 6 core domains.
-    Translates English backend domains to Persian UI labels.
+    Renders an interactive RADAR chart showing resilience score distribution across the 6 core domains.
     """
     logs = get_user_latest_node_statuses(user_id)
     if not logs:
@@ -41,54 +40,49 @@ def render_domain_resilience_chart(user_id: int) -> None:
     }
 
     df['category_fa'] = df['category'].map(domain_translation)
-
     all_categories_fa = ["فردی", "سیاسی", "اقتصادی", "جسمانی", "اجتماعی", "معنوی"]
     
+    # پر کردن دسته‌های خالی با ۰ برای حفظ ساختار ۶ ضلعی نمودار راداری
     category_avg = df.groupby('category_fa')['score'].mean().reindex(all_categories_fa, fill_value=0).reset_index()
     category_avg.columns = ['دسته', 'امتیاز']
 
-    custom_colors = {
-        "فردی": "#38bdf8",     
-        "سیاسی": "#a855f7",    
-        "اقتصادی": "#f59e0b",  
-        "جسمانی": "#10b981",   
-        "اجتماعی": "#ec4899",  
-        "معنوی": "#6366f1"     
-    }
-
-    fig = px.pie(
+    # رسم نمودار راداری
+    fig = px.line_polar(
         category_avg,
-        values='امتیاز',
-        names='دسته',
-        hole=0.55,
-        color='دسته',
-        color_discrete_map=custom_colors
+        r='امتیاز',
+        theta='دسته',
+        line_close=True,
+        range_r=[0, 100],  # 🧠 ثابت کردن مقیاس از ۰ تا ۱۰۰
+        markers=True
     )
+
+    # استایل‌دهی مدرن نمودار
+    fig.update_traces(fill='toself', line_color='#38bdf8', marker=dict(size=8, color='#0ea5e9'))
 
     fig.update_layout(
-        showlegend=True,
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                color="#64748b",  # رنگ اعداد مقیاس
+                gridcolor="rgba(255, 255, 255, 0.1)",
+                tickfont=dict(size=10)
+            ),
+            angularaxis=dict(
+                color="#cbd5e1",  # رنگ متن دسته‌ها
+                gridcolor="rgba(255, 255, 255, 0.1)",
+                tickfont=dict(size=13, family="Vazirmatn")
+            ),
+            bgcolor="rgba(0,0,0,0)"
+        ),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(t=10, b=10, l=10, r=10),
-        height=280,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            font=dict(color="#cbd5e1", size=12)
-        )
-    )
-
-    fig.update_traces(
-        textposition='inside',
-        textinfo='label+percent',
-        hoverinfo='label+value'
+        margin=dict(t=40, b=40, l=40, r=40),
+        height=320,
     )
 
     st.plotly_chart(fig, width="stretch", config={'displayModeBar': False})
-
+    
 # -----------------------------------------------------------------------------
 # 1. Streamlit Page Configuration & Initialization
 # -----------------------------------------------------------------------------
