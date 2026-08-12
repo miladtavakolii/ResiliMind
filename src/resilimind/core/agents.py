@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 import networkx as nx
+from langchain_core.messages import AIMessage
 
 from .state import AgentState
 from ..graph.ingestion import load_resilience_graph
@@ -109,9 +110,12 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
         "user_message": user_msg,
         "subgraph_context": context
     })
-    
-    return {"final_response": response.content}
 
+    question_text: str = response.content
+    return {
+        "final_response": question_text,
+        "messages": [AIMessage(content=question_text)]
+    }
 
 def advisor_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -138,4 +142,9 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
         "assessments": str(assessments)
     })
     
-    return {"final_response": response.content}
+    advice_text: str = response.content
+    
+    return {
+        "final_response": advice_text,
+        "messages": [AIMessage(content=advice_text)]
+    }
