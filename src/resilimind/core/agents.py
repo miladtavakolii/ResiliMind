@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from .state import AgentState
 from .database import get_user_latest_node_statuses
@@ -92,25 +92,34 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
 
 def questioner_node(state: AgentState) -> Dict[str, Any]:
     """
-    Generates a targeted, empathetic clarification question when input is ambiguous.
+    Generates a targeted, empathetic clarification question when input is ambiguous,
+    using the full conversational memory.
 
     Args:
-        state (AgentState): Current state with 'user_message' and 'subgraph_context'.
+        state (AgentState): Current state with 'messages' and 'subgraph_context'.
 
     Returns:
-        Dict[str, Any]: Updated state dict with 'final_response'.
+        Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
     print("[Node] Questioner Agent is formulating clarification...")
-    user_msg: str = state.get("user_message", "")
     context: str = state.get("subgraph_context", "")
     
-    conversational_llm = llm_engine.get_conversational_llm()
-    prompt_template = prompts.get_questioner_prompt()
+    # Fetch the full chat history from the graph state
+    messages_history = state.get("messages", [])
     
-    chain = prompt_template | conversational_llm
+    conversational_llm = llm_engine.get_conversational_llm()
+    system_prompt_text = prompts.get_questioner_prompt()
+    
+    # Combine system instructions, graph context, and the dynamic message history
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", f"{system_prompt_text}\n\n=== GRAPH CONTEXT ===\n{{subgraph_context}}"),
+        MessagesPlaceholder(variable_name="messages")
+    ])
+    
+    chain = prompt | conversational_llm
     response = chain.invoke({
-        "user_message": user_msg,
-        "subgraph_context": context
+        "subgraph_context": context,
+        "messages": messages_history
     })
 
     question_text: str = response.content
@@ -123,19 +132,21 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
 def advisor_node(state: AgentState) -> Dict[str, Any]:
     """
     Generates tailored psychological advice and interventions using active graph guidance
-    combined with the user's historical resilience profile fetched from SQLite database.
+    combined with the user's historical resilience profile and full conversational memory.
 
     Args:
-        state (AgentState): Current state with 'user_id', 'user_message', 'subgraph_context', and 'assessments'.
+        state (AgentState): Current state with 'user_id', 'messages', 'subgraph_context', and 'assessments'.
 
     Returns:
         Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
-    print("[Node] Advisor Agent is generating psychological interventions with historical profile awareness...")
+    print("[Node] Advisor Agent is generating psychological interventions with full memory...")
     user_id: int = state.get("user_id", 0)
-    user_msg: str = state.get("user_message", "")
     subgraph_context: str = state.get("subgraph_context", "")
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
+    
+    # Fetch the full chat history from the graph state
+    messages_history = state.get("messages", [])
     
     # Fetch user's historical resilience node statuses from SQLite database
     history_logs: List[Dict[str, Any]] = get_user_latest_node_statuses(user_id) if user_id else []
@@ -156,13 +167,19 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     )
 
     conversational_llm = llm_engine.get_conversational_llm()
-    prompt_template = prompts.get_advisor_prompt()
+    system_prompt_text = prompts.get_advisor_prompt()
     
-    chain = prompt_template | conversational_llm
+    # Combine system instructions, historical/graph contexts, assessments, and message history
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", f"{system_prompt_text}\n\n{{subgraph_context}}\n\n=== ASSESSMENTS ===\n{{assessments}}"),
+        MessagesPlaceholder(variable_name="messages")
+    ])
+    
+    chain = prompt | conversational_llm
     response = chain.invoke({
-        "user_message": user_msg,
         "subgraph_context": full_context,
-        "assessments": str(assessments)
+        "assessments": str(assessments),
+        "messages": messages_history
     })
     
     advice_text: str = response.content
