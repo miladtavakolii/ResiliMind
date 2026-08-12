@@ -42,53 +42,58 @@ st.markdown("""
 
     /* Modern Glassmorphic Dashboard Cards */
     .metric-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 14px 18px;
-        margin-bottom: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease-in-out;
+    }
+    .metric-card:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
     }
 
     /* Node Chip Badge */
     .node-chip {
         display: inline-block;
-        background-color: #1e293b;
+        background-color: rgba(14, 165, 233, 0.1);
         color: #38bdf8;
-        border: 1px solid #0284c7;
+        border: 1px solid rgba(14, 165, 233, 0.3);
         border-radius: 20px;
-        padding: 3px 12px;
-        font-size: 0.82rem;
+        padding: 4px 14px;
+        font-size: 0.85rem;
         font-weight: 600;
-        margin: 3px;
+        margin: 4px;
         direction: ltr;
     }
 
     /* Resilience Status Badges */
     .badge-green {
         background-color: rgba(16, 185, 129, 0.15);
-        color: #10b981;
-        border: 1px solid #10b981;
-        padding: 2px 10px;
-        border-radius: 6px;
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 4px 12px;
+        border-radius: 8px;
         font-weight: 700;
         font-size: 0.85rem;
     }
     .badge-yellow {
         background-color: rgba(245, 158, 11, 0.15);
-        color: #f59e0b;
-        border: 1px solid #f59e0b;
-        padding: 2px 10px;
-        border-radius: 6px;
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        padding: 4px 12px;
+        border-radius: 8px;
         font-weight: 700;
         font-size: 0.85rem;
     }
     .badge-red {
         background-color: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-        border: 1px solid #ef4444;
-        padding: 2px 10px;
-        border-radius: 6px;
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        padding: 4px 12px;
+        border-radius: 8px;
         font-weight: 700;
         font-size: 0.85rem;
     }
@@ -102,22 +107,63 @@ st.markdown("""
     /* Header Accent Banner */
     .main-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-        border-radius: 16px;
-        padding: 24px;
+        border-radius: 18px;
+        padding: 28px;
         color: #ffffff;
-        margin-bottom: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
     }
-    
-    /* Authentication Container Styling */
-    .auth-box {
-        max-width: 400px;
-        margin: 0 auto;
-        padding: 30px;
-        border: 1px solid rgba(255,255,255,0.1);
+
+       
+    /* Styled Input Fields */
+    .stTextInput > div > div > input {
+        border-radius: 10px !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        background-color: rgba(255,255,255,0.03) !important;
+        padding: 12px 16px !important;
+        transition: all 0.3s ease !important;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 0 1px #38bdf8 !important;
+        background-color: rgba(255,255,255,0.06) !important;
+    }
+
+    /* Styled Buttons */
+    .stButton > button {
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        padding: 8px 16px !important;
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+        border: none !important;
+        color: white !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(2, 132, 199, 0.4) !important;
+    }
+
+    /* Styled Tabs (for Login and Sidebar) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(255, 255, 255, 0.02);
+        padding: 6px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.02);
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        background-color: transparent;
+        border: none !important;
+        font-weight: 600 !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        color: #38bdf8 !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -133,25 +179,36 @@ if "username" not in st.session_state:
 
 # Render login/registration interface if unauthenticated
 if st.session_state.user_id is None:
-    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>ورود به سامانه ResiliMind</h2>", unsafe_allow_html=True)
+    # Add top margin for vertical centering
+    st.markdown("<div style='margin-top: 10vh;'></div>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("<div class='auth-box'>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["ورود", "ثبت‌نام"])
+        # Beautiful Header Section
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <div style="font-size: 3.5rem; margin-bottom: 0.5rem; animation: float 3s ease-in-out infinite;">🌱</div>
+            <h1 style="font-weight: 700; color: #f8fafc; font-size: 2.2rem; margin-bottom: 0.5rem;">ResiliMind</h1>
+            <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0;">پلتفرم هوشمند مشاوره و ارزیابی تاب‌آوری</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔑 ورود به حساب", "📝 ثبت‌نام جدید"])
         
         # Login Form
         with tab1:
-            login_user: str = st.text_input("نام کاربری", key="log_user")
-            login_pass: str = st.text_input("رمز عبور", type="password", key="log_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
+            login_user: str = st.text_input("👤 نام کاربری", key="log_user")
+            login_pass: str = st.text_input("🔒 رمز عبور", type="password", key="log_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("ورود به حساب", use_container_width=True):
+            if st.button("ورود به سامانه", use_container_width=True):
                 if login_user and login_pass:
                     user_id: Optional[int] = authenticate_user(login_user, login_pass)
                     if user_id:
                         st.session_state.user_id = user_id
                         st.session_state.username = login_user
-                        st.success("ورود موفقیت‌آمیز بود!")
+                        st.success("ورود موفقیت‌آمیز بود! در حال انتقال...")
                         st.rerun()
                     else:
                         st.error("نام کاربری یا رمز عبور اشتباه است.")
@@ -160,19 +217,19 @@ if st.session_state.user_id is None:
                     
         # Registration Form
         with tab2:
-            reg_user: str = st.text_input("نام کاربری جدید", key="reg_user")
-            reg_pass: str = st.text_input("رمز عبور", type="password", key="reg_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
+            reg_user: str = st.text_input("👤 نام کاربری دلخواه", key="reg_user")
+            reg_pass: str = st.text_input("🔒 رمز عبور", type="password", key="reg_pass")
+            st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("ایجاد حساب کاربری", use_container_width=True):
                 if reg_user and reg_pass:
                     if register_user(reg_user, reg_pass):
-                        st.success("حساب کاربری ایجاد شد. اکنون می‌توانید وارد شوید.")
+                        st.success("حساب کاربری با موفقیت ایجاد شد! اکنون می‌توانید از تب ورود استفاده کنید.")
                     else:
-                        st.error("این نام کاربری قبلاً ثبت شده است.")
+                        st.error("این نام کاربری قبلاً ثبت شده است. لطفاً نام دیگری انتخاب کنید.")
                 else:
                     st.warning("لطفاً همه فیلدها را پر کنید.")
-                    
-        st.markdown("</div>", unsafe_allow_html=True)
         
     st.stop()
 
@@ -213,7 +270,7 @@ if "messages" not in st.session_state or not st.session_state.messages:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": f"سلام {st.session_state.username} عزیز 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری روانی.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
+                "content": f"سلام {st.session_state.username} عزیز 👋 من **ResiliMind** هستم؛ دستیار هوشمند ارزیابی و تقویت تاب‌آوری.\n\nامروز چه حسی داری یا دوست داری در مورد چه موضوعی با هم گفتگو کنیم؟"
             }
         ]
 
@@ -240,7 +297,7 @@ with st.sidebar:
     st.divider()
 
     # Sidebar Tabs for Real-Time Analysis vs. Historical Logs
-    sidebar_tab1, sidebar_tab2 = st.tabs(["📊 تحلیل نشست جاری", "📜 سوابق تاب‌آوری"])
+    sidebar_tab1, sidebar_tab2 = st.tabs(["📊 نشست جاری", "📜 سوابق قبلی"])
 
     # Tab 1: Current Session State
     with sidebar_tab1:
@@ -317,7 +374,7 @@ st.markdown("""
 <div class="main-header">
     <h2 style="margin:0; font-weight:700;">🌱 سامانه هوشمند مشاوره و تاب‌آوری ResiliMind</h2>
     <p style="margin:6px 0 0 0; opacity:0.85; font-size:0.95rem;">
-        تحلیل چندبعدی وضعیت روانی بر اساس شبکه گراف دانش و هوش مصنوعی
+        تحلیل چندبعدی وضعیت بر اساس شبکه گراف دانش و هوش مصنوعی
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -337,7 +394,7 @@ if user_input := st.chat_input("پیام خود را اینجا بنویسید..
 
     # 2. Process message through LangGraph state machine with persistent thread config
     with st.chat_message("assistant"):
-        with st.spinner("در حال تحلیل پیام، واکشی از گراف دانش و ارزیابی روانی..."):
+        with st.spinner("در حال تحلیل پیام، واکشی از گراف دانش و ارزیابی..."):
 
             # Construct execution initial state payload
             initial_state: Dict[str, Any] = {
