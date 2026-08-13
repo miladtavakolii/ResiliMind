@@ -1,9 +1,13 @@
 import sqlite3
 import hashlib
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from .config import settings
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 # Define the path for the SQLite database file
 DB_PATH: Path = settings.user_db_path
@@ -14,36 +18,43 @@ def init_db() -> None:
     if they do not exist. Ensures parent directories exist prior to database connection.
     """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor: sqlite3.Cursor = conn.cursor()
-        
-        # Create users table for authentication
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create resilience_logs table for tracking node status history per user
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS resilience_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                node_id TEXT NOT NULL,
-                category TEXT NOT NULL,
-                status TEXT NOT NULL,
-                score INTEGER NOT NULL,
-                confidence REAL NOT NULL,
-                reasoning TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-            )
-        ''')
-        
-        conn.commit()
+    logger.info(f"[Database] Initializing database at {DB_PATH}")
+    
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor: sqlite3.Cursor = conn.cursor()
+            
+            # Create users table for authentication
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create resilience_logs table for tracking node status history per user
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS resilience_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    node_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    score INTEGER NOT NULL,
+                    confidence REAL NOT NULL,
+                    reasoning TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+            ''')
+            
+            conn.commit()
+            logger.debug("[Database] Tables 'users' and 'resilience_logs' verified/created.")
+    except sqlite3.Error as e:
+        logger.error(f"[Database] Failed to initialize tables: {e}")
+        raise
 
 
 def _hash_password(password: str) -> str:
@@ -78,9 +89,13 @@ def register_user(username: str, password: str) -> bool:
                 (username.strip(), _hash_password(password))
             )
             conn.commit()
+        logger.info(f"[Database] Successfully registered user: {username}")
         return True
     except sqlite3.IntegrityError:
-        # Triggered if the username violates the UNIQUE constraint in the database
+        logger.warning(f"[Database] Registration failed: Username '{username}' already exists.")
+        return False
+    except sqlite3.Error as e:
+        logger.error(f"[Database] Registration error for '{username}': {e}")
         return False
 
 
@@ -102,7 +117,13 @@ def authenticate_user(username: str, password: str) -> Optional[int]:
             (username.strip(), _hash_password(password))
         )
         result: Optional[tuple] = cursor.fetchone()
-        return result[0] if result else None
+        
+        if result:
+            logger.info(f"[Database] User '{username}' authenticated successfully.")
+            return result[0]
+        
+        logger.warning(f"[Database] Authentication attempt failed for user: {username}")
+        return None
 
 
 def save_resilience_log(
@@ -124,16 +145,20 @@ def save_resilience_log(
         confidence (float): The confidence score assigned by the Assessor Agent.
         reasoning (Optional[str]): The underlying reasoning text provided by the LLM.
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor: sqlite3.Cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO resilience_logs (user_id, node_id, category, status, score, confidence, reasoning)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (user_id, node_id, category, status.upper(), score, confidence, reasoning)
-        )
-        conn.commit()
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor: sqlite3.Cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO resilience_logs (user_id, node_id, category, status, score, confidence, reasoning)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, node_id, category, status.upper(), score, confidence, reasoning)
+            )
+            conn.commit()
+        logger.debug(f"[Database] Saved resilience log for user {user_id} on node {node_id}.")
+    except sqlite3.Error as e:
+        logger.error(f"[Database] Failed to save resilience log for user {user_id}: {e}")
 
 
 def get_user_resilience_history(user_id: int, limit: int = 20) -> List[Dict[str, Any]]:
@@ -161,6 +186,7 @@ def get_user_resilience_history(user_id: int, limit: int = 20) -> List[Dict[str,
             (user_id, limit)
         )
         rows = cursor.fetchall()
+        logger.debug(f"[Database] Retrieved {len(rows)} history logs for user {user_id}.")
         return [dict(row) for row in rows]
 
 
@@ -192,6 +218,7 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
             (user_id, user_id)
         )
         rows = cursor.fetchall()
+        logger.debug(f"[Database] Retrieved {len(rows)} latest node statuses for user {user_id}.")
         return [dict(row) for row in rows]
 
 def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
@@ -220,4 +247,5 @@ def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]
             (user_id, limit)
         )
         rows = cursor.fetchall()
+        logger.debug(f"[Database] Retrieved {len(rows)} timeline records for user {user_id}.")
         return [dict(row) for row in rows]

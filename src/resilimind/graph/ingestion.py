@@ -1,7 +1,11 @@
 import json
+import logging
 import networkx as nx
 import importlib.resources as pkg_resources
 from typing import Dict, Any, List, Optional
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
     """
@@ -21,15 +25,17 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
     try:
         if json_file_path:
             # Custom path provided (e.g., for external testing)
+            logger.info(f"[GraphLoader] Loading custom graph from: {json_file_path}")
             with open(json_file_path, 'r', encoding='utf-8') as f:
                 graph_data: Dict[str, Any] = json.load(f)
         else:
             # Default: Load safely from the bundled package assets
+            logger.info("[GraphLoader] Loading default bundled resilience graph.")
             json_text = pkg_resources.files("resilimind.assets").joinpath("final_resilience_graph.json").read_text(encoding="utf-8")
             graph_data: Dict[str, Any] = json.loads(json_text)
             
     except Exception as e:
-        print(f"Error loading graph data: {e}")
+        logger.error(f"[GraphLoader] Error loading graph data: {e}")
         return G
 
     # 2. Add Nodes
@@ -46,7 +52,7 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
             interventions=node_attrs.get("interventions", {})
         )
     
-    print(f"Successfully loaded {G.number_of_nodes()} nodes.")
+    logger.info(f"[GraphLoader] Successfully loaded {G.number_of_nodes()} nodes.")
 
     # 3. Add Edges
     edges: List[Dict[str, str]] = graph_data.get("edges", [])
@@ -62,13 +68,18 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
                 relation_type=edge.get("type"),
                 description=edge.get("description")
             )
+        else:
+            logger.warning(f"[GraphLoader] Edge {source} -> {target} skipped: Node missing.")
     
-    print(f"Successfully loaded {G.number_of_edges()} edges.")
+    logger.info(f"[GraphLoader] Successfully loaded {G.number_of_edges()} edges.")
     
     return G
 
 # Script Testing and Data Retrieval Example
 if __name__ == "__main__":
+    # Configure basic logging for test script
+    logging.basicConfig(level=logging.INFO)
+    
     # Build the graph using default path resolution
     resilience_graph: nx.DiGraph = load_resilience_graph()
     
@@ -76,7 +87,7 @@ if __name__ == "__main__":
     target_node: str = "IND_ECO_01"
     
     if target_node in resilience_graph:
-        print(f"\n--- Fetching data for node: {target_node} ---")
+        logger.info(f"--- Fetching data for node: {target_node} ---")
         node_data: Dict[str, Any] = resilience_graph.nodes[target_node]
         
         print(f"Domain: {node_data.get('domain')}")

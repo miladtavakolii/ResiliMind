@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
@@ -9,6 +10,9 @@ from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
 from ..llm import prompts
 from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 # Initialize LLM Engine singleton and load graph into memory once
 llm_engine: LLMEngine = LLMEngine()
@@ -26,7 +30,7 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'active_nodes'.
     """
-    print("[Node] Extractor Agent is analyzing input...")
+    logger.info("[Extractor] Extractor Agent is analyzing input...")
     user_msg: str = state.get("user_message", "")
     
     extractor_chain = llm_engine.get_extractor_runner(prompts.EXTRACTOR_SYSTEM_PROMPT)
@@ -37,6 +41,7 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     
     # Extract unique node IDs from active signals
     active_node_ids: List[str] = list({signal.node_id for signal in result.active_signals})
+    logger.debug(f"[Extractor] Extracted {len(active_node_ids)} nodes and {len(signals_list)} signals.")
     
     return {"active_nodes": active_node_ids, "active_signals": signals_list}
 
@@ -51,11 +56,12 @@ def retriever_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'subgraph_context'.
     """
-    print("[Node] Graph Retriever is fetching node knowledge...")
+    logger.info("[Retriever] Graph Retriever is fetching node knowledge...")
     active_nodes: List[str] = state.get("active_nodes", [])
     
     # Fetch structured string representation from NetworkX graph
     context: str = retrieve_subgraph_context(resilience_graph, active_nodes)
+    logger.debug(f"[Retriever] Fetched subgraph context for nodes: {active_nodes}")
     
     return {"subgraph_context": context}
 
@@ -125,7 +131,9 @@ def calculate_composite_confidence(
 
     # Aggregate and cap at 1.0
     composite_score = llm_score + evidence_weight + consistency_weight
-    return min(max(round(composite_score, 2), 0.0), 1.0)
+    final_conf = min(max(round(composite_score, 2), 0.0), 1.0)
+    logger.debug(f"[Confidence] Calculated composite confidence: {final_conf} (raw: {raw_confidence})")
+    return final_conf
 
 
 def assessor_node(state: AgentState) -> Dict[str, Any]:
@@ -140,7 +148,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state with 'assessments' and 'requires_disambiguation'.
     """
-    print("[Node] Assessor Agent is evaluating resilience status with evidence...")
+    logger.info("[Assessor] Assessor Agent is evaluating resilience status with evidence...")
     user_msg: str = state.get("user_message", "")
     context: str = state.get("subgraph_context", "")
     active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
@@ -156,6 +164,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
             )
         formatted_evidence = "\n".join(evidence_blocks)
     else:
+        logger.warning("[Assessor] No explicit extracted signals provided.")
         formatted_evidence = "No explicit extracted signals provided."
 
     # 2. Construct clear evidence-aware payload conforming to assessor.txt prompt
@@ -203,6 +212,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
 
         # Re-evaluate routing logic based on the calibrated score
         if true_confidence < 0.70:
+            logger.warning(f"[Assessor] Low confidence detected for node {node_id} ({true_confidence}). Flagging disambiguation.")
             requires_disambiguation_override = True
 
     return {
@@ -222,7 +232,7 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
-    print("[Node] Questioner Agent is formulating clarification...")
+    logger.info("[Questioner] Questioner Agent is formulating clarification...")
     context: str = state.get("subgraph_context", "")
     
     # Fetch the full chat history from the graph state
@@ -238,6 +248,7 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
     })
 
     question_text: str = response.content
+    logger.debug("[Questioner] Clarification question successfully generated.")
     return {
         "final_response": question_text,
         "messages": [AIMessage(content=question_text)]
@@ -255,7 +266,7 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
-    print("[Node] Advisor Agent is generating psychological interventions with full memory...")
+    logger.info("[Advisor] Advisor Agent is generating psychological interventions with full memory...")
     user_id: int = state.get("user_id", 0)
     subgraph_context: str = state.get("subgraph_context", "")
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
@@ -286,6 +297,7 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
             formatted_logs.append(f"• Node {nid} Timeline: {path_str}")
             
         history_context = "\n".join(formatted_logs)
+        logger.debug(f"[Advisor] Loaded timeline history for user {user_id}.")
     
     # Combine real-time graph context with the user's historical profile
     full_context: str = (
@@ -304,6 +316,7 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     })
     
     advice_text: str = response.content
+    logger.debug("[Advisor] Advice successfully generated.")
     
     return {
         "final_response": advice_text,
@@ -323,15 +336,15 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'safety_flag' boolean.
     """
-    print("[Node] Safety Gate is checking for high-risk signals...")
+    logger.info("[Safety] Safety Gate is checking for high-risk signals...")
     user_msg: str = state.get("user_message", "")
     
     # 1. Fast Heuristic Keyword Fallback (Zero-latency safety net)
     danger_keywords = ["خودکشی", "نمیخوام زنده باشم", "مرگ", "خودمو بکشم", "پایان بدم", "رگ"]
     normalized_msg = user_msg.replace(" ", "")
     if any(keyword in normalized_msg for keyword in danger_keywords):
-        print("[Safety] Fast heuristic triggered high-risk flag.")
-        return {"safety_flag": True}
+        logger.warning("[Safety] Fast heuristic triggered high-risk flag.")
+        return {"safety_status": "HIGH_RISK", "safety_flag": True}
         
     # 2. LLM-based Safety Classification
     try:
@@ -339,16 +352,18 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
         
         if result.is_high_risk:
-            print(f"LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
+            logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
             return {"safety_status": "HIGH_RISK", "safety_flag": True}
             
+        logger.debug("[Safety] Input evaluated as SAFE.")
         return {"safety_status": "SAFE", "safety_flag": False}
         
     except Exception as e:
         # AVAILABILITY-AWARE FALLBACK: Do not falsely accuse user of crisis. 
         # Instead, mark safety subsystem as unavailable and halt standard pipeline.
-        print(f"Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
+        logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
         return {"safety_status": "UNAVAILABLE", "safety_flag": False}
+
 
 def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -362,7 +377,7 @@ def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
         Dict[str, Any]: A state update dictionary containing the formatted service 
                         unavailable message and appended AI message history.
     """
-    print("Pipeline halted: Safety subsystem is unavailable.")
+    logger.error("[ServiceUnavailable] Pipeline halted: Safety subsystem is unavailable.")
     unavailable_text: str = (
         "⚠️ **The system is temporarily experiencing some issues with the safety assessment section.**\n\n"
         "For security reasons, it is not possible to continue the psychological analysis at this time. "
@@ -372,6 +387,7 @@ def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
         "final_response": unavailable_text,
         "messages": [AIMessage(content=unavailable_text)]
     }
+
 
 def emergency_response_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -384,7 +400,7 @@ def emergency_response_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
     """
-    print("[Node] 🚨 HIGH RISK DETECTED: Routing to Emergency Protocols!")
+    logger.critical("[Emergency] 🚨 HIGH RISK DETECTED: Routing to Emergency Protocols!")
     
     # Load static, clinically approved crisis text directly from prompt configuration
     emergency_text: str = prompts.EMERGENCY_RESPONSE_TEMPLATE

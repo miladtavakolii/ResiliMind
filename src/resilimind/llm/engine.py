@@ -1,9 +1,13 @@
+import logging
 from typing import Any, Optional
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
 from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
 from ..core.config import settings
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 
 class LLMEngine:
@@ -37,6 +41,7 @@ class LLMEngine:
         """
         if cls._instance is None:
             cls._instance = super(LLMEngine, cls).__new__(cls)
+            logger.debug("[LLMEngine] Creating new singleton instance of LLMEngine.")
         return cls._instance
 
     def __init__(self) -> None:
@@ -57,6 +62,7 @@ class LLMEngine:
             self._conversational_llm: Optional[ChatOllama] = None
             
             self.is_initialized: bool = True
+            logger.info(f"[LLMEngine] Initialized engine with model '{self.model_name}' at URL '{self.base_url}'.")
 
     def get_safety_runner(self, system_prompt: str) -> Any:
         """
@@ -71,6 +77,7 @@ class LLMEngine:
                             `SafetyOutput` Pydantic object.
         """
         if self._safety_llm is None:
+            logger.debug("[LLMEngine] Initializing cached safety LLM runner (temp=0.0)...")
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
@@ -97,6 +104,7 @@ class LLMEngine:
                             `ExtractionOutput` Pydantic object.
         """
         if self._extractor_llm is None:
+            logger.debug("[LLMEngine] Initializing cached extractor LLM runner (temp=0.0)...")
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
@@ -124,6 +132,7 @@ class LLMEngine:
                             `AssessmentOutput` Pydantic object.
         """
         if self._assessor_llm is None:
+            logger.debug("[LLMEngine] Initializing cached assessor LLM runner (temp=0.2)...")
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
@@ -146,6 +155,7 @@ class LLMEngine:
             ChatOllama: An initialized Ollama LLM instance configured for conversational flow.
         """
         if self._conversational_llm is None:
+            logger.debug(f"[LLMEngine] Initializing cached conversational LLM instance (temp={self.conversational_temp})...")
             self._conversational_llm = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 

@@ -1,4 +1,5 @@
 import sqlite3
+import logging
 from pathlib import Path
 from typing import Literal, Any, List, Dict
 from langgraph.graph import StateGraph, START, END
@@ -18,57 +19,11 @@ from .agents import (
 )
 from .config import settings
 
+# Initialize module logger
+logger = logging.getLogger(__name__)
+
 # Define path for SQLite persistent checkpoint database
 CHECKPOINT_DB_PATH: Path = settings.checkpoint_db_path
-
-
-def route_safety(state: AgentState) -> Literal["emergency_response", "extractor"]:
-    """
-    Determines if the input contains a high-risk crisis signal requiring 
-    immediate emergency intervention, bypassing normal resilience analysis.
-
-    Args:
-        state (AgentState): The current state dictionary of the workflow.
-
-    Returns:
-        Literal["emergency_response", "extractor"]: Target node identifier.
-    """
-    if state.get("safety_flag", False):
-        print("🚨 Routing to emergency response protocol...")
-        return "emergency_response"
-    return "extractor"
-
-
-def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"]:
-    """
-    Conditional edge router that determines whether to ask a clarifying question
-    or to provide final psychological advice based on disambiguation status and confidence threshold.
-
-    Args:
-        state (AgentState): The current state dictionary of the workflow.
-
-    Returns:
-        Literal["questioner", "advisor"]: Target agent node identifier.
-    """
-    # 1. Check explicit disambiguation flag set by Assessor Agent
-    if state.get("requires_disambiguation", False):
-        return "questioner"
-    
-    # 2. Retrieve extracted node assessments
-    assessments: List[Dict[str, Any]] = state.get("assessments", [])
-    
-    # If no nodes were extracted or active, route to Questioner for clarification
-    if not assessments:
-        return "questioner"
-
-    # If any confidence score falls below the 0.70 threshold, force disambiguation
-    for item in assessments:
-        confidence: float = item.get("confidence", 1.0)
-        if confidence < 0.70:
-            print(f"⚠️ Low confidence detected ({confidence}). Routing to Questioner...")
-            return "questioner"
-            
-    return "advisor"
 
 
 def route_safety(state: AgentState) -> Literal["emergency_response", "service_unavailable", "extractor"]:
@@ -86,15 +41,50 @@ def route_safety(state: AgentState) -> Literal["emergency_response", "service_un
     status: str = state.get("safety_status", "SAFE")
     
     if status == "HIGH_RISK":
-        print("High-risk signal detected! Routing to emergency response protocol...")
+        logger.error("[Workflow] High-risk signal detected! Routing to emergency response protocol...")
         return "emergency_response"
     
     if status == "UNAVAILABLE":
-        print("Safety subsystem unavailable. Routing to service unavailable block...")
+        logger.warning("[Workflow] Safety subsystem unavailable. Routing to service unavailable block...")
         return "service_unavailable"
         
-    print("Safety check passed (SAFE). Routing to extractor...")
+    logger.info("[Workflow] Safety check passed (SAFE). Routing to extractor...")
     return "extractor"
+
+
+def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"]:
+    """
+    Conditional edge router that determines whether to ask a clarifying question
+    or to provide final psychological advice based on disambiguation status and confidence threshold.
+
+    Args:
+        state (AgentState): The current state dictionary of the workflow.
+
+    Returns:
+        Literal["questioner", "advisor"]: Target agent node identifier.
+    """
+    # 1. Check explicit disambiguation flag set by Assessor Agent
+    if state.get("requires_disambiguation", False):
+        logger.info("[Workflow] Disambiguation flag is TRUE. Routing to Questioner...")
+        return "questioner"
+    
+    # 2. Retrieve extracted node assessments
+    assessments: List[Dict[str, Any]] = state.get("assessments", [])
+    
+    # If no nodes were extracted or active, route to Questioner for clarification
+    if not assessments:
+        logger.info("[Workflow] No assessments generated. Routing to Questioner for context...")
+        return "questioner"
+
+    # If any confidence score falls below the 0.70 threshold, force disambiguation
+    for item in assessments:
+        confidence: float = item.get("confidence", 1.0)
+        if confidence < 0.70:
+            logger.warning(f"[Workflow] Low confidence detected ({confidence}). Routing to Questioner...")
+            return "questioner"
+            
+    logger.info("[Workflow] Assessment confidence is high. Routing to Advisor...")
+    return "advisor"
 
 
 def build_workflow() -> Any:
@@ -120,10 +110,6 @@ def build_workflow() -> Any:
 
     # 3. Entry Point: Route to Safety Gate first
     workflow.add_edge(START, "safety_classifier")
-    workflow.add_conditional_edges(
-        "safety_classifier",
-        route_safety
-    )
 
     # 4. Conditional Edge: Evaluate Safety
     workflow.add_conditional_edges(
@@ -149,10 +135,12 @@ def build_workflow() -> Any:
 
     # 8. Ensure data directory exists and set up SQLite checkpointer connection
     CHECKPOINT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"[Workflow] Connecting to checkpointer database at: {CHECKPOINT_DB_PATH}")
     conn: sqlite3.Connection = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
     memory: SqliteSaver = SqliteSaver(conn)
 
     # 9. Compile the graph configuration into an executable application with memory persistence
     app: Any = workflow.compile(checkpointer=memory)
+    logger.info("[Workflow] LangGraph workflow successfully compiled and ready.")
     
     return app

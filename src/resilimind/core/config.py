@@ -1,5 +1,11 @@
+import logging
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
+from typing_extensions import Self
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 class AppConfig(BaseSettings):
     """
@@ -17,6 +23,8 @@ class AppConfig(BaseSettings):
     RESILIMIND_LLM_MODEL: str = "gemma4:e2b"
     RESILIMIND_LLM_TEMPERATURE: float = 0.6
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE_PATH: Path = Path("resilimind.log")
     
     # Centralized Storage Directory (Defaults to 'data' in the current working directory)
     DATA_DIR: Path = Path("data")
@@ -27,6 +35,23 @@ class AppConfig(BaseSettings):
         extra="ignore"
     )
 
+    @model_validator(mode="after")
+    def _log_config_initialization(self) -> Self:
+        """Logs configuration details at INFO level upon successful initialization."""
+        logger.info(f"[Config] AppConfig successfully loaded with model '{self.RESILIMIND_LLM_MODEL}' and data directory '{self.DATA_DIR}'.")
+        return self
+
+    @property
+    def resolved_log_file_path(self) -> Path:
+        """
+        Dynamically computes the absolute path for the log file, ensuring parent directories exist.
+        """
+        path: Path = self.LOG_FILE_PATH
+        if not path.is_absolute():
+            path = (self.DATA_DIR / path).resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     @property
     def user_db_path(self) -> Path:
         """
@@ -35,7 +60,9 @@ class AppConfig(BaseSettings):
         Returns:
             Path: The resolved path to 'resilimind.db'.
         """
-        return (self.DATA_DIR / "resilimind.db").resolve()
+        path: Path = (self.DATA_DIR / "resilimind.db").resolve()
+        logger.debug(f"[Config] Resolved user database path: {path}")
+        return path
 
     @property
     def checkpoint_db_path(self) -> Path:
@@ -45,7 +72,9 @@ class AppConfig(BaseSettings):
         Returns:
             Path: The resolved path to 'checkpoints.db'.
         """
-        return (self.DATA_DIR / "checkpoints.db").resolve()
+        path: Path = (self.DATA_DIR / "checkpoints.db").resolve()
+        logger.debug(f"[Config] Resolved checkpoint database path: {path}")
+        return path
 
 # Singleton instance of the configuration
 settings: AppConfig = AppConfig()

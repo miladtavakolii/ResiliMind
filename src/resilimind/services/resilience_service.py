@@ -28,7 +28,7 @@ class ResilienceService:
         Returns:
             ProcessResult: The decoupled container holding the response, assessments, and final state.
         """
-        logger.info("Executing resilience workflow for user...")
+        logger.info("[Service] Executing resilience workflow for user...")
         
         initial_state: Dict[str, Any] = {
             "user_id": user_id,
@@ -42,11 +42,13 @@ class ResilienceService:
             "final_response": "",
             "messages": [HumanMessage(content=user_input)]
         }
+        logger.debug(f"[Service] Initial state constructed for user_id={user_id}.")
 
         try:
             final_state: Dict[str, Any] = app.invoke(initial_state, config=config)
+            logger.debug("[Service] LangGraph workflow invoked successfully.")
         except Exception as e:
-            logger.exception(f"Workflow execution failed: {e}")
+            logger.exception(f"[Service] Workflow execution failed: {e}")
             raise
 
         new_assessments: List[Dict[str, Any]] = final_state.get("assessments", [])
@@ -72,7 +74,7 @@ class ResilienceService:
             user_id (int): The unique identifier of the user.
             assessments (List[Dict[str, Any]]): List of assessment dictionaries from graph state.
         """
-        logger.info(f"Persisting {len(assessments)} node assessments to database...")
+        logger.info(f"[Service] Persisting {len(assessments)} node assessments to database...")
         
         for assessment in assessments:
             scores: Dict[str, int] = assessment.get("scores", {})
@@ -99,6 +101,7 @@ class ResilienceService:
                 confidence=float(assessment.get("confidence", 0.0)),
                 reasoning=assessment.get("reasoning", "")
             )
+            logger.debug(f"[Service] Saved assessment log for node '{assessment.get('node_id')}' with status '{status}' and score {total_score}.")
 
     @staticmethod
     def build_response(final_state: Dict[str, Any]) -> str:
@@ -111,10 +114,12 @@ class ResilienceService:
         Returns:
             str: The formatted response string.
         """
+        logger.debug("[Service] Building final response text from state.")
         return final_state.get("final_response", "پاسخی از سمت سیستم دریافت نشد.")
 
 
 # Backward-compatible functional wrapper for UI invocation
 def process_user_message(app: Any, config: Dict[str, Any], user_input: str, user_id: int) -> ProcessResult:
     """Legacy functional wrapper delegating to ResilienceService."""
+    logger.debug("[Service] Invoking legacy process_user_message wrapper.")
     return ResilienceService.process_message(app, config, user_input, user_id)

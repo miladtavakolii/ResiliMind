@@ -1,5 +1,9 @@
+import logging
 from typing import List, Dict, Any
 import networkx as nx
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> str:
     """
@@ -14,12 +18,15 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
         str: Formatted context text containing node definitions, levels, and outgoing edges.
     """
     if not active_node_ids:
+        logger.debug("[Retriever] No active node IDs provided for context extraction.")
         return "No specific resilience domains were activated."
 
     context_blocks: List[str] = []
+    logger.debug(f"[Retriever] Extracting context for active nodes: {active_node_ids}")
 
     for node_id in active_node_ids:
         if node_id not in graph.nodes:
+            logger.warning(f"[Retriever] Node ID '{node_id}' not found in the resilience graph.")
             continue
 
         node_data: Dict[str, Any] = graph.nodes[node_id]
@@ -53,4 +60,5 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
 
         context_blocks.append(block)
 
+    logger.debug(f"[Retriever] Successfully built context blocks for {len(context_blocks)} nodes.")
     return "\n" + "=" * 50 + "\n".join(context_blocks)

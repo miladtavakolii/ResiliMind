@@ -1,18 +1,26 @@
+import logging
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from typing import List, Dict, Any
 from resilimind.core.database import get_user_latest_node_statuses, get_user_resilience_history
 
+# Initialize module logger
+logger = logging.getLogger(__name__)
+
+
 def render_domain_resilience_chart(user_id: int) -> None:
     """Renders an interactive RADAR chart showing resilience score distribution."""
+    logger.debug(f"[UI-Dashboard] Rendering domain resilience chart for user_id={user_id}...")
     logs = get_user_latest_node_statuses(user_id)
     if not logs:
+        logger.debug("[UI-Dashboard] No logs available for radar chart rendering.")
         st.caption("هنوز ارزیابی کافی برای محاسبه نمودار ثبت نشده است.")
         return
 
     df = pd.DataFrame(logs)
     if 'category' not in df.columns or 'score' not in df.columns:
+        logger.warning("[UI-Dashboard] Missing required columns ('category' or 'score') in log data frame.")
         st.caption("لطفاً پیام جدیدی ارسال کنید تا داده‌های ساختاریافته در دیتابیس قرار گیرند.")
         return
 
@@ -44,15 +52,19 @@ def render_domain_resilience_chart(user_id: int) -> None:
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(t=40, b=40, l=40, r=40), height=320,
     )
+    logger.debug("[UI-Dashboard] Radar chart successfully compiled. Rendering in Streamlit...")
     st.plotly_chart(fig, width="stretch", config={'displayModeBar': False})
+
 
 def render_sidebar_dashboard() -> None:
     """Renders the complete sidebar profile and dashboard."""
+    logger.debug("[UI-Dashboard] Rendering sidebar profile and dashboard...")
     with st.sidebar:
         st.markdown("### 👤 پروفایل کاربری")
         st.markdown(f"کاربر فعلی: **{st.session_state.username}**")
         
         if st.button("🚪 خروج از حساب", width="stretch"):
+            logger.info(f"[UI-Dashboard] User '{st.session_state.username}' logged out.")
             for key in ["user_id", "username", "messages", "last_state"]:
                 st.session_state[key] = None if key in ["user_id", "username", "last_state"] else []
             st.rerun()
@@ -68,6 +80,7 @@ def render_sidebar_dashboard() -> None:
                 
                 st.markdown("**سیگنال‌ها و شواهد شناسایی‌شده:**")
                 if active_signals:
+                    logger.debug(f"[UI-Dashboard] Rendering {len(active_signals)} active signals in sidebar.")
                     for sig in active_signals:
                         node_id = sig.get("node_id", "")
                         polarity = sig.get("detected_signal", "mixed")
@@ -91,6 +104,7 @@ def render_sidebar_dashboard() -> None:
                 assessments: List[Dict[str, Any]] = state.get("assessments", [])
                 st.markdown("**ارزیابی نشست:**")
                 if assessments:
+                    logger.debug(f"[UI-Dashboard] Rendering {len(assessments)} assessments in sidebar.")
                     for item in assessments:
                         node_id = item.get("node_id", "N/A")
                         status = item.get("status", "YELLOW").upper()
@@ -122,6 +136,7 @@ def render_sidebar_dashboard() -> None:
             history_logs = get_user_resilience_history(st.session_state.user_id, limit=15)
             
             if history_logs:
+                logger.debug(f"[UI-Dashboard] Rendering {len(history_logs)} historical logs in sidebar.")
                 for log in history_logs:
                     node_id = log.get("node_id", "N/A")
                     status = log.get("status", "YELLOW").upper()
