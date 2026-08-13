@@ -1,6 +1,5 @@
 from typing import List, Literal
-from pydantic import BaseModel, Field, model_validator, computed_field
-from typing_extensions import Self
+from pydantic import BaseModel, Field, computed_field
 
 class SafetyOutput(BaseModel):
     """
@@ -45,12 +44,9 @@ class ExtractionOutput(BaseModel):
 class NodeAssessment(BaseModel):
     """
     Detailed evaluation of resilience status for a specific node based on a 4-dimensional rubric.
+    The LLM outputs ONLY the raw dimensions; status and total score are deterministically computed.
     """
     node_id: str = Field(..., description="The unique identifier of the node.")
-    status: Literal["GREEN", "YELLOW", "RED"] = Field(
-        ..., 
-        description="Assessed resilience status: GREEN (High), YELLOW (Moderate), RED (Critical)."
-    )
     category: Literal[
         "Personal_Resilience", 
         "Political_Resilience", 
@@ -84,7 +80,7 @@ class NodeAssessment(BaseModel):
         le=1.0, 
         description="Confidence score of the assessment between 0.0 and 1.0."
     )
-    reasoning: str = Field(..., description="Psychological reasoning behind this status assessment based on evidence dimensions.")
+    reasoning: str = Field(..., description="Psychological reasoning behind the assigned dimension scores.")
 
     @computed_field
     @property
@@ -95,24 +91,19 @@ class NodeAssessment(BaseModel):
         """
         return self.severity_score + self.frequency_score + self.functional_score + self.coping_score
 
-    @model_validator(mode="after")
-    def validate_score_status_alignment(self) -> Self:
+    @computed_field
+    @property
+    def status(self) -> str:
         """
-        Enforces strict numerical alignment between status and computed score thresholds.
-        Raises ValueError if the LLM hallucinates inconsistent status/score combinations.
+        Deterministically evaluates the color status based on the aggregated score.
         """
-        status = self.status
-        score = self.score
-
-        if status == "GREEN" and not (70 <= score <= 100):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 70-100 for GREEN.")
-        elif status == "YELLOW" and not (40 <= score <= 69):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 40-69 for YELLOW.")
-        elif status == "RED" and not (0 <= score <= 39):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 0-39 for RED.")
-        
-        # In Pydantic v2 mode="after", returning self is mandatory
-        return self
+        total = self.score
+        if total >= 70:
+            return "GREEN"
+        elif total >= 40:
+            return "YELLOW"
+        else:
+            return "RED"
 
 class AssessmentOutput(BaseModel):
     """
