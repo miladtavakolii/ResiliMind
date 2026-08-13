@@ -1,9 +1,8 @@
 from pathlib import Path
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Base path for prompt files
 PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "prompts"
-
 
 def load_prompt_text(filename: str) -> str:
     """
@@ -22,11 +21,9 @@ def load_prompt_text(filename: str) -> str:
     except FileNotFoundError:
         raise FileNotFoundError(f"Prompt file not found at: {file_path}")
 
-
-# System Prompt Strings loaded from files
+# System Prompt Strings loaded from files for Extractor and Assessor
 EXTRACTOR_SYSTEM_PROMPT: str = load_prompt_text("extractor.txt")
 ASSESSOR_SYSTEM_PROMPT: str = load_prompt_text("assessor.txt")
-
 
 def get_questioner_prompt() -> ChatPromptTemplate:
     """

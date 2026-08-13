@@ -31,10 +31,10 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     user_msg: str = state.get("user_message", "")
     
     extractor_chain = llm_engine.get_extractor_runner(prompts.EXTRACTOR_SYSTEM_PROMPT)
+    result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
     signals_list: List[Dict[str, Any]] = [
         signal.model_dump() for signal in result.active_signals
     ]
-    result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
     
     # Extract unique node IDs from active signals
     active_node_ids: List[str] = list({signal.node_id for signal in result.active_signals})
@@ -135,16 +135,10 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
     messages_history = state.get("messages", [])
     
     conversational_llm = llm_engine.get_conversational_llm()
-    system_prompt_text = prompts.get_questioner_prompt()
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "{system_instructions}\n\n=== GRAPH CONTEXT ===\n{subgraph_context}"),
-        MessagesPlaceholder(variable_name="messages")
-    ])
-    
-    chain = prompt | conversational_llm
+    prompt = prompts.get_questioner_prompt()
+    chain = prompt | conversational_llm    
     response = chain.invoke({
-        "system_instructions": system_prompt_text,
+        "user_message": state.get("user_message", ""),
         "subgraph_context": context,
         "messages": messages_history
     })
@@ -194,16 +188,10 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     )
 
     conversational_llm = llm_engine.get_conversational_llm()
-    system_prompt_text = prompts.get_advisor_prompt()
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "{system_instructions}\n\n{subgraph_context}\n\n=== ASSESSMENTS ===\n{assessments}"),
-        MessagesPlaceholder(variable_name="messages")
-    ])
-    
-    chain = prompt | conversational_llm
+    prompt = prompts.get_advisor_prompt()
+    chain = prompt | conversational_llm    
     response = chain.invoke({
-        "system_instructions": system_prompt_text,
+        "user_message": state.get("user_message", ""),
         "subgraph_context": full_context,
         "assessments": str(assessments),
         "messages": messages_history
