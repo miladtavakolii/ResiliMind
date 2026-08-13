@@ -1,5 +1,5 @@
 from typing import List, Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, computed_field
 from typing_extensions import Self
 
 class SafetyOutput(BaseModel):
@@ -44,7 +44,7 @@ class ExtractionOutput(BaseModel):
 
 class NodeAssessment(BaseModel):
     """
-    Detailed evaluation of resilience status for a specific node.
+    Detailed evaluation of resilience status for a specific node based on a 4-dimensional rubric.
     """
     node_id: str = Field(..., description="The unique identifier of the node.")
     status: Literal["GREEN", "YELLOW", "RED"] = Field(
@@ -59,30 +59,57 @@ class NodeAssessment(BaseModel):
         "Social_Resilience", 
         "Spiritual_Cultural_Resilience"
     ] = Field(description="The exact domain string of the node as provided in the graph context.")
+    
+    # --- Evidence-Based Rubric Dimensions (0-25 each) ---
+    severity_score: int = Field(
+        description="Absence of severity: 0 (Severe/Overwhelming distress) to 25 (None/Mild distress).", 
+        ge=0, le=25
+    )
+    frequency_score: int = Field(
+        description="Absence of frequency: 0 (Constant/Chronic distress) to 25 (Rare/Isolated distress).", 
+        ge=0, le=25
+    )
+    functional_score: int = Field(
+        description="Functional preservation: 0 (Severe impairment) to 25 (Fully functional/Adapted).", 
+        ge=0, le=25
+    )
+    coping_score: int = Field(
+        description="Coping capacity: 0 (No Coping/Surrender) to 25 (Excellent Coping Mechanisms).", 
+        ge=0, le=25
+    )
+    
     confidence: float = Field(
         ..., 
         ge=0.0, 
         le=1.0, 
         description="Confidence score of the assessment between 0.0 and 1.0."
     )
-    score: int = Field(ge=0, le=100, description="Exact numerical score representing resilience capacity (0 to 100)")
-    reasoning: str = Field(..., description="Psychological reasoning behind this status assessment.")
+    reasoning: str = Field(..., description="Psychological reasoning behind this status assessment based on evidence dimensions.")
+
+    @computed_field
+    @property
+    def score(self) -> int:
+        """
+        Deterministically aggregates the final resilience score (0-100) 
+        from the four evidence dimensions.
+        """
+        return self.severity_score + self.frequency_score + self.functional_score + self.coping_score
 
     @model_validator(mode="after")
     def validate_score_status_alignment(self) -> Self:
         """
-        Enforces strict numerical alignment between status and score thresholds.
+        Enforces strict numerical alignment between status and computed score thresholds.
         Raises ValueError if the LLM hallucinates inconsistent status/score combinations.
         """
         status = self.status
         score = self.score
 
         if status == "GREEN" and not (70 <= score <= 100):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. GREEN must be between 70 and 100.")
+            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 70-100 for GREEN.")
         elif status == "YELLOW" and not (40 <= score <= 69):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. YELLOW must be between 40 and 69.")
+            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 40-69 for YELLOW.")
         elif status == "RED" and not (0 <= score <= 39):
-            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. RED must be between 0 and 39.")
+            raise ValueError(f"Inconsistent assessment: Status is {status} but computed score is {score}. Dimensions must sum to 0-39 for RED.")
         
         # In Pydantic v2 mode="after", returning self is mandatory
         return self
