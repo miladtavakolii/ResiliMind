@@ -57,8 +57,8 @@ def render_domain_resilience_chart(user_id: int) -> None:
 
 
 def render_sidebar_dashboard() -> None:
-    """Renders the complete sidebar profile and dashboard."""
-    logger.debug("[UI-Dashboard] Rendering sidebar profile and dashboard...")
+    """Renders the complete sidebar profile and dashboard securely without raw HTML injection risks."""
+    logger.debug("[UI-Dashboard] Rendering sidebar profile and dashboard securely...")
     with st.sidebar:
         st.markdown("### 👤 پروفایل کاربری")
         st.markdown(f"کاربر فعلی: **{st.session_state.username}**")
@@ -86,18 +86,14 @@ def render_sidebar_dashboard() -> None:
                         polarity = sig.get("detected_signal", "mixed")
                         evidence = sig.get("evidence", "")
                         
-                        color_map = {"positive": "#34d399", "negative": "#f87171", "mixed": "#fbbf24"}
-                        sig_color = color_map.get(polarity, "#38bdf8")
-                        
-                        st.markdown(f"""
-                        <div class="metric-card" style="border-right: 4px solid {sig_color};">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-weight: 700; font-family: monospace;">{node_id}</span>
-                                <span style="font-size: 0.75rem; color: {sig_color}; font-weight: bold;">{polarity.upper()}</span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 6px; font-style: italic;">"{evidence}"</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        with st.container(border=True):
+                            col1, col2 = st.columns([2, 1])
+                            with col1:
+                                st.code(node_id, language=None)
+                            with col2:
+                                st.markdown(f"**{polarity.upper()}**")
+                            if evidence:
+                                st.caption(f'شاهد: "{evidence}"')
                 else:
                     st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
 
@@ -110,18 +106,16 @@ def render_sidebar_dashboard() -> None:
                         status = item.get("status", "YELLOW").upper()
                         confidence = int(item.get("confidence", 0.0) * 100)
                         reasoning = item.get("reasoning", "")
-                        badge_class = f"badge-{status.lower()}"
                         
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <span style="font-weight: 700; font-family: monospace; direction: ltr;">{node_id}</span>
-                                <span class="{badge_class}">{status}</span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: #94a3b8;">درصد اطمینان: {confidence}%</div>
-                            <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px;">{reasoning}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        with st.container(border=True):
+                            col1, col2 = st.columns([2, 1])
+                            with col1:
+                                st.code(node_id, language=None)
+                            with col2:
+                                st.markdown(f"**{status}**")
+                            st.markdown(f"اطمینان: {confidence}%")
+                            if reasoning:
+                                st.markdown(f"تحلیل: {reasoning}")
                 else:
                     st.caption("ارزیابی جدیدی ثبت نشده است.")
             else:
@@ -141,16 +135,13 @@ def render_sidebar_dashboard() -> None:
                     node_id = log.get("node_id", "N/A")
                     status = log.get("status", "YELLOW").upper()
                     created_at = str(log.get("created_at", ""))[:16]
-                    badge_class = f"badge-{status.lower()}"
                     
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 700; font-family: monospace; direction: ltr;">{node_id}</span>
-                            <span class="{badge_class}">{status}</span>
-                        </div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px; direction: ltr; text-align: left;">{created_at}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    with st.container(border=True):
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.code(node_id, language=None)
+                        with col2:
+                            st.markdown(f"**{status}**")
+                        st.caption(created_at)
             else:
                 st.caption("هنوز سابقه ارزیابی برای حساب شما ثبت نشده است.")
