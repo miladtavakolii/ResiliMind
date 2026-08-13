@@ -1,5 +1,5 @@
-from typing import List, Literal
-from pydantic import BaseModel, Field, computed_field
+from typing import List, Literal, Dict, Any
+from pydantic import BaseModel, Field
 
 class SafetyOutput(BaseModel):
     """
@@ -41,10 +41,55 @@ class ExtractionOutput(BaseModel):
         description="List of nodes activated by the user's input message."
     )
 
+class EvidenceScores(BaseModel):
+    """
+    4-dimensional evidence-based resilience rubric (0-25 each).
+    Strictly contains only raw dimension scores for LLM generation.
+    """
+    severity: int = Field(
+        ..., 
+        ge=0, 
+        le=25, 
+        description="Absence of severity: 0 (Severe distress) to 25 (None/Mild distress)."
+    )
+    frequency: int = Field(
+        ..., 
+        ge=0, 
+        le=25, 
+        description="Absence of frequency: 0 (Constant/Chronic distress) to 25 (Rare/Isolated)."
+    )
+    functional: int = Field(
+        ..., 
+        ge=0, 
+        le=25, 
+        description="Functional preservation: 0 (Severe impairment) to 25 (Fully functional/Adapted)."
+    )
+    coping: int = Field(
+        ..., 
+        ge=0, 
+        le=25, 
+        description="Coping capacity: 0 (No Coping/Surrender) to 25 (Strong Coping Mechanisms)."
+    )
+
+    @property
+    def total_score(self) -> int:
+        """Calculates total score (0-100) deterministically in Python."""
+        return self.severity + self.frequency + self.functional + self.coping
+
+    @property
+    def status(self) -> str:
+        """Derives status color deterministically from total score in Python."""
+        total = self.total_score
+        if total >= 70:
+            return "GREEN"
+        elif total >= 40:
+            return "YELLOW"
+        return "RED"
+
 class NodeAssessment(BaseModel):
     """
-    Detailed evaluation of resilience status for a specific node based on a 4-dimensional rubric.
-    The LLM outputs ONLY the raw dimensions; status and total score are deterministically computed.
+    Detailed evaluation of resilience status for a specific node.
+    LLM only generates rubric scores, confidence, and reasoning.
     """
     node_id: str = Field(..., description="The unique identifier of the node.")
     category: Literal[
@@ -56,24 +101,10 @@ class NodeAssessment(BaseModel):
         "Spiritual_Cultural_Resilience"
     ] = Field(description="The exact domain string of the node as provided in the graph context.")
     
-    # --- Evidence-Based Rubric Dimensions (0-25 each) ---
-    severity_score: int = Field(
-        description="Absence of severity: 0 (Severe/Overwhelming distress) to 25 (None/Mild distress).", 
-        ge=0, le=25
+    scores: EvidenceScores = Field(
+        ..., 
+        description="The 4-dimensional evidence rubric ratings."
     )
-    frequency_score: int = Field(
-        description="Absence of frequency: 0 (Constant/Chronic distress) to 25 (Rare/Isolated distress).", 
-        ge=0, le=25
-    )
-    functional_score: int = Field(
-        description="Functional preservation: 0 (Severe impairment) to 25 (Fully functional/Adapted).", 
-        ge=0, le=25
-    )
-    coping_score: int = Field(
-        description="Coping capacity: 0 (No Coping/Surrender) to 25 (Excellent Coping Mechanisms).", 
-        ge=0, le=25
-    )
-    
     confidence: float = Field(
         ..., 
         ge=0.0, 
@@ -82,28 +113,25 @@ class NodeAssessment(BaseModel):
     )
     reasoning: str = Field(..., description="Psychological reasoning behind the assigned dimension scores.")
 
-    @computed_field
     @property
     def score(self) -> int:
-        """
-        Deterministically aggregates the final resilience score (0-100) 
-        from the four evidence dimensions.
-        """
-        return self.severity_score + self.frequency_score + self.functional_score + self.coping_score
+        """Proxy property for total calculated score."""
+        return self.scores.total_score
 
-    @computed_field
     @property
     def status(self) -> str:
+        """Proxy property for derived status color."""
+        return self.scores.status
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """
-        Deterministically evaluates the color status based on the aggregated score.
+        Overridden to inject computed 'score' and 'status' into dictionary outputs.
+        Ensures 100% backward compatibility with DB persistence and Streamlit UI.
         """
-        total = self.score
-        if total >= 70:
-            return "GREEN"
-        elif total >= 40:
-            return "YELLOW"
-        else:
-            return "RED"
+        data: Dict[str, Any] = super().model_dump(*args, **kwargs)
+        data["score"] = self.score
+        data["status"] = self.status
+        return data
 
 class AssessmentOutput(BaseModel):
     """
