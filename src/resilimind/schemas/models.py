@@ -1,5 +1,6 @@
 from typing import List, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self
 
 class ActiveSignal(BaseModel):
     """
@@ -52,6 +53,25 @@ class NodeAssessment(BaseModel):
     )
     score: int = Field(ge=0, le=100, description="Exact numerical score representing resilience capacity (0 to 100)")
     reasoning: str = Field(..., description="Psychological reasoning behind this status assessment.")
+
+    @model_validator(mode="after")
+    def validate_score_status_alignment(self) -> Self:
+        """
+        Enforces strict numerical alignment between status and score thresholds.
+        Raises ValueError if the LLM hallucinates inconsistent status/score combinations.
+        """
+        status = self.status
+        score = self.score
+
+        if status == "GREEN" and not (70 <= score <= 100):
+            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. GREEN must be between 70 and 100.")
+        elif status == "YELLOW" and not (40 <= score <= 69):
+            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. YELLOW must be between 40 and 69.")
+        elif status == "RED" and not (0 <= score <= 39):
+            raise ValueError(f"Inconsistent assessment: Status is {status} but score is {score}. RED must be between 0 and 39.")
+        
+        # In Pydantic v2 mode="after", returning self is mandatory
+        return self
 
 class AssessmentOutput(BaseModel):
     """
