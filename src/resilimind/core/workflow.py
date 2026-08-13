@@ -10,6 +10,7 @@ from .agents import (
     safety_classifier_node,
     emergency_response_node,
     extractor_node,
+    service_unavailable_node,
     retriever_node,
     assessor_node,
     questioner_node,
@@ -70,6 +71,32 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
     return "advisor"
 
 
+def route_safety(state: AgentState) -> Literal["emergency_response", "service_unavailable", "extractor"]:
+    """
+    Determines the next workflow branch based on the tri-state safety status: 
+    HIGH_RISK, UNAVAILABLE, or SAFE.
+
+    Args:
+        state (AgentState): The current state dictionary containing the safety status.
+
+    Returns:
+        Literal["emergency_response", "service_unavailable", "extractor"]: 
+            Target node identifier for execution routing.
+    """
+    status: str = state.get("safety_status", "SAFE")
+    
+    if status == "HIGH_RISK":
+        print("High-risk signal detected! Routing to emergency response protocol...")
+        return "emergency_response"
+    
+    if status == "UNAVAILABLE":
+        print("Safety subsystem unavailable. Routing to service unavailable block...")
+        return "service_unavailable"
+        
+    print("Safety check passed (SAFE). Routing to extractor...")
+    return "extractor"
+
+
 def build_workflow() -> Any:
     """
     Constructs, connects, attaches persistent SQLite checkpointer, and compiles 
@@ -84,6 +111,7 @@ def build_workflow() -> Any:
     # 2. Register all agent functions as distinct nodes in the graph
     workflow.add_node("safety_classifier", safety_classifier_node)
     workflow.add_node("emergency_response", emergency_response_node)
+    workflow.add_node("service_unavailable", service_unavailable_node)
     workflow.add_node("extractor", extractor_node)
     workflow.add_node("retriever", retriever_node)
     workflow.add_node("assessor", assessor_node)
@@ -92,6 +120,10 @@ def build_workflow() -> Any:
 
     # 3. Entry Point: Route to Safety Gate first
     workflow.add_edge(START, "safety_classifier")
+    workflow.add_conditional_edges(
+        "safety_classifier",
+        route_safety
+    )
 
     # 4. Conditional Edge: Evaluate Safety
     workflow.add_conditional_edges(
@@ -111,6 +143,7 @@ def build_workflow() -> Any:
 
     # 7. Connect terminal nodes to END
     workflow.add_edge("emergency_response", END)
+    workflow.add_edge("service_unavailable", END)
     workflow.add_edge("questioner", END)
     workflow.add_edge("advisor", END)
 

@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Annotated
+from typing import List, Dict, Any, Annotated, Literal
 from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -30,6 +30,7 @@ class AgentState(TypedDict):
     user_message: str
     
     # 2. Safety Gate Classification
+    safety_status: Literal["SAFE", "HIGH_RISK", "UNAVAILABLE"]
     safety_flag: bool
     
     # 3. Extractor Agent Outputs

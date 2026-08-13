@@ -335,22 +335,43 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         
     # 2. LLM-based Safety Classification
     try:
-        safety_chain = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
+        safety_chain: Any = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
         result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
         
         if result.is_high_risk:
             print(f"LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
-            return {"safety_flag": True}
+            return {"safety_status": "HIGH_RISK", "safety_flag": True}
             
-        return {"safety_flag": False}
-
+        return {"safety_status": "SAFE", "safety_flag": False}
+        
     except Exception as e:
-        # CONSERVATIVE FALLBACK (FAIL-CLOSED): 
-        # If the local LLM fails, times out, or hallucinates schema, DO NOT pass to Advisor. 
-        # Always default to safe-guarding the user.
-        print(f"Safety LLM execution failed ({e}). Applying conservative fallback: forcing safety flag to True.")
-        return {"safety_flag": True}
-    
+        # AVAILABILITY-AWARE FALLBACK: Do not falsely accuse user of crisis. 
+        # Instead, mark safety subsystem as unavailable and halt standard pipeline.
+        print(f"Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
+        return {"safety_status": "UNAVAILABLE", "safety_flag": False}
+
+def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Handles cases where the safety subsystem or LLM backend is unavailable, 
+    preventing un-vetted processing while gracefully informing the user.
+
+    Args:
+        state (AgentState): The current state dictionary of the workflow.
+
+    Returns:
+        Dict[str, Any]: A state update dictionary containing the formatted service 
+                        unavailable message and appended AI message history.
+    """
+    print("Pipeline halted: Safety subsystem is unavailable.")
+    unavailable_text: str = (
+        "⚠️ **The system is temporarily experiencing some issues with the safety assessment section.**\n\n"
+        "For security reasons, it is not possible to continue the psychological analysis at this time. "
+        "Please try again in a few minutes or contact the help desk if you need immediate support."
+    )
+    return {
+        "final_response": unavailable_text,
+        "messages": [AIMessage(content=unavailable_text)]
+    }
 
 def emergency_response_node(state: AgentState) -> Dict[str, Any]:
     """
