@@ -2,6 +2,20 @@ from typing import List, Literal
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self
 
+class SafetyOutput(BaseModel):
+    """
+    Structured output schema for the Safety Classifier Agent.
+    Acts as a zero-tolerance gatekeeper to detect high-risk user intents.
+    """
+    is_high_risk: bool = Field(
+        ..., 
+        description="True ONLY if the user explicitly expresses intent for self-harm, suicide, or severe violence."
+    )
+    risk_category: Literal["SAFE", "SELF_HARM", "VIOLENCE", "SEVERE_ABUSE"] = Field(
+        ...,
+        description="Categorization of the detected risk based on safety guidelines."
+    )
+
 class ActiveSignal(BaseModel):
     """
     Represents an individual node detected from user input.

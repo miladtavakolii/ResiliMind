@@ -9,7 +9,7 @@ from ..graph.ingestion import load_resilience_graph
 from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
 from ..llm import prompts
-from ..schemas.models import ExtractionOutput, AssessmentOutput
+from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
 
 # Initialize LLM Engine singleton and load graph into memory once
 llm_engine: LLMEngine = LLMEngine()
@@ -309,4 +309,55 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     return {
         "final_response": advice_text,
         "messages": [AIMessage(content=advice_text)]
+    }
+
+
+def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Acts as the primary zero-tolerance safety gate of the architecture. 
+    Screens user input for high-risk emergency signals (self-harm, suicidal ideation)
+    before any resilience processing occurs.
+
+    Args:
+        state (AgentState): Current state containing 'user_message'.
+
+    Returns:
+        Dict[str, Any]: Updated state dict with 'safety_flag' boolean.
+    """
+    print("[Node] Safety Gate is checking for high-risk signals...")
+    user_msg: str = state.get("user_message", "")
+    
+    # 1. Fast Heuristic Keyword Fallback (Zero-latency safety net)
+    danger_keywords = ["خودکشی", "نمیخوام زنده باشم", "مرگ", "خودمو بکشم", "پایان بدم", "رگ"]
+    normalized_msg = user_msg.replace(" ", "")
+    if any(keyword in normalized_msg for keyword in danger_keywords):
+        print("[Safety] Fast heuristic triggered high-risk flag.")
+        return {"safety_flag": True}
+        
+    # 2. LLM-based Safety Classification
+    safety_chain = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
+    result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
+    
+    return {"safety_flag": result.is_high_risk}
+
+
+def emergency_response_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Generates a deterministic emergency intervention response with official crisis hotlines,
+    bypassing LLM generation completely to avoid hallucinations or clinical risks.
+
+    Args:
+        state (AgentState): Current graph state.
+
+    Returns:
+        Dict[str, Any]: Updated state dict with 'final_response' and 'messages'.
+    """
+    print("[Node] 🚨 HIGH RISK DETECTED: Routing to Emergency Protocols!")
+    
+    # Load static, clinically approved crisis text directly from prompt configuration
+    emergency_text: str = prompts.EMERGENCY_RESPONSE_TEMPLATE
+    
+    return {
+        "final_response": emergency_text,
+        "messages": [AIMessage(content=emergency_text)]
     }

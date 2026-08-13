@@ -21,9 +21,11 @@ def load_prompt_text(filename: str) -> str:
     except FileNotFoundError:
         raise FileNotFoundError(f"Prompt file not found at: {file_path}")
 
-# System Prompt Strings loaded from files for Extractor and Assessor
+# System Prompt Strings loaded from files for Extractor, Assessor, and Safety modules
 EXTRACTOR_SYSTEM_PROMPT: str = load_prompt_text("extractor.txt")
 ASSESSOR_SYSTEM_PROMPT: str = load_prompt_text("assessor.txt")
+SAFETY_CLASSIFIER_PROMPT: str = load_prompt_text("safety_classifier.txt")
+EMERGENCY_RESPONSE_TEMPLATE: str = load_prompt_text("emergency_response.txt")
 
 def get_questioner_prompt() -> ChatPromptTemplate:
     """
@@ -31,10 +33,9 @@ def get_questioner_prompt() -> ChatPromptTemplate:
     """
     system_text = load_prompt_text("questioner.txt")
     return ChatPromptTemplate.from_messages([
-        ("system", system_text),
-        ("human", "User message: {user_message}\n\nContext:\n{subgraph_context}")
+        ("system", f"{system_text}\n\n=== GRAPH CONTEXT ===\n{{subgraph_context}}"),
+        MessagesPlaceholder(variable_name="messages")
     ])
-
 
 def get_advisor_prompt() -> ChatPromptTemplate:
     """
@@ -42,6 +43,6 @@ def get_advisor_prompt() -> ChatPromptTemplate:
     """
     system_text = load_prompt_text("advisor.txt")
     return ChatPromptTemplate.from_messages([
-        ("system", system_text),
-        ("human", "User message: {user_message}\n\nAssessed Status:\n{assessments}\n\nGraph Interventions:\n{subgraph_context}")
+        ("system", f"{system_text}\n\n{{subgraph_context}}\n\n=== ASSESSMENTS ===\n{{assessments}}"),
+        MessagesPlaceholder(variable_name="messages")
     ])
