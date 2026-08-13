@@ -138,5 +138,9 @@ def inject_custom_css() -> None:
             color: #38bdf8 !important;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
+        .stChatMessage div[data-testid="stMarkdownContainer"] p {
+            white-space: pre-line !important;
+            line-height: 1.7; /* برای خوانایی بهتر متن‌های فارسی */
+        }
     </style>
     """, unsafe_allow_html=True)
