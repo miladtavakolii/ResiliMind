@@ -334,11 +334,23 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         return {"safety_flag": True}
         
     # 2. LLM-based Safety Classification
-    safety_chain = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
-    result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
-    
-    return {"safety_flag": result.is_high_risk}
+    try:
+        safety_chain = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
+        result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
+        
+        if result.is_high_risk:
+            print(f"LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
+            return {"safety_flag": True}
+            
+        return {"safety_flag": False}
 
+    except Exception as e:
+        # CONSERVATIVE FALLBACK (FAIL-CLOSED): 
+        # If the local LLM fails, times out, or hallucinates schema, DO NOT pass to Advisor. 
+        # Always default to safe-guarding the user.
+        print(f"Safety LLM execution failed ({e}). Applying conservative fallback: forcing safety flag to True.")
+        return {"safety_flag": True}
+    
 
 def emergency_response_node(state: AgentState) -> Dict[str, Any]:
     """
