@@ -191,3 +191,31 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
         )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
+
+def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Fetches the chronological history of node assessments for a user
+    to build a true temporal memory for the Advisor Agent.
+
+    Args:
+        user_id (int): The ID of the user.
+        limit (int): Maximum number of log entries to return (default: 50).
+
+    Returns:
+        List[Dict[str, Any]]: A list of dictionaries containing chronological log entries.
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor: sqlite3.Cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT node_id, status, score, created_at
+            FROM resilience_logs
+            WHERE user_id = ?
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (user_id, limit)
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]

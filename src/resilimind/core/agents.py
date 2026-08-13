@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from .state import AgentState
-from .database import get_user_latest_node_statuses
+from .database import get_user_latest_node_statuses, get_user_node_timeline
 from ..graph.ingestion import load_resilience_graph
 from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
@@ -169,16 +169,28 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     # Fetch the full chat history from the graph state
     messages_history = state.get("messages", [])
     
-    # Fetch user's historical resilience node statuses from SQLite database
-    history_logs: List[Dict[str, Any]] = get_user_latest_node_statuses(user_id) if user_id else []
+    # Fetch user's historical resilience timeline from SQLite database
+    history_logs: List[Dict[str, Any]] = get_user_node_timeline(user_id) if user_id else []
     
-    # Format historical profile into a readable context block
-    history_context: str = "No prior historical profile recorded."
+    # Format historical profile into a chronological timeline block
+    history_context: str = "No prior historical timeline recorded."
     if history_logs:
-        formatted_logs: List[str] = [
-            f"- Node {log['node_id']}: Previous Status = {log['status']} (Recorded: {str(log['created_at'])[:16]})"
-            for log in history_logs
-        ]
+        timeline_by_node = {}
+        for log in history_logs:
+            nid = log.get('node_id')
+            if nid not in timeline_by_node:
+                timeline_by_node[nid] = []
+            
+            date_str = str(log.get('created_at', ''))[:10]
+            status = log.get('status', 'UNKNOWN')
+            score = log.get('score', 'N/A')
+            timeline_by_node[nid].append(f"[{date_str}] {status}({score})")
+        
+        formatted_logs = []
+        for nid, timeline in timeline_by_node.items():
+            path_str = " ➔ ".join(timeline)
+            formatted_logs.append(f"• Node {nid} Timeline: {path_str}")
+            
         history_context = "\n".join(formatted_logs)
     
     # Combine real-time graph context with the user's historical profile
