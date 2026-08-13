@@ -31,12 +31,15 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     user_msg: str = state.get("user_message", "")
     
     extractor_chain = llm_engine.get_extractor_runner(prompts.EXTRACTOR_SYSTEM_PROMPT)
+    signals_list: List[Dict[str, Any]] = [
+        signal.model_dump() for signal in result.active_signals
+    ]
     result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
     
     # Extract unique node IDs from active signals
     active_node_ids: List[str] = list({signal.node_id for signal in result.active_signals})
     
-    return {"active_nodes": active_node_ids}
+    return {"active_nodes": active_node_ids, "active_signals": signals_list}
 
 
 def retriever_node(state: AgentState) -> Dict[str, Any]:
@@ -72,10 +75,19 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     print("[Node] Assessor Agent is evaluating resilience status...")
     user_msg: str = state.get("user_message", "")
     context: str = state.get("subgraph_context", "")
-    
+    active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
+
+    formatted_evidence = "No explicit extracted signals."
+    if active_signals:
+        evidence_lines = [
+            f"- Node {s['node_id']}: Polarity={s.get('detected_signal', 'N/A')}, Evidence='{s.get('evidence', '')}'"
+            for s in active_signals
+        ]
+        formatted_evidence = "\n".join(evidence_lines)
+    enriched_user_msg = f"{user_msg}\n\n=== EXTRACTED SIGNALS & EVIDENCE ===\n{formatted_evidence}"
     assessor_chain = llm_engine.get_assessor_runner(prompts.ASSESSOR_SYSTEM_PROMPT)
     result: AssessmentOutput = assessor_chain.invoke({
-        "user_message": user_msg,
+        "user_message": enriched_user_msg,
         "subgraph_context": context
     })
     

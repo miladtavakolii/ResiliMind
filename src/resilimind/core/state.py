@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     
     # 2. Extractor Agent Outputs
     active_nodes: List[str]
+    active_signals: List[Dict[str, Any]]
     
     # 3. Graph Retriever Output
     subgraph_context: str

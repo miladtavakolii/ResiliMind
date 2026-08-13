@@ -375,16 +375,32 @@ with st.sidebar:
         if st.session_state.last_state:
             state: Dict[str, Any] = st.session_state.last_state
 
-            # Display Extracted Active Graph Nodes
-            active_nodes: List[str] = state.get("active_nodes", [])
-            st.markdown("**نودهای فعال:**")
-            if active_nodes:
-                chips_html: str = "".join([f"<span class='node-chip'>{node}</span>" for node in active_nodes])
-                st.markdown(f"<div style='margin-bottom: 12px;'>{chips_html}</div>", unsafe_allow_html=True)
+            active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
+            st.markdown("**سیگنال‌ها و شواهد شناسایی‌شده:**")
+            
+            if active_signals:
+                for sig in active_signals:
+                    node_id = sig.get("node_id", "")
+                    polarity = sig.get("detected_signal", "mixed")
+                    evidence = sig.get("evidence", "")
+                    
+                    # تعیین رنگ بر اساس قطبیت سیگنال
+                    color_map = {"positive": "#34d399", "negative": "#f87171", "mixed": "#fbbf24"}
+                    sig_color = color_map.get(polarity, "#38bdf8")
+                    
+                    st.markdown(f"""
+                    <div class="metric-card" style="border-right: 4px solid {sig_color};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700; font-family: monospace;">{node_id}</span>
+                            <span style="font-size: 0.75rem; color: {sig_color}; font-weight: bold;">{polarity.upper()}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 6px; font-style: italic;">
+                            "{evidence}"
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
                 st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
-
-            st.markdown("---")
 
             # Display Current Assessment Statuses
             assessments: List[Dict[str, Any]] = state.get("assessments", [])
