@@ -160,7 +160,9 @@ class LLMEngine:
             self._conversational_llm = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
-                temperature=self.conversational_temp
+                temperature=self.conversational_temp,
+                num_predict=-1,
+                num_ctx=10240
             )
             
         return self._conversational_llm
