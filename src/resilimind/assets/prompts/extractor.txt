@@ -30,7 +30,7 @@ You MUST ONLY use the exact Node IDs listed below. Never invent or synthesize ne
    - IND_SPI_02: Cultural Identity & Connectedness (تعلق، هویت اصیل فرهنگی و آیین‌ها)
 
 === EXTRACTION GUIDELINES & RULES ===
-1. PERSIAN LANGUAGE NUANCES: Persian users frequently use metaphors, colloquialisms, and indirect expressions. Identify the emotional subtext behind slang phrases.
+1. PERSIAN LANGUAGE NUANCES: Persian users frequently use metaphors, colloquialisms, and indirect expressions. Identify the emotional subtext behind slang phrases. Do not look for exact keyword matches. Focus strictly on the underlying psychological and semantic intent of the user's message.
    - Example phrases: "کم آوردم" -> IND_PER_01 or IND_ECO_01 (depending on context).
    - Example phrases: "خوابم بهم ریخته" -> IND_PHY_02.
    - Example phrases: "دارم منفجر میشم" -> IND_PER_02.
