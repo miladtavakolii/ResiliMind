@@ -78,70 +78,87 @@ def render_sidebar_dashboard() -> None:
                 state: Dict[str, Any] = st.session_state.last_state
                 active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
                 
-                st.markdown("**سیگنال‌ها و شواهد شناسایی‌شده:**")
+                st.markdown("### 📡 سیگنال‌های دریافتی")
                 if active_signals:
                     logger.debug(f"[UI-Dashboard] Rendering {len(active_signals)} active signals in sidebar.")
+                    
+                    polarity_styles = {
+                        "positive": "📈 مثبت",
+                        "negative": "📉 منفی",
+                        "mixed": "〰️ ترکیبی"
+                    }
+
                     for sig in active_signals:
                         node_id = sig.get("node_id", "")
-                        polarity = sig.get("detected_signal", "mixed")
+                        raw_polarity = sig.get("detected_signal", "mixed").lower()
+                        polarity = polarity_styles.get(raw_polarity, raw_polarity.upper())
                         evidence = sig.get("evidence", "")
                         
                         with st.container(border=True):
-                            col1, col2 = st.columns([2, 1])
-                            with col1:
-                                st.code(node_id, language=None)
-                            with col2:
-                                st.markdown(f"**{polarity.upper()}**")
+                            st.markdown(f"🏷️ **نود:** `{node_id}`")
+                            st.markdown(f"🧭 **جهت‌گیری:** {polarity}")
                             if evidence:
-                                st.caption(f'شاهد: "{evidence}"')
+                                st.caption(f'💬 **شاهد:** "{evidence}"')
                 else:
                     st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
 
+                st.divider()
+
                 assessments: List[Dict[str, Any]] = state.get("assessments", [])
-                st.markdown("**ارزیابی نشست:**")
+                st.markdown("### 🎯 ارزیابی نشست")
                 if assessments:
                     logger.debug(f"[UI-Dashboard] Rendering {len(assessments)} assessments in sidebar.")
+                    
+                    status_styles = {
+                        "RED": "🔴 بحرانی (RED)",
+                        "YELLOW": "🟡 هشدار (YELLOW)",
+                        "GREEN": "🟢 پایدار (GREEN)"
+                    }
+
                     for item in assessments:
                         node_id = item.get("node_id", "N/A")
-                        status = item.get("status", "YELLOW").upper()
+                        raw_status = item.get("status", "YELLOW").upper()
+                        status = status_styles.get(raw_status, raw_status)
                         confidence = int(item.get("confidence", 0.0) * 100)
                         reasoning = item.get("reasoning", "")
                         
                         with st.container(border=True):
-                            col1, col2 = st.columns([2, 1])
-                            with col1:
-                                st.code(node_id, language=None)
-                            with col2:
-                                st.markdown(f"**{status}**")
-                            st.markdown(f"اطمینان: {confidence}%")
+                            st.markdown(f"🏷️ **نود:** `{node_id}`")
+                            st.markdown(f"🚦 **وضعیت:** **{status}**")
+                            st.markdown(f"📊 **میزان اطمینان:** `{confidence}%`")
                             if reasoning:
-                                st.markdown(f"تحلیل: {reasoning}")
+                                st.caption(f"🧠 **تحلیل:** {reasoning}")
                 else:
                     st.caption("ارزیابی جدیدی ثبت نشده است.")
             else:
                 st.info("با ارسال پیام، جزئیات نشست در این بخش قرار می‌گیرد.")
 
         with sidebar_tab2:
-            st.markdown("**📊 خلاصه وضعیت تاب‌آوری:**")
+            st.markdown("### 📊 خلاصه وضعیت تاب‌آوری")
             render_domain_resilience_chart(st.session_state.user_id)
             st.divider()
 
-            st.markdown("**تاریخچه ارزیابی‌های اخیر:**")
+            st.markdown("### 📜 تاریخچه ارزیابی‌های اخیر")
             history_logs = get_user_resilience_history(st.session_state.user_id, limit=15)
             
             if history_logs:
                 logger.debug(f"[UI-Dashboard] Rendering {len(history_logs)} historical logs in sidebar.")
+                
+                status_styles = {
+                    "RED": "🔴 بحرانی",
+                    "YELLOW": "🟡 هشدار",
+                    "GREEN": "🟢 پایدار"
+                }
+
                 for log in history_logs:
                     node_id = log.get("node_id", "N/A")
-                    status = log.get("status", "YELLOW").upper()
+                    raw_status = log.get("status", "YELLOW").upper()
+                    status = status_styles.get(raw_status, raw_status)
                     created_at = str(log.get("created_at", ""))[:16]
                     
                     with st.container(border=True):
-                        col1, col2 = st.columns([2, 1])
-                        with col1:
-                            st.code(node_id, language=None)
-                        with col2:
-                            st.markdown(f"**{status}**")
-                        st.caption(created_at)
+                        st.markdown(f"🏷️ **نود:** `{node_id}`")
+                        st.markdown(f"🚦 **وضعیت:** **{status}**")
+                        st.caption(f"🕒 **زمان ثبت:** {created_at}")
             else:
                 st.caption("هنوز سابقه ارزیابی برای حساب شما ثبت نشده است.")
