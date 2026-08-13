@@ -1,10 +1,9 @@
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from .state import AgentState
-from .database import get_user_latest_node_statuses, get_user_node_timeline
+from .database import get_user_node_timeline
 from ..graph.ingestion import load_resilience_graph
 from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
