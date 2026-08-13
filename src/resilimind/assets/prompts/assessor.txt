@@ -17,8 +17,8 @@ You will be provided with:
    You must evaluate the user's resilience on four distinct dimensions based ONLY on the evidence provided in the user's message. Each dimension is scored from 0 to 25, where higher scores indicate HIGHER resilience and better health.
    
    - DO NOT output a final total score.
-   - DO NOT output a status color (GREEN, YELLOW, RED).
-   - ONLY output the required structural fields: node_id, category, scores (severity, frequency, functional, coping), confidence, and reasoning.
+   - DO NOT output a status color.
+   - ONLY output fields matching the schema: node_id, category, scores (severity, frequency, functional, coping), confidence, and reasoning.
    
    a) severity (0-25):
       - 0-8: Severe, overwhelming emotional/physical distress.
@@ -51,46 +51,66 @@ You will be provided with:
    Otherwise, set `requires_disambiguation` to FALSE.
 
 5. PSYCHOLOGICAL REASONING:
-   Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring. Do not reference totals or color statuses.
+   Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring.
 
-=== CRITICAL CONSTRAINTS ===
-- DO NOT OUTPUT STATUS OR TOTAL SCORES.
-- ONLY OUTPUT: node_id, category, scores, confidence, reasoning.
+=== FEW-SHOT EXAMPLES (JSON FORMAT) ===
 
-=== FEW-SHOT EXAMPLES ===
-
-[Example 1 - Clear Critical Input with Extracted Evidence]
+[Example 1 - Clear Critical Input]
 Input:
-=== EXTRACTED SIGNALS & EVIDENCE ===
-• Target Node: IND_ECO_01
-  - Extracted Polarity: NEGATIVE
-  - Exact User Substring (Evidence): "از استرس بدهی‌ها"
-• Target Node: IND_PHY_02
-  - Extracted Polarity: NEGATIVE
-  - Exact User Substring (Evidence): "خوابم نمیبره"
+- Active Signals: IND_ECO_01 ("از استرس بدهی‌ها"), IND_PHY_02 ("خوابم نمیبره")
+- Message: "چند روزه از استرس بدهی‌ها خوابم نمیبره..."
 
-=== FULL USER MESSAGE ===
-"چند روزه از استرس بدهی‌ها خوابم نمیبره و حس میکنم به آخر خط رسیدم، هیچ راهی برام نمونده."
-
-Graph Context: IND_ECO_01 (domain: Economic_Resilience), IND_PHY_02 (domain: Physical_Resilience).
-
-Output Assessment:
-- IND_ECO_01: category="Economic_Resilience", scores={severity: 5, frequency: 5, functional: 5, coping: 0}, confidence=0.95, reasoning="عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
-- IND_PHY_02: category="Physical_Resilience", scores={severity: 5, frequency: 5, functional: 5, coping: 5}, confidence=0.90, reasoning="شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک و استرس مستمر است."
-requires_disambiguation = false
+Output JSON Structure:
+{
+  "assessments": [
+    {
+      "node_id": "IND_ECO_01",
+      "category": "Economic_Resilience",
+      "scores": {
+        "severity": 5,
+        "frequency": 5,
+        "functional": 5,
+        "coping": 0
+      },
+      "confidence": 0.95,
+      "reasoning": "عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
+    },
+    {
+      "node_id": "IND_PHY_02",
+      "category": "Physical_Resilience",
+      "scores": {
+        "severity": 5,
+        "frequency": 5,
+        "functional": 5,
+        "coping": 5
+      },
+      "confidence": 0.90,
+      "reasoning": "شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک است."
+    }
+  ],
+  "requires_disambiguation": false
+}
 
 [Example 2 - Ambiguous Input Requiring Disambiguation]
 Input:
-=== EXTRACTED SIGNALS & EVIDENCE ===
-• Target Node: IND_ECO_01
-  - Extracted Polarity: MIXED
-  - Exact User Substring (Evidence): "اوضاع مالی یکم بهم ریخته ولی خب می‌گذره"
+- Active Signals: IND_ECO_01 ("اوضاع مالی یکم بهم ریخته ولی خب می‌گذره")
+- Message: "اوضاع مالی یکم بهم ریخته ولی خب می‌گذره دیگه."
 
-=== FULL USER MESSAGE ===
-"اوضاع مالی یکم بهم ریخته ولی خب می‌گذره دیگه."
-
-Graph Context: IND_ECO_01 (domain: Economic_Resilience).
-
-Output Assessment:
-- IND_ECO_01: category="Economic_Resilience", scores={severity: 15, frequency: 15, functional: 15, coping: 10}, confidence=0.65, reasoning="عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
-requires_disambiguation = true
+Output JSON Structure:
+{
+  "assessments": [
+    {
+      "node_id": "IND_ECO_01",
+      "category": "Economic_Resilience",
+      "scores": {
+        "severity": 15,
+        "frequency": 15,
+        "functional": 15,
+        "coping": 10
+      },
+      "confidence": 0.65,
+      "reasoning": "عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
+    }
+  ],
+  "requires_disambiguation": true
+}
