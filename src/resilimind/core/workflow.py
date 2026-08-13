@@ -17,7 +17,7 @@ from .agents import (
 )
 
 # Define path for SQLite persistent checkpoint database
-CHECKPOINT_DB_PATH: Path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "checkpoints.db"
+CHECKPOINT_DB_PATH: Path = Path.cwd() / "data" / "checkpoints.db"
 
 
 def route_safety(state: AgentState) -> Literal["emergency_response", "extractor"]:

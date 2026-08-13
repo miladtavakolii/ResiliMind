@@ -1,8 +1,5 @@
-from pathlib import Path
+import importlib.resources as pkg_resources
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-
-# Base path for prompt files
-PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "prompts"
 
 def load_prompt_text(filename: str) -> str:
     """
@@ -14,14 +11,14 @@ def load_prompt_text(filename: str) -> str:
     Returns:
         str: Raw prompt text string.
     """
-    file_path = PROMPTS_DIR / filename
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Prompt file not found at: {file_path}")
-
-# System Prompt Strings loaded from files for Extractor, Assessor, and Safety modules
+        # Load directly from the packaged resources (PEP 592/302 compatible)
+        prompt_content = pkg_resources.files("resilimind.assets.prompts").joinpath(filename).read_text(encoding="utf-8")
+        return prompt_content.strip()
+    except Exception as e:
+        raise FileNotFoundError(f"Failed to load prompt '{filename}' from package resources: {e}")
+    
+# System Prompt Strings loaded from files
 EXTRACTOR_SYSTEM_PROMPT: str = load_prompt_text("extractor.txt")
 ASSESSOR_SYSTEM_PROMPT: str = load_prompt_text("assessor.txt")
 SAFETY_CLASSIFIER_PROMPT: str = load_prompt_text("safety_classifier.txt")

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 # Define the path for the SQLite database file within the 'data' directory
-DB_PATH: Path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "resilimind.db"
+DB_PATH: Path = Path.cwd() / "data" / "resilimind.db"
 
 def init_db() -> None:
     """

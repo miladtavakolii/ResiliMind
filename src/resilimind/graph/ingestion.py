@@ -1,6 +1,6 @@
 import json
 import networkx as nx
-from pathlib import Path
+import importlib.resources as pkg_resources
 from typing import Dict, Any, List, Optional
 
 def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
@@ -8,8 +8,8 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
     Reads the resilience graph JSON file and returns a directed graph (DiGraph).
 
     Args:
-        json_file_path (Optional[str]): The path to the JSON file containing the graph data. 
-                                        Defaults to standard project path if None.
+        json_file_path (Optional[str]): The path to a custom JSON file. 
+                                        If None, loads the default bundled asset via pkg_resources.
 
     Returns:
         nx.DiGraph: A NetworkX directed graph populated with nodes and edges.
@@ -17,18 +17,19 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
     # Initialize an empty directed graph
     G: nx.DiGraph = nx.DiGraph()
 
-    # Determine default path if not explicitly provided
-    if json_file_path is None:
-        # Resolves path relative to the project root (assuming data/ folder is at the root)
-        current_dir = Path(__file__).resolve().parent
-        json_file_path = str(current_dir.parent.parent.parent / "data" / "final_resilience_graph.json")
-
-    # 1. Read the JSON file
+    # 1. Read the JSON data
     try:
-        with open(json_file_path, 'r', encoding='utf-8') as f:
-            graph_data: Dict[str, Any] = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: The file {json_file_path} was not found.")
+        if json_file_path:
+            # Custom path provided (e.g., for external testing)
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                graph_data: Dict[str, Any] = json.load(f)
+        else:
+            # Default: Load safely from the bundled package assets
+            json_text = pkg_resources.files("resilimind.assets").joinpath("final_resilience_graph.json").read_text(encoding="utf-8")
+            graph_data: Dict[str, Any] = json.loads(json_text)
+            
+    except Exception as e:
+        print(f"Error loading graph data: {e}")
         return G
 
     # 2. Add Nodes
