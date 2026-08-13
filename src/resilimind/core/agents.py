@@ -63,35 +63,50 @@ def retriever_node(state: AgentState) -> Dict[str, Any]:
 
 def assessor_node(state: AgentState) -> Dict[str, Any]:
     """
-    Evaluates resilience levels and calculates confidence to determine 
-    if disambiguation is needed.
+    Evaluates resilience levels using extracted evidence and polarity signals,
+    grounded in the retrieved subgraph context.
 
     Args:
-        state (AgentState): Current state with 'user_message' and 'subgraph_context'.
+        state (AgentState): Current state containing 'user_message', 
+                            'subgraph_context', and 'active_signals'.
 
     Returns:
-        Dict[str, Any]: Updated state dict with 'assessments' and 'requires_disambiguation'.
+        Dict[str, Any]: Updated state with 'assessments' and 'requires_disambiguation'.
     """
-    print("[Node] Assessor Agent is evaluating resilience status...")
+    print("[Node] Assessor Agent is evaluating resilience status with evidence...")
     user_msg: str = state.get("user_message", "")
     context: str = state.get("subgraph_context", "")
     active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
 
-    formatted_evidence = "No explicit extracted signals."
+    # 1. Format extracted signals & evidence substrings for prompt ingestion
     if active_signals:
-        evidence_lines = [
-            f"- Node {s['node_id']}: Polarity={s.get('detected_signal', 'N/A')}, Evidence='{s.get('evidence', '')}'"
-            for s in active_signals
-        ]
-        formatted_evidence = "\n".join(evidence_lines)
-    enriched_user_msg = f"{user_msg}\n\n=== EXTRACTED SIGNALS & EVIDENCE ===\n{formatted_evidence}"
+        evidence_blocks = []
+        for sig in active_signals:
+            evidence_blocks.append(
+                f"• Target Node: {sig.get('node_id')}\n"
+                f"  - Extracted Polarity: {sig.get('detected_signal', 'mixed').upper()}\n"
+                f"  - Exact User Substring (Evidence): \"{sig.get('evidence', '')}\""
+            )
+        formatted_evidence = "\n".join(evidence_blocks)
+    else:
+        formatted_evidence = "No explicit extracted signals provided."
+
+    # 2. Construct clear evidence-aware payload conforming to assessor.txt prompt
+    enriched_input = (
+        f"=== EXTRACTED SIGNALS & EVIDENCE ===\n"
+        f"{formatted_evidence}\n\n"
+        f"=== FULL USER MESSAGE ===\n"
+        f"{user_msg}"
+    )
+
+    # 3. Invoke LLM chain with evidence payload
     assessor_chain = llm_engine.get_assessor_runner(prompts.ASSESSOR_SYSTEM_PROMPT)
     result: AssessmentOutput = assessor_chain.invoke({
-        "user_message": enriched_user_msg,
+        "user_message": enriched_input,
         "subgraph_context": context
     })
     
-    # Convert Pydantic models to dicts for LangGraph state compatibility
+    # 4. Convert Pydantic models to dicts for LangGraph state compatibility
     assessments_list: List[Dict[str, Any]] = [
         assessment.model_dump() for assessment in result.assessments
     ]
