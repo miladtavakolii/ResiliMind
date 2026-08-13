@@ -1,13 +1,17 @@
 import sqlite3
-import hashlib
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHash
 
 from .config import settings
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
+
+# Initialize Argon2 Password Hasher (OWASP recommended standard)
+ph = PasswordHasher()
 
 # Define the path for the SQLite database file
 DB_PATH: Path = settings.user_db_path
@@ -57,22 +61,9 @@ def init_db() -> None:
         raise
 
 
-def _hash_password(password: str) -> str:
-    """
-    Hashes a plain-text password using the SHA-256 algorithm.
-
-    Args:
-        password (str): The plain-text password provided by the user.
-
-    Returns:
-        str: The SHA-256 hashed password string.
-    """
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-
 def register_user(username: str, password: str) -> bool:
     """
-    Registers a new user in the database.
+    Registers a new user in the database using secure Argon2id password hashing.
 
     Args:
         username (str): The desired username.
@@ -82,11 +73,12 @@ def register_user(username: str, password: str) -> bool:
         bool: True if the registration is successful, False if the username already exists.
     """
     try:
+        hashed_password = ph.hash(password)
         with sqlite3.connect(DB_PATH) as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (username.strip(), _hash_password(password))
+                (username.strip(), hashed_password)
             )
             conn.commit()
         logger.info(f"[Database] Successfully registered user: {username}")
@@ -101,7 +93,7 @@ def register_user(username: str, password: str) -> bool:
 
 def authenticate_user(username: str, password: str) -> Optional[int]:
     """
-    Authenticates a user by verifying their username and password match in the database.
+    Authenticates a user by securely verifying their password against the stored Argon2 hash.
 
     Args:
         username (str): The provided username.
@@ -113,16 +105,22 @@ def authenticate_user(username: str, password: str) -> Optional[int]:
     with sqlite3.connect(DB_PATH) as conn:
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
-            "SELECT id FROM users WHERE username = ? AND password_hash = ?",
-            (username.strip(), _hash_password(password))
+            "SELECT id, password_hash FROM users WHERE username = ?",
+            (username.strip(),)
         )
         result: Optional[tuple] = cursor.fetchone()
         
         if result:
-            logger.info(f"[Database] User '{username}' authenticated successfully.")
-            return result[0]
-        
-        logger.warning(f"[Database] Authentication attempt failed for user: {username}")
+            user_id, stored_hash = result
+            try:
+                if ph.verify(stored_hash, password):
+                    logger.info(f"[Database] User '{username}' authenticated successfully.")
+                    return user_id
+            except (VerifyMismatchError, InvalidHash):
+                logger.warning(f"[Database] Password mismatch for user: {username}")
+        else:
+            logger.warning(f"[Database] Authentication attempt failed: User '{username}' not found.")
+            
         return None
 
 
