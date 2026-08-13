@@ -334,7 +334,7 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         state (AgentState): Current state containing 'user_message'.
 
     Returns:
-        Dict[str, Any]: Updated state dict with 'safety_flag' boolean.
+        Dict[str, Any]: Updated state dict with 'safety_status' and 'safety_flag'.
     """
     logger.info("[Safety] Safety Gate is checking for high-risk signals...")
     user_msg: str = state.get("user_message", "")
@@ -344,7 +344,10 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
     normalized_msg = user_msg.replace(" ", "")
     if any(keyword in normalized_msg for keyword in danger_keywords):
         logger.warning("[Safety] Fast heuristic triggered high-risk flag.")
-        return {"safety_status": "HIGH_RISK", "safety_flag": True}
+        return {
+            "safety_status": "HIGH_RISK", 
+            "safety_flag": True
+        }
         
     # 2. LLM-based Safety Classification
     try:
@@ -353,16 +356,25 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         
         if result.is_high_risk:
             logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
-            return {"safety_status": "HIGH_RISK", "safety_flag": True}
+            return {
+                "safety_status": "HIGH_RISK", 
+                "safety_flag": True
+            }
             
         logger.debug("[Safety] Input evaluated as SAFE.")
-        return {"safety_status": "SAFE", "safety_flag": False}
+        return {
+            "safety_status": "SAFE", 
+            "safety_flag": False
+        }
         
     except Exception as e:
         # AVAILABILITY-AWARE FALLBACK: Do not falsely accuse user of crisis. 
         # Instead, mark safety subsystem as unavailable and halt standard pipeline.
         logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
-        return {"safety_status": "UNAVAILABLE", "safety_flag": False}
+        return {
+            "safety_status": "UNAVAILABLE", 
+            "safety_flag": False
+        }
 
 
 def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
