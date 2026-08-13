@@ -1,66 +1,133 @@
-from typing import Any
+from typing import Any, Optional
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
-from ..schemas.models import ExtractionOutput, AssessmentOutput
+from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
 
 
 class LLMEngine:
     """
-    Singleton wrapper class for interacting with the local Gemma model via Ollama.
-    Handles structured outputs and conversational chains.
+    True Singleton wrapper class for interacting with the local Gemma model via Ollama.
+
+    Manages the lifecycle of LLM instances to prevent unnecessary object instantiation,
+    memory leaks, and initialization overhead. It provides cached, task-specific runnable 
+    chains (e.g., extraction, assessment, safety) tailored with appropriate temperatures 
+    and structured output schemas.
+
+    Attributes:
+        model_name (str): The name of the underlying Ollama model instance.
+        is_initialized (bool): Flag indicating if the Singleton instance has been set up.
     """
+    
+    _instance = None
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> "LLMEngine":
+        """
+        Enforces the Singleton pattern by creating the instance only if it does not exist.
+
+        Returns:
+            LLMEngine: The single, shared instance of the class.
+        """
+        if cls._instance is None:
+            cls._instance = super(LLMEngine, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self, model_name: str = "gemma4:e2b") -> None:
         """
-        Initializes the LLMEngine with the specified Ollama model.
+        Initializes the LLMEngine variables. Safely prevents re-initialization if the 
+        Singleton instance has already been configured in a previous call.
 
         Args:
-            model_name (str): Name of the Ollama model instance (default: 'gemma4:e2b').
+            model_name (str, optional): Name of the Ollama model instance to communicate with. 
+                                        Defaults to "gemma4:e2b".
         """
-        self.model_name: str = model_name
+        if not hasattr(self, 'is_initialized'):
+            self.model_name: str = model_name
+            
+            # Lazy-loaded, cached LLM instances
+            self._extractor_llm: Optional[Any] = None
+            self._assessor_llm: Optional[Any] = None
+            self._safety_llm: Optional[Any] = None
+            self._conversational_llm: Optional[ChatOllama] = None
+            
+            self.is_initialized = True
 
-    def get_extractor_runner(self, system_prompt: str) -> Any:
+    def get_safety_runner(self, system_prompt: str) -> Any:
         """
-        Creates a runnable chain for extraction enforced with ExtractionOutput schema.
+        Creates or retrieves a cached runnable chain for zero-tolerance safety classification.
+        Uses temperature 0.0 for deterministic, highly reproducible triage.
 
         Args:
-            system_prompt (str): System prompt instructions for extraction.
+            system_prompt (str): The system prompt instructions defining safety protocols.
 
         Returns:
-            Any (Runnable): Execution chain outputting ExtractionOutput Pydantic object.
+            Any (Runnable): A LangChain runnable chain that outputs a structured 
+                            `SafetyOutput` Pydantic object.
         """
-        llm = ChatOllama(model=self.model_name, temperature=0.0)
-        structured_llm = llm.with_structured_output(ExtractionOutput)
+        if self._safety_llm is None:
+            llm = ChatOllama(model=self.model_name, temperature=0.0)
+            self._safety_llm = llm.with_structured_output(SafetyOutput)
+            
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", "User input: {user_message}")
         ])
-        return prompt | structured_llm
+        return prompt | self._safety_llm
+
+    def get_extractor_runner(self, system_prompt: str) -> Any:
+        """
+        Creates or retrieves a cached runnable chain for entity and signal extraction.
+        Uses temperature 0.0 to ensure factual extraction without hallucination.
+
+        Args:
+            system_prompt (str): The system prompt instructions defining extraction targets.
+
+        Returns:
+            Any (Runnable): A LangChain runnable chain that outputs a structured 
+                            `ExtractionOutput` Pydantic object.
+        """
+        if self._extractor_llm is None:
+            llm = ChatOllama(model=self.model_name, temperature=0.0)
+            self._extractor_llm = llm.with_structured_output(ExtractionOutput)
+            
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", "User input: {user_message}")
+        ])
+        return prompt | self._extractor_llm
 
     def get_assessor_runner(self, system_prompt: str) -> Any:
         """
-        Creates a runnable chain for resilience assessment enforced with AssessmentOutput schema.
+        Creates or retrieves a cached runnable chain for psychological resilience assessment.
+        Uses a low temperature (0.2) to allow slight analytical flexibility while maintaining 
+        strict schema compliance.
 
         Args:
-            system_prompt (str): System prompt instructions for assessment.
+            system_prompt (str): The system prompt instructions for graph-grounded assessment.
 
         Returns:
-            Any (Runnable): Execution chain outputting AssessmentOutput Pydantic object.
+            Any (Runnable): A LangChain runnable chain that outputs a structured 
+                            `AssessmentOutput` Pydantic object.
         """
-        llm = ChatOllama(model=self.model_name, temperature=0.2)
-        structured_llm = llm.with_structured_output(AssessmentOutput)
+        if self._assessor_llm is None:
+            llm = ChatOllama(model=self.model_name, temperature=0.2)
+            self._assessor_llm = llm.with_structured_output(AssessmentOutput)
+            
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", "User message: {user_message}\n\nRetrieved Graph Knowledge:\n{subgraph_context}")
         ])
-        return prompt | structured_llm
+        return prompt | self._assessor_llm
 
     def get_conversational_llm(self) -> ChatOllama:
         """
-        Returns a ChatOllama instance tuned for natural conversational responses.
+        Retrieves a cached ChatOllama instance tuned for natural, empathetic conversational responses.
+        Uses a higher temperature (0.6) to generate warm, varied, and engaging dialogue.
 
         Returns:
-            ChatOllama: LLM instance with temperature set for empathy and fluid advice.
+            ChatOllama: An initialized Ollama LLM instance configured for conversational flow.
         """
-        return ChatOllama(model=self.model_name, temperature=0.6)
+        if self._conversational_llm is None:
+            self._conversational_llm = ChatOllama(model=self.model_name, temperature=0.6)
+            
+        return self._conversational_llm
