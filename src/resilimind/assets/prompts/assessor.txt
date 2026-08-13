@@ -7,7 +7,7 @@ You will be provided with:
 2. FULL USER MESSAGE: The verbatim Persian input for surrounding conversational context.
 3. RETRACTED GRAPH KNOWLEDGE: Definitions, cues, status levels, domains, and cross-domain links for active nodes.
 
-=== EVALUATION & SCORING RULES ===
+=== EVALUATION & OUTPUT RULES ===
 
 1. CATEGORY (DOMAIN) EXTRACTION:
    For each active node, extract the EXACT "domain" string provided in the graph context. It MUST be exactly one of:
@@ -15,21 +15,24 @@ You will be provided with:
 
 2. EVIDENCE-BASED SCORING RUBRIC (4 DIMENSIONS):
    You must evaluate the user's resilience on four distinct dimensions based ONLY on the evidence provided in the user's message. Each dimension is scored from 0 to 25, where higher scores indicate HIGHER resilience and better health.
-   Do NOT output a final total score or a color status. The system will compute those deterministically.
    
-   a) severity_score (0-25):
+   - DO NOT output a final total score.
+   - DO NOT output a status color (GREEN, YELLOW, RED).
+   - ONLY output the required structural fields: node_id, category, scores (severity, frequency, functional, coping), confidence, and reasoning.
+   
+   a) severity (0-25):
       - 0-8: Severe, overwhelming emotional/physical distress.
       - 9-17: Moderate, manageable distress.
       - 18-25: Mild or no distress.
-   b) frequency_score (0-25):
+   b) frequency (0-25):
       - 0-8: Symptoms/distress are constant, chronic, or daily.
       - 9-17: Occasional or fluctuating distress.
       - 18-25: Rare, isolated, or one-time distress.
-   c) functional_score (0-25):
+   c) functional (0-25):
       - 0-8: Severe impairment (unable to work, sleep, or maintain relationships).
       - 9-17: Partial impairment (struggling but maintaining basic functions).
       - 18-25: Fully functional and adapted.
-   d) coping_score (0-25):
+   d) coping (0-25):
       - 0-8: Total surrender, no coping mechanisms, helplessness.
       - 9-17: Emerging but fragile coping strategies.
       - 18-25: Strong, active, and effective coping mechanisms.
@@ -48,11 +51,11 @@ You will be provided with:
    Otherwise, set `requires_disambiguation` to FALSE.
 
 5. PSYCHOLOGICAL REASONING:
-   Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring. Do not reference a final color status or sum.
+   Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring. Do not reference totals or color statuses.
 
-=== CRITICAL DISAMBIGUATION RULES ===
-1. SHORT / VAGUE EVIDENCE: If the extracted evidence substring is extremely short or lacks specific emotional/situational details, set confidence below 0.65 and `requires_disambiguation` to TRUE.
-2. ABSOLUTE CERTAINTY REQUIREMENT: Assign confidence above 0.80 ONLY when the evidence explicitly names both cause and somatic/psychological symptoms.
+=== CRITICAL CONSTRAINTS ===
+- DO NOT OUTPUT STATUS OR TOTAL SCORES.
+- ONLY OUTPUT: node_id, category, scores, confidence, reasoning.
 
 === FEW-SHOT EXAMPLES ===
 
@@ -65,19 +68,15 @@ Input:
 • Target Node: IND_PHY_02
   - Extracted Polarity: NEGATIVE
   - Exact User Substring (Evidence): "خوابم نمیبره"
-• Target Node: IND_PER_03
-  - Extracted Polarity: NEGATIVE
-  - Exact User Substring (Evidence): "حس میکنم به آخر خط رسیدم"
 
 === FULL USER MESSAGE ===
 "چند روزه از استرس بدهی‌ها خوابم نمیبره و حس میکنم به آخر خط رسیدم، هیچ راهی برام نمونده."
 
-Graph Context: IND_ECO_01 (domain: Economic_Resilience), IND_PHY_02 (domain: Physical_Resilience), IND_PER_03 (domain: Personal_Resilience).
+Graph Context: IND_ECO_01 (domain: Economic_Resilience), IND_PHY_02 (domain: Physical_Resilience).
 
 Output Assessment:
-- IND_ECO_01: category="Economic_Resilience", severity_score=5, frequency_score=5, functional_score=5, coping_score=0, confidence=0.95, reasoning="عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
-- IND_PHY_02: category="Physical_Resilience", severity_score=5, frequency_score=5, functional_score=5, coping_score=5, confidence=0.90, reasoning="شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک و استرس مستمر است."
-- IND_PER_03: category="Personal_Resilience", severity_score=0, frequency_score=5, functional_score=5, coping_score=0, confidence=0.85, reasoning="عبارت 'به آخر خط رسیدم' نشان‌دهنده فقدان کامل مکانیسم‌های مقابله‌ای و ناامیدی مطلق است."
+- IND_ECO_01: category="Economic_Resilience", scores={severity: 5, frequency: 5, functional: 5, coping: 0}, confidence=0.95, reasoning="عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
+- IND_PHY_02: category="Physical_Resilience", scores={severity: 5, frequency: 5, functional: 5, coping: 5}, confidence=0.90, reasoning="شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک و استرس مستمر است."
 requires_disambiguation = false
 
 [Example 2 - Ambiguous Input Requiring Disambiguation]
@@ -93,5 +92,5 @@ Input:
 Graph Context: IND_ECO_01 (domain: Economic_Resilience).
 
 Output Assessment:
-- IND_ECO_01: category="Economic_Resilience", severity_score=15, frequency_score=15, functional_score=15, coping_score=10, confidence=0.65, reasoning="عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
+- IND_ECO_01: category="Economic_Resilience", scores={severity: 15, frequency: 15, functional: 15, coping: 10}, confidence=0.65, reasoning="عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
 requires_disambiguation = true
