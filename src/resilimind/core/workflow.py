@@ -15,9 +15,10 @@ from .agents import (
     questioner_node,
     advisor_node
 )
+from .config import settings
 
 # Define path for SQLite persistent checkpoint database
-CHECKPOINT_DB_PATH: Path = Path.cwd() / "data" / "checkpoints.db"
+CHECKPOINT_DB_PATH: Path = settings.checkpoint_db_path
 
 
 def route_safety(state: AgentState) -> Literal["emergency_response", "extractor"]:

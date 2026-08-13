@@ -3,8 +3,10 @@ import hashlib
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# Define the path for the SQLite database file within the 'data' directory
-DB_PATH: Path = Path.cwd() / "data" / "resilimind.db"
+from .config import settings
+
+# Define the path for the SQLite database file
+DB_PATH: Path = settings.user_db_path
 
 def init_db() -> None:
     """
