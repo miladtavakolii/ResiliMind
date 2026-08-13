@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage
 
 from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
 from ..core.config import settings
@@ -86,7 +87,7 @@ class LLMEngine:
             self._safety_llm = llm.with_structured_output(SafetyOutput)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+            SystemMessage(content=system_prompt),
             ("human", "User input: {user_message}")
         ])
         return prompt | self._safety_llm
@@ -113,7 +114,7 @@ class LLMEngine:
             self._extractor_llm = llm.with_structured_output(ExtractionOutput)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+            SystemMessage(content=system_prompt),
             ("human", "User input: {user_message}")
         ])
         return prompt | self._extractor_llm
@@ -141,7 +142,7 @@ class LLMEngine:
             self._assessor_llm = llm.with_structured_output(AssessmentOutput)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+            SystemMessage(content=system_prompt),
             ("human", "User message: {user_message}\n\nRetrieved Graph Knowledge:\n{subgraph_context}")
         ])
         return prompt | self._assessor_llm
