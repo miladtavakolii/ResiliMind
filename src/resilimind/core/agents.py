@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
+import re
 
 from .state import AgentState
 from .database import get_user_node_timeline
@@ -324,32 +325,76 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
+def normalize_persian_text(text: str) -> str:
+    """
+    Standardizes Persian text by unifying characters, removing diacritics, 
+    punctuations, ZWNJ (\u200c), and normalizing whitespaces.
+    """
+    if not text:
+        return ""
+
+    # 1. Unified Arabic to Persian characters
+    translation_table = str.maketrans({
+        'ي': 'ی', 'ى': 'ی', 'ئ': 'ی',
+        'ك': 'ک',
+        'آ': 'ا', 'أ': 'ا', 'إ': 'ا',
+        'ۀ': 'ه', 'ة': 'ه',
+        '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+        '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+    })
+    text = text.translate(translation_table)
+
+    # 2. Remove Persian/Arabic diacritics (اعراب)
+    text = re.sub(r'[\u064B-\u065F\u0670]', '', text)
+
+    # 3. Replace ZWNJ (\u200c) and punctuation with space
+    text = re.sub(r'[\u200c\u200d\r\n\t\f\v!?,.:;؛؟"\'()\-[\]{}<>/\\]', ' ', text)
+
+    # 4. Collapse multiple spaces into a single space
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text.lower()
+
+
 def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
     """
-    Acts as the primary zero-tolerance safety gate of the architecture. 
-    Screens user input for high-risk emergency signals (self-harm, suicidal ideation)
-    before any resilience processing occurs.
-
-    Args:
-        state (AgentState): Current state containing 'user_message'.
-
-    Returns:
-        Dict[str, Any]: Updated state dict with 'safety_status' and 'safety_flag'.
+    Primary zero-tolerance safety gate.
+    Pipeline: Raw Input -> Persian Normalization -> High-Recall Heuristic -> LLM Classifier -> Policy Router
     """
     logger.info("[Safety] Safety Gate is checking for high-risk signals...")
     user_msg: str = state.get("user_message", "")
     
-    # 1. Fast Heuristic Keyword Fallback (Zero-latency safety net)
-    danger_keywords = ["خودکشی", "نمیخوام زنده باشم", "مرگ", "خودمو بکشم", "پایان بدم", "رگ"]
-    normalized_msg = user_msg.replace(" ", "")
-    if any(keyword in normalized_msg for keyword in danger_keywords):
-        logger.warning("[Safety] Fast heuristic triggered high-risk flag.")
+    # 1. Text Normalization
+    normalized_msg = normalize_persian_text(user_msg)
+    
+    # 2. Context-Aware Crisis Intent Phrases (High-Recall, Low-False-Positive)
+    crisis_phrases = [
+        "خودکشی",
+        "خودمو بکشم",
+        "خودم رو بکشم",
+        "خودکشی کنم",
+        "نمیخوام زنده باشم",
+        "نمی خواهم زنده باشم",
+        "میخوام بمیرم",
+        "می خواهم بمیرم",
+        "پایان بدم به زندگی",
+        "پایان دادن به زندگی",
+        "رگمو بزنم",
+        "رگم رو بزنم",
+        "رگم بزنم",
+        "قصدم خودکشیه",
+        "خسته شدم از زندگی میخوام بمیرم"
+    ]
+
+    # Check for multi-word phrases or explicit suicide intent
+    if any(phrase in normalized_msg for phrase in crisis_phrases):
+        logger.warning(f"[Safety] Fast heuristic triggered high-risk flag on normalized input.")
         return {
             "safety_status": "HIGH_RISK", 
             "safety_flag": True
         }
         
-    # 2. LLM-based Safety Classification
+    # 3. LLM-based Safety Classification (Context-aware fallback)
     try:
         safety_chain: Any = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
         result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
@@ -368,8 +413,6 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        # AVAILABILITY-AWARE FALLBACK: Do not falsely accuse user of crisis. 
-        # Instead, mark safety subsystem as unavailable and halt standard pipeline.
         logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
         return {
             "safety_status": "UNAVAILABLE", 
