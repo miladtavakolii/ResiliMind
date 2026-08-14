@@ -13,4 +13,4 @@ wheels/
 data
 .env
 *.log
-evaluation/datasets/v1/scenarios_test.jsonl
+evaluation/datasets
