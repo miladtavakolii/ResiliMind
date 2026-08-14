@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 import time
+from dotenv import load_dotenv
 
 from google import genai
 from google.genai import types
@@ -620,6 +621,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Run the complete scenario rendering pipeline."""
+    load_dotenv()
     args = parse_args()
 
     cases = load_cases(
