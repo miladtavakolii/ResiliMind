@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+import time
 
 from google import genai
 from google.genai import types
@@ -94,6 +95,9 @@ class ScenarioRenderer:
         api_key: str | None = None,
         temperature: float = 0.7,
         prompt_path: Path = DEFAULT_PROMPT_PATH,
+        max_retries: int = 3,
+        retry_delay: float = 2.0,
+        request_delay: float = 1.0,
     ) -> None:
         """Initialize the Gemini scenario renderer.
 
@@ -102,14 +106,30 @@ class ScenarioRenderer:
             api_key: Gemini API key. If omitted, ``GEMINI_API_KEY`` is used.
             temperature: Sampling temperature for natural-language generation.
             prompt_path: Path to the system rendering prompt.
+            max_retries: Maximum number of retries after an API failure.
+            retry_delay: Initial delay in seconds before retrying a failed request.
+            request_delay: Delay in seconds between consecutive API requests.
 
         Raises:
-            ValueError: If no Gemini API key is available.
+            ValueError: If the Gemini API key is not configured or any timing
+                parameter is invalid.
             FileNotFoundError: If the prompt file does not exist.
         """
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+
+        if retry_delay < 0:
+            raise ValueError("retry_delay must be >= 0")
+
+        if request_delay < 0:
+            raise ValueError("request_delay must be >= 0")
+
         self.model_name = model_name
         self.temperature = temperature
         self.prompt_path = prompt_path
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.request_delay = request_delay
 
         api_key = api_key or os.getenv("GEMINI_API_KEY")
 
@@ -140,52 +160,77 @@ class ScenarioRenderer:
             encoding="utf-8",
         )
 
+    def _generate(
+        self,
+        *,
+        prompt: str,
+    ) -> ScenarioRenderOutput:
+        """Generate structured scenario content with automatic retries.
+
+        The request is retried after API failures using exponential backoff.
+        """
+
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=[
+                        self.system_prompt,
+                        prompt,
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=self.temperature,
+                        response_mime_type="application/json",
+                        response_schema=ScenarioRenderOutput,
+                    ),
+                )
+
+                if not response.text:
+                    raise ValueError(
+                        "Gemini returned an empty response"
+                    )
+
+                return ScenarioRenderOutput.model_validate_json(
+                    response.text
+                )
+
+            except Exception as exc:
+                last_error = exc
+
+                if attempt >= self.max_retries:
+                    break
+
+                delay = self.retry_delay * (2 ** attempt)
+
+                logger.warning(
+                    "Gemini request failed "
+                    "(attempt %d/%d): %s. Retrying in %.1f seconds...",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                    delay,
+                )
+
+                time.sleep(delay)
+
+        raise RuntimeError(
+            f"Gemini request failed after "
+            f"{self.max_retries + 1} attempts"
+        ) from last_error
+
     def render(
         self,
         case: EvaluationCase,
     ) -> EvaluationCase:
-        """Render one latent scenario into a natural-language conversation.
+        """Render one latent scenario into a natural-language conversation."""
 
-        Args:
-            case: Evaluation case containing the latent scenario and its
-                immutable ground-truth annotations.
-
-        Returns:
-            The evaluation case with generated user messages and evidence
-            attached.
-
-        Raises:
-            ValueError: If Gemini produces invalid or inconsistent output.
-        """
         prompt = self._build_user_prompt(case)
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=[
-                self.system_prompt,
-                prompt,
-            ],
-            config=types.GenerateContentConfig(
-                temperature=self.temperature,
-                response_mime_type="application/json",
-                response_schema=ScenarioRenderOutput,
-            ),
+        rendered = self._generate(
+            prompt=prompt,
         )
-
-        if not response.text:
-            raise ValueError(
-                f"{case.case_id}: Gemini returned an empty response"
-            )
-
-        try:
-            rendered = ScenarioRenderOutput.model_validate_json(
-                response.text
-            )
-        except Exception as exc:
-            raise ValueError(
-                f"{case.case_id}: failed to parse Gemini structured output: "
-                f"{exc}"
-            ) from exc
 
         self._validate_rendered_output(
             case=case,
@@ -203,7 +248,7 @@ class ScenarioRenderer:
         )
 
         return case
-
+        
     def _build_user_prompt(
         self,
         case: EvaluationCase,
@@ -368,16 +413,8 @@ class ScenarioRenderer:
         *,
         skip_failures: bool = False,
     ) -> list[EvaluationCase]:
-        """Render all cases in a dataset.
+        """Render all cases in a dataset."""
 
-        Args:
-            cases: Evaluation cases to render.
-            skip_failures: Whether to skip cases that fail rendering instead
-                of aborting the complete run.
-
-        Returns:
-            Successfully rendered evaluation cases.
-        """
         rendered_cases: list[EvaluationCase] = []
 
         for index, case in enumerate(cases, start=1):
@@ -404,8 +441,14 @@ class ScenarioRenderer:
                 if not skip_failures:
                     raise
 
-        return rendered_cases
+            if index < len(cases):
+                logger.info(
+                    "Sleeping %.1f seconds before next request...",
+                    self.request_delay,
+                )
+                time.sleep(self.request_delay)
 
+        return rendered_cases
 
 def load_cases(
     input_path: Path,
@@ -551,6 +594,27 @@ def parse_args() -> argparse.Namespace:
         help="Skip cases that fail rendering.",
     )
 
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Maximum number of retries after an API failure.",
+    )
+
+    parser.add_argument(
+        "--retry-delay",
+        type=float,
+        default=2.0,
+        help="Initial retry delay in seconds.",
+    )
+
+    parser.add_argument(
+        "--request-delay",
+        type=float,
+        default=1.0,
+        help="Delay between consecutive API requests in seconds.",
+    )
+
     return parser.parse_args()
 
 
@@ -574,6 +638,9 @@ def main() -> None:
         model_name=args.model,
         temperature=args.temperature,
         prompt_path=args.prompt,
+        max_retries=args.max_retries,
+        retry_delay=args.retry_delay,
+        request_delay=args.request_delay,
     )
 
     rendered_cases = renderer.render_dataset(
