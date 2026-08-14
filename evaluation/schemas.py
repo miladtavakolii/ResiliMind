@@ -106,6 +106,10 @@ class GoldSignal(BaseModel):
 
     # Filled during the text-generation stage.
     evidence: str | None = None
+    evidence_message_index: int | None = Field(
+        default=None,
+        ge=0,
+    )
 
 
 class GoldExtraction(BaseModel):
