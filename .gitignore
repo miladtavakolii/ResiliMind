@@ -15,3 +15,4 @@ data
 *.log
 evaluation/datasets
 evaluation/runtime
+evaluation/results
