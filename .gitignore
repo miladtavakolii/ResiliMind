@@ -14,3 +14,4 @@ data
 .env
 *.log
 evaluation/datasets
+evaluation/runtime

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -287,3 +287,36 @@ class EvaluationCase(BaseModel):
                 )
 
         return self
+
+
+class TurnPrediction(BaseModel):
+    """Store the raw prediction produced for a single conversation turn."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    turn_index: int = Field(ge=0)
+    user_message: str
+    safety_status: str | None = None
+    safety_flag: bool = False
+    active_nodes: list[str] = Field(default_factory=list)
+    active_signals: list[dict[str, Any]] = Field(default_factory=list)
+    subgraph_context: str = ""
+    assessments: list[dict[str, Any]] = Field(default_factory=list)
+    requires_disambiguation: bool = False
+    final_response: str = ""
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    error: str | None = None
+
+
+class CasePrediction(BaseModel):
+    """Store the complete raw prediction for one evaluation case."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str
+    dataset_version: str
+    thread_id: str
+    successful: bool
+    turns: list[TurnPrediction] = Field(default_factory=list)
+    final_response: str = ""
+    error: str | None = None
