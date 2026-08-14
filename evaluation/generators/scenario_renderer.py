@@ -47,15 +47,11 @@ DEFAULT_OUTPUT_PATH = (
 class RenderedMessage(BaseModel):
     """Represent a single generated user message."""
 
-    model_config = ConfigDict(extra="forbid")
-
     content: str = Field(min_length=1)
 
 
 class RenderedEvidence(BaseModel):
     """Represent evidence associated with a generated signal."""
-
-    model_config = ConfigDict(extra="forbid")
 
     node_id: str
     evidence: str = Field(min_length=1)
@@ -69,8 +65,6 @@ class ScenarioRenderOutput(BaseModel):
     evidence spans. Ground-truth safety, extraction, assessment, and routing
     information remains controlled by the deterministic benchmark generator.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     messages: list[RenderedMessage] = Field(min_length=1)
     evidence: list[RenderedEvidence] = Field(default_factory=list)
