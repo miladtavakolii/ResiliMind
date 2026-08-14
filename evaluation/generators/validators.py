@@ -9,18 +9,16 @@ from evaluation.schemas import (
 )
 
 
-def validate_assessment(assessment: GoldAssessment) -> list[str]:
-    """Validate the deterministic properties of a single assessment.
-
-    The validation checks that all rubric dimensions are within the supported
-    range, that the total score is valid, and that the assessment status
-    matches the total score according to the ResiliMind scoring thresholds.
+def validate_assessment(
+    assessment: GoldAssessment,
+) -> list[str]:
+    """Validate the deterministic properties of an assessment.
 
     Args:
         assessment: Ground-truth assessment to validate.
 
     Returns:
-        A list of validation error messages. An empty list indicates that the
+        A list of validation errors. An empty list indicates that the
         assessment is valid.
     """
     errors: list[str] = []
@@ -37,14 +35,16 @@ def validate_assessment(assessment: GoldAssessment) -> list[str]:
     for name, value in dimensions.items():
         if not 0 <= value <= 25:
             errors.append(
-                f"{assessment.node_id}: {name}={value} is outside [0, 25]"
+                f"{assessment.node_id}: "
+                f"{name}={value} is outside [0, 25]"
             )
 
     total = rubric.total_score
 
     if not 0 <= total <= 100:
         errors.append(
-            f"{assessment.node_id}: total score {total} is outside [0, 100]"
+            f"{assessment.node_id}: "
+            f"total score {total} is outside [0, 100]"
         )
 
     expected_status = (
@@ -64,85 +64,81 @@ def validate_assessment(assessment: GoldAssessment) -> list[str]:
     return errors
 
 
-def validate_case(
+def validate_case_structure(
     case: EvaluationCase,
     valid_node_ids: set[str],
 ) -> list[str]:
-    """Validate the internal consistency of a complete evaluation case.
-
-    The validation covers case identifiers, signal and assessment node
-    references, duplicate signals and assessments, signal-to-assessment
-    consistency, safety labels, and routing decisions.
-
-    Assessment-to-signal consistency is intentionally not enforced because
-    future evaluation versions may support derived or multi-node assessments
-    that do not correspond directly to a single extracted signal.
+    """Validate the structural consistency of an evaluation case.
 
     Args:
         case: Evaluation case to validate.
-        valid_node_ids: Set of valid node identifiers from the knowledge graph.
+        valid_node_ids: Valid node identifiers from the knowledge graph.
 
     Returns:
-        A list of validation error messages. An empty list indicates that the
-        case is valid.
+        A list of validation errors.
     """
     errors: list[str] = []
 
     if not case.case_id:
         errors.append("case_id is empty")
 
-    signal_node_ids = []
+    signal_node_ids = [
+        signal.node_id
+        for signal in case.gold.extraction.active_signals
+    ]
 
-    for signal in case.gold.extraction.active_signals:
-        signal_node_ids.append(signal.node_id)
-
-        if signal.node_id not in valid_node_ids:
+    for node_id in signal_node_ids:
+        if node_id not in valid_node_ids:
             errors.append(
-                f"{case.case_id}: unknown signal node "
-                f"{signal.node_id}"
+                f"{case.case_id}: unknown signal node {node_id}"
             )
 
-    duplicates = [
+    duplicate_signal_nodes = [
         node_id
-        for node_id, count in Counter(signal_node_ids).items()
+        for node_id, count in Counter(
+            signal_node_ids
+        ).items()
         if count > 1
     ]
 
-    for node_id in duplicates:
+    for node_id in duplicate_signal_nodes:
         errors.append(
             f"{case.case_id}: duplicate signal for node {node_id}"
         )
 
-    assessment_node_ids = []
+    assessment_node_ids = [
+        assessment.node_id
+        for assessment in case.gold.assessment.assessments
+    ]
 
-    for assessment in case.gold.assessment.assessments:
-        assessment_node_ids.append(assessment.node_id)
-
-        if assessment.node_id not in valid_node_ids:
+    for node_id in assessment_node_ids:
+        if node_id not in valid_node_ids:
             errors.append(
-                f"{case.case_id}: unknown assessment node "
-                f"{assessment.node_id}"
+                f"{case.case_id}: unknown assessment node {node_id}"
             )
 
-        errors.extend(validate_assessment(assessment))
-
-    duplicates = [
+    duplicate_assessment_nodes = [
         node_id
-        for node_id, count in Counter(assessment_node_ids).items()
+        for node_id, count in Counter(
+            assessment_node_ids
+        ).items()
         if count > 1
     ]
 
-    for node_id in duplicates:
+    for node_id in duplicate_assessment_nodes:
         errors.append(
             f"{case.case_id}: duplicate assessment for node {node_id}"
+        )
+
+    for assessment in case.gold.assessment.assessments:
+        errors.extend(
+            validate_assessment(assessment)
         )
 
     signal_nodes = set(signal_node_ids)
     assessment_nodes = set(assessment_node_ids)
 
-    missing_assessments = signal_nodes - assessment_nodes
-
-    for node_id in missing_assessments:
+    for node_id in signal_nodes - assessment_nodes:
         errors.append(
             f"{case.case_id}: signal {node_id} has no assessment"
         )
@@ -151,7 +147,7 @@ def validate_case(
 
     if safety.is_high_risk and safety.risk_category == "SAFE":
         errors.append(
-            f"{case.case_id}: high-risk flag cannot have SAFE category"
+            f"{case.case_id}: high-risk case cannot have SAFE category"
         )
 
     if not safety.is_high_risk and safety.risk_category != "SAFE":
@@ -161,13 +157,13 @@ def validate_case(
 
     route = case.gold.routing.expected_route
 
-    if safety.is_high_risk and route != "emergency_response":
-        errors.append(
-            f"{case.case_id}: high-risk case must route to "
-            "emergency_response"
-        )
-
-    if not safety.is_high_risk and route == "emergency_response":
+    if safety.is_high_risk:
+        if route != "emergency_response":
+            errors.append(
+                f"{case.case_id}: high-risk case must route to "
+                "emergency_response"
+            )
+    elif route == "emergency_response":
         errors.append(
             f"{case.case_id}: SAFE case cannot route to "
             "emergency_response"
@@ -176,15 +172,82 @@ def validate_case(
     if route == "questioner":
         if case.gold.routing.confidence_class != "low":
             errors.append(
-                f"{case.case_id}: questioner route should use low "
+                f"{case.case_id}: questioner route requires low "
                 "confidence class"
             )
 
     if route == "advisor":
         if case.gold.routing.confidence_class != "high":
             errors.append(
-                f"{case.case_id}: advisor route should use high "
+                f"{case.case_id}: advisor route requires high "
                 "confidence class"
+            )
+
+    return errors
+
+
+def validate_rendered_input(
+    case: EvaluationCase,
+) -> list[str]:
+    """Validate generated natural-language input and evidence alignment.
+
+    Args:
+        case: Rendered evaluation case.
+
+    Returns:
+        A list of validation errors.
+    """
+    errors: list[str] = []
+
+    messages = case.input.messages
+
+    expected_turn_count = case.scenario.turn_count
+
+    if len(messages) != expected_turn_count:
+        errors.append(
+            f"{case.case_id}: expected "
+            f"{expected_turn_count} messages, "
+            f"got {len(messages)}"
+        )
+
+    for index, message in enumerate(messages):
+        if not message.strip():
+            errors.append(
+                f"{case.case_id}: message {index} is empty"
+            )
+
+    signals = case.gold.extraction.active_signals
+
+    for signal in signals:
+        if not signal.evidence:
+            errors.append(
+                f"{case.case_id}: missing evidence for "
+                f"{signal.node_id}"
+            )
+            continue
+
+        if signal.evidence_message_index is None:
+            errors.append(
+                f"{case.case_id}: missing evidence message index "
+                f"for {signal.node_id}"
+            )
+            continue
+
+        message_index = signal.evidence_message_index
+
+        if not 0 <= message_index < len(messages):
+            errors.append(
+                f"{case.case_id}: invalid evidence message index "
+                f"{message_index} for {signal.node_id}"
+            )
+            continue
+
+        message = messages[message_index]
+
+        if signal.evidence not in message:
+            errors.append(
+                f"{case.case_id}: evidence for {signal.node_id} "
+                "is not an exact substring of the referenced message"
             )
 
     return errors
@@ -194,59 +257,61 @@ def validate_dataset(
     cases: Iterable[EvaluationCase],
     valid_node_ids: set[str],
 ) -> None:
-    """Validate the complete generated evaluation dataset.
+    """Validate a complete evaluation dataset.
 
-    The function verifies that the dataset is non-empty, that all case
-    identifiers are unique, and that every individual case satisfies the
-    structural and semantic validation rules defined by ``validate_case``.
-
-    Validation errors from all cases are collected before raising an
-    exception, allowing multiple dataset problems to be diagnosed in a
-    single run.
+    All cases are validated before an exception is raised so that the caller
+    receives a complete list of dataset errors in a single execution.
 
     Args:
-        cases: Iterable containing the evaluation cases to validate.
-        valid_node_ids: Set of valid node identifiers from the knowledge graph.
+        cases: Evaluation cases to validate.
+        valid_node_ids: Valid node identifiers from the knowledge graph.
 
     Raises:
-        ValueError: If the dataset is empty or contains one or more
-            validation errors.
+        ValueError: If the dataset is empty or contains validation errors.
     """
-    all_errors: list[str] = []
-
     cases = list(cases)
 
     if not cases:
         raise ValueError("Dataset is empty")
 
-    case_ids = [case.case_id for case in cases]
+    errors: list[str] = []
 
-    duplicates = [
+    case_ids = [
+        case.case_id
+        for case in cases
+    ]
+
+    duplicate_case_ids = [
         case_id
         for case_id, count in Counter(case_ids).items()
         if count > 1
     ]
 
-    for case_id in duplicates:
-        all_errors.append(
+    for case_id in duplicate_case_ids:
+        errors.append(
             f"Duplicate case_id: {case_id}"
         )
 
     for case in cases:
-        all_errors.extend(
-            validate_case(
+        errors.extend(
+            validate_case_structure(
                 case,
                 valid_node_ids=valid_node_ids,
             )
         )
 
-    if all_errors:
-        formatted = "\n".join(
+        errors.extend(
+            validate_rendered_input(case)
+        )
+
+    if errors:
+        formatted_errors = "\n".join(
             f"- {error}"
-            for error in all_errors
+            for error in errors
         )
 
         raise ValueError(
             f"Dataset validation failed with "
-            f"{len(all_errors)} error(s):\n{formatted}"
+            f"{len(errors)} error(s):\n"
+            f"{formatted_errors}"
         )
