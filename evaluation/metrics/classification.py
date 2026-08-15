@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from typing import Any
 
 
-def classification_report(pairs: list[tuple[str, str]]) -> dict:
-    """
-    Calculate multiclass classification metrics.
+def classification_report(pairs: list[tuple[str, str]]) -> dict[str, Any]:
+    """Calculate multiclass classification metrics.
 
     Args:
-        pairs: List of (gold_label, predicted_label).
+        pairs: List of tuples containing (gold_label, predicted_label).
 
     Returns:
-        Accuracy, precision, recall and F1 metrics.
+        dict[str, Any]: Dictionary containing accuracy, macro-averaged metrics,
+            and per-class precision, recall, and F1 scores.
     """
     labels = sorted({label for pair in pairs for label in pair})
     results = {}

@@ -11,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiJudge:
-    """
-    Gemini based evaluator for qualitative response assessment.
+    """Gemini based evaluator for qualitative response assessment.
 
     Uses a separate LLM call to judge advisor responses.
     """
@@ -25,12 +24,31 @@ class GeminiJudge:
         retries: int = 5,
         delay: float = 3.0,
     ) -> None:
+        """Initialize the Gemini judge.
+
+        Args:
+            api_key: Google Gemini API key.
+            model: Gemini model identifier used for evaluation.
+            retries: Maximum number of retry attempts upon failure.
+            delay: Base delay in seconds between retries.
+        """
         self.client = genai.Client(api_key=api_key)
         self.model = model
         self.retries = retries
         self.delay = delay
 
     def evaluate(self, prompt: str) -> dict[str, Any]:
+        """Evaluate a prompt using the Gemini model and return the parsed JSON response.
+
+        Args:
+            prompt: Formatted evaluation prompt string.
+
+        Returns:
+            Parsed JSON evaluation results as a dictionary.
+
+        Raises:
+            RuntimeError: If the request fails across all retry attempts.
+        """
         for attempt in range(1, self.retries + 1):
             try:
                 response = self.client.models.generate_content(

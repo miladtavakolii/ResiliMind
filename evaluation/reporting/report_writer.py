@@ -1,10 +1,20 @@
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Any
 
 
 class MarkdownReportWriter:
     """Writes human-readable evaluation reports."""
 
-    def write(self, report: dict, path: Path) -> None:
+    def write(self, report: dict[str, Any], path: Path) -> None:
+        """Write evaluation metrics to a formatted Markdown report file.
+
+        Args:
+            report: Dictionary containing aggregated evaluation statistics across
+                dataset size, safety, assessment, routing, and response quality.
+            path: Destination file path for the Markdown report.
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
 
         content = f"""# ResiliMind Evaluation Report

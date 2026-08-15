@@ -14,7 +14,18 @@ DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.
 
 
 def load_cases(path: Path) -> list[EvaluationCase]:
-    """Load evaluation cases from a JSONL file."""
+    """Load evaluation cases from a JSONL file.
+
+    Args:
+        path: Path to the dataset JSONL file.
+
+    Returns:
+        list[EvaluationCase]: List of parsed and validated evaluation cases.
+
+    Raises:
+        FileNotFoundError: If the dataset file does not exist.
+        ValueError: If any JSONL record fails validation or decoding.
+    """
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
@@ -33,7 +44,18 @@ def load_cases(path: Path) -> list[EvaluationCase]:
 
 
 def load_valid_node_ids(graph_path: Path) -> set[str]:
-    """Load valid node identifiers from the ResiliMind knowledge graph."""
+    """Load valid node identifiers from the ResiliMind knowledge graph.
+
+    Args:
+        graph_path: Path to the knowledge graph JSON file.
+
+    Returns:
+        set[str]: Set of valid node identifiers extracted from the graph.
+
+    Raises:
+        FileNotFoundError: If the knowledge graph file does not exist.
+        ValueError: If the graph structure is invalid or lacks 'nodes'.
+    """
     if not graph_path.exists():
         raise FileNotFoundError(f"Knowledge graph not found: {graph_path}")
 
@@ -48,7 +70,11 @@ def load_valid_node_ids(graph_path: Path) -> set[str]:
 
 
 def print_statistics(cases: list[EvaluationCase]) -> None:
-    """Print basic dataset statistics."""
+    """Print basic dataset statistics across domains, difficulties, safety, and routes.
+
+    Args:
+        cases: List of evaluation cases to aggregate and display.
+    """
     domains = Counter(case.scenario.domain for case in cases)
     difficulties = Counter(case.scenario.difficulty for case in cases)
     case_types = Counter(case.scenario.case_type for case in cases)
@@ -81,7 +107,11 @@ def print_statistics(cases: list[EvaluationCase]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse validation command-line arguments."""
+    """Parse validation command-line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(description="Validate a ResiliMind evaluation dataset.")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET_PATH, help="Path to the dataset JSONL file.")
     parser.add_argument("--graph", type=Path, default=DEFAULT_GRAPH_PATH, help="Path to the ResiliMind knowledge graph.")
@@ -89,7 +119,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Load, validate, and report statistics for a dataset."""
+    """Load, validate, and report statistics for an evaluation dataset."""
     args = parse_args()
 
     cases = load_cases(args.dataset)

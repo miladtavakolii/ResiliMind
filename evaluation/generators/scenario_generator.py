@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +24,10 @@ from evaluation.schemas import (
     ScenarioSpec,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_GRAPH_PATH = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
+DEFAULT_GRAPH_PATH: Path = (
+    PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
+)
 
 DEFAULT_DISTRIBUTION: dict[str, int] = {
     "easy_normal": 20,
@@ -38,11 +41,30 @@ DEFAULT_DISTRIBUTION: dict[str, int] = {
 
 
 class ScenarioGenerator:
-    """Generate deterministic synthetic evaluation scenarios."""
+    """Generate deterministic synthetic evaluation scenarios for ResiliMind.
 
-    VERSION = "1.0.0"
+    Attributes:
+        VERSION (str): Generator version string.
+        graph_path (Path): Path to the resilience knowledge graph JSON file.
+        seed (int): Random seed used for deterministic generation.
+        rng (random.Random): Dedicated random number generator instance.
+        graph (dict[str, Any]): Loaded knowledge graph data.
+        nodes (dict[str, dict[str, Any]]): Extracted node mapping from the graph.
+    """
+
+    VERSION: str = "1.0.0"
 
     def __init__(self, *, graph_path: Path = DEFAULT_GRAPH_PATH, seed: int = 42) -> None:
+        """Initialize the scenario generator.
+
+        Args:
+            graph_path: Path to the knowledge graph JSON asset.
+            seed: Seed value for deterministic random generation.
+
+        Raises:
+            FileNotFoundError: If the graph file does not exist.
+            ValueError: If the graph format is invalid or contains no nodes.
+        """
         self.graph_path = Path(graph_path)
         self.seed = seed
         self.rng = random.Random(seed)
@@ -54,7 +76,15 @@ class ScenarioGenerator:
             raise ValueError(f"No nodes found in graph: {self.graph_path}")
 
     def _load_graph(self) -> dict[str, Any]:
-        """Load the ResiliMind knowledge graph from disk."""
+        """Load the ResiliMind knowledge graph from disk.
+
+        Returns:
+            dict[str, Any]: Parsed knowledge graph dictionary.
+
+        Raises:
+            FileNotFoundError: If the graph file cannot be located.
+            ValueError: If the top-level 'nodes' key is missing.
+        """
         if not self.graph_path.exists():
             raise FileNotFoundError(f"Knowledge graph not found: {self.graph_path}")
 
@@ -67,7 +97,14 @@ class ScenarioGenerator:
         return graph
 
     def _load_nodes(self) -> dict[str, dict[str, Any]]:
-        """Extract and validate node definitions from the knowledge graph."""
+        """Extract and validate node definitions from the knowledge graph.
+
+        Returns:
+            dict[str, dict[str, Any]]: Mapping of node IDs to their attribute dictionaries.
+
+        Raises:
+            ValueError: If the 'nodes' element is not a dictionary.
+        """
         nodes = self.graph["nodes"]
         if not isinstance(nodes, dict):
             raise ValueError("Graph 'nodes' must be a dictionary")
@@ -76,7 +113,19 @@ class ScenarioGenerator:
     def generate(
         self, count: int = 100, *, distribution: dict[str, int] | None = None
     ) -> list[EvaluationCase]:
-        """Generate a deterministic collection of evaluation scenarios."""
+        """Generate a deterministic collection of evaluation scenarios.
+
+        Args:
+            count: Total number of evaluation scenarios to create.
+            distribution: Custom distribution mapping bucket names to target counts.
+                If None, scales DEFAULT_DISTRIBUTION to the requested count.
+
+        Returns:
+            list[EvaluationCase]: Generated and shuffled list of evaluation cases.
+
+        Raises:
+            ValueError: If count is non-positive or distribution counts do not sum to count.
+        """
         if count <= 0:
             raise ValueError("count must be greater than zero")
 
@@ -84,7 +133,7 @@ class ScenarioGenerator:
         if sum(distribution.values()) != count:
             raise ValueError("Distribution counts must sum to requested count")
 
-        cases: list[EvaluationCase] = []
+        cases = []
         index = 1
 
         for bucket, bucket_count in distribution.items():
@@ -96,7 +145,14 @@ class ScenarioGenerator:
         return cases
 
     def _scaled_distribution(self, count: int) -> dict[str, int]:
-        """Scale the default scenario distribution to a target size."""
+        """Scale the default scenario distribution to a target size using largest remainder.
+
+        Args:
+            count: Target total number of evaluation scenarios.
+
+        Returns:
+            dict[str, int]: Scaled bucket distribution summing to the requested count.
+        """
         if count == 100:
             return dict(DEFAULT_DISTRIBUTION)
 
@@ -114,7 +170,18 @@ class ScenarioGenerator:
         return dict(zip(keys, floors))
 
     def _generate_case(self, *, index: int, bucket: str) -> EvaluationCase:
-        """Generate a single evaluation case for a scenario bucket."""
+        """Generate a single evaluation case for a specific scenario bucket.
+
+        Args:
+            index: Sequential integer index for scenario ID naming.
+            bucket: Bucket identifier determining difficulty and case type.
+
+        Returns:
+            EvaluationCase: Fully constructed benchmark case with gold annotations.
+
+        Raises:
+            ValueError: If the bucket name is unrecognized.
+        """
         bucket_config = {
             "easy_normal": ("easy", "normal"),
             "moderate_normal": ("moderate", "normal"),
@@ -173,14 +240,31 @@ class ScenarioGenerator:
         )
 
     def _choose_domain(self, *, case_type: str) -> str:
-        """Select a domain from the knowledge graph."""
+        """Select a domain randomly from available graph nodes.
+
+        Args:
+            case_type: Scenario case type category.
+
+        Returns:
+            str: Selected domain name.
+
+        Raises:
+            ValueError: If no valid domains are found in the graph.
+        """
         domains = sorted({node["domain"] for node in self.nodes.values() if "domain" in node})
         if not domains:
             raise ValueError("No domains found in knowledge graph")
         return self.rng.choice(domains)
 
     def _choose_turn_count(self, *, case_type: str) -> int:
-        """Determine the number of user turns for a scenario."""
+        """Determine the number of user turns based on the case type.
+
+        Args:
+            case_type: Scenario case type category.
+
+        Returns:
+            int: Number of conversation turns.
+        """
         if case_type == "multi_domain":
             return self.rng.choice([2, 3])
         if case_type in {"adversarial", "ambiguous"}:
@@ -188,7 +272,14 @@ class ScenarioGenerator:
         return 1
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
-        """Generate the ground-truth safety annotation."""
+        """Generate ground-truth safety annotations.
+
+        Args:
+            case_type: Scenario case type category.
+
+        Returns:
+            GoldSafety: Constructed safety gold standard.
+        """
         if case_type != "high_risk":
             return GoldSafety(is_high_risk=False, risk_category="SAFE")
 
@@ -198,7 +289,19 @@ class ScenarioGenerator:
     def _generate_signals(
         self, *, domain: str, case_type: str, safety: GoldSafety
     ) -> list[GoldSignal]:
-        """Generate ground-truth resilience signals."""
+        """Generate ground-truth resilience signals based on domain and case type.
+
+        Args:
+            domain: Primary resilience domain selected.
+            case_type: Scenario case type category.
+            safety: Generated safety gold object.
+
+        Returns:
+            list[GoldSignal]: List of active resilience gold signals.
+
+        Raises:
+            ValueError: If no candidate nodes exist for the specified domain.
+        """
         if safety.is_high_risk:
             return []
 
@@ -225,7 +328,7 @@ class ScenarioGenerator:
             number_of_signals = min(2, len(candidates))
 
         selected = self.rng.sample(candidates, k=number_of_signals)
-        signals: list[GoldSignal] = []
+        signals = []
 
         for node_id in selected:
             if case_type == "mixed_signal":
@@ -240,10 +343,19 @@ class ScenarioGenerator:
         return signals
 
     def _generate_assessments(
-        self, *, signals: list[GoldSignal], difficulty: str, case_type: str
+        self, *, signals: Sequence[GoldSignal], difficulty: str, case_type: str
     ) -> list[GoldAssessment]:
-        """Generate ground-truth assessments for detected signals."""
-        assessments: list[GoldAssessment] = []
+        """Generate ground-truth rubric assessments for detected signals.
+
+        Args:
+            signals: Sequence of gold signals to score.
+            difficulty: Scenario difficulty rating.
+            case_type: Scenario case type category.
+
+        Returns:
+            list[GoldAssessment]: Assessment items for each signal.
+        """
+        assessments = []
         for signal in signals:
             scores = self._generate_rubric(
                 polarity=signal.detected_signal,
@@ -256,7 +368,20 @@ class ScenarioGenerator:
     def _generate_rubric(
         self, *, polarity: str, difficulty: str, case_type: str
     ) -> AssessmentRubric:
-        """Generate a four-dimensional resilience assessment."""
+        """Generate a four-dimensional resilience rubric assessment.
+
+        Args:
+            polarity: Signal polarity ('positive', 'negative', or 'mixed').
+            difficulty: Scenario difficulty rating.
+            case_type: Scenario case type category.
+
+        Returns:
+            AssessmentRubric: Generated rubric containing scores for severity,
+                frequency, functional impact, and coping capacity.
+
+        Raises:
+            ValueError: If called on a high-risk case type.
+        """
         if case_type == "high_risk":
             raise ValueError("High-risk cases must not generate assessments")
 
@@ -282,9 +407,19 @@ class ScenarioGenerator:
         safety: GoldSafety,
         difficulty: str,
         case_type: str,
-        assessments: list[GoldAssessment],
+        assessments: Sequence[GoldAssessment],
     ) -> GoldRouting:
-        """Generate the expected routing decision."""
+        """Generate the expected workflow routing decision.
+
+        Args:
+            safety: Generated safety gold object.
+            difficulty: Scenario difficulty rating.
+            case_type: Scenario case type category.
+            assessments: Sequence of generated gold assessments.
+
+        Returns:
+            GoldRouting: Expected route and confidence class.
+        """
         if safety.is_high_risk:
             return GoldRouting(expected_route="emergency_response", confidence_class="high")
 
@@ -294,8 +429,13 @@ class ScenarioGenerator:
         return GoldRouting(expected_route="advisor", confidence_class="high")
 
 
-def write_jsonl(cases: list[EvaluationCase], output_path: Path) -> None:
-    """Write evaluation cases to a JSON Lines file."""
+def write_jsonl(cases: Sequence[EvaluationCase], output_path: Path) -> None:
+    """Write evaluation cases to a JSON Lines file.
+
+    Args:
+        cases: Sequence of evaluation cases to serialize.
+        output_path: Target file path on disk.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as file:
         for case in cases:
@@ -303,8 +443,18 @@ def write_jsonl(cases: list[EvaluationCase], output_path: Path) -> None:
 
 
 def load_jsonl(input_path: Path) -> list[EvaluationCase]:
-    """Load and validate evaluation cases from a JSONL file."""
-    cases: list[EvaluationCase] = []
+    """Load and validate evaluation cases from a JSONL file.
+
+    Args:
+        input_path: Path to the JSONL dataset file.
+
+    Returns:
+        list[EvaluationCase]: List of parsed and validated evaluation cases.
+
+    Raises:
+        ValueError: If a record fails schema validation or JSON decoding.
+    """
+    cases = []
     with input_path.open("r", encoding="utf-8") as file:
         for line_number, line in enumerate(file, start=1):
             line = line.strip()
@@ -318,7 +468,11 @@ def load_jsonl(input_path: Path) -> list[EvaluationCase]:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments for the scenario generator."""
+    """Parse command-line arguments for the scenario generator.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Generate deterministic synthetic evaluation scenarios for ResiliMind."
     )

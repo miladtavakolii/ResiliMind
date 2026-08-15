@@ -1,34 +1,33 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 from evaluation.evaluators.base import BaseEvaluator
 
 
 class ExtractionEvaluator(BaseEvaluator):
-    """
-    Evaluates the Extractor Agent performance.
+    """Evaluates the Extractor Agent performance.
 
     This evaluator measures whether the system correctly identifies
     active resilience graph nodes and their associated signal polarity.
 
     Evaluation levels:
-    1. Node extraction: Precision, Recall, F1, Jaccard similarity
-    2. Signal polarity: Accuracy over correctly extracted nodes
+        1. Node extraction: Precision, Recall, F1, Jaccard similarity
+        2. Signal polarity: Accuracy over correctly extracted nodes
     """
 
-    name = "extraction"
+    name: str = "extraction"
 
     def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
-        """
-        Evaluate extracted resilience signals.
+        """Evaluate extracted resilience signals against ground truth.
 
         Args:
-            gold: EvaluationGold object.
-            prediction: Workflow output containing extracted signals.
+            gold: EvaluationGold object containing ground truth extractions.
+            prediction: Workflow output dictionary containing extracted signals.
 
         Returns:
-            Extraction metrics.
+            dict[str, Any]: Extraction metrics containing node detection stats
+                (counts, precision, recall, f1, jaccard) and polarity metrics.
         """
         gold_signals = gold.extraction.active_signals
         predicted_signals = prediction.get("extraction", {}).get("signals", [])
@@ -62,8 +61,21 @@ class ExtractionEvaluator(BaseEvaluator):
             "polarity": polarity,
         }
 
-    def _evaluate_polarity(self, gold_signals, predicted_signals) -> dict[str, float]:
-        """Evaluate signal polarity for matched nodes."""
+    def _evaluate_polarity(
+        self,
+        gold_signals: Sequence[Any],
+        predicted_signals: Sequence[dict[str, Any]],
+    ) -> dict[str, float | int]:
+        """Evaluate signal polarity for matched nodes.
+
+        Args:
+            gold_signals: Sequence of ground truth signal objects.
+            predicted_signals: Sequence of predicted signal dictionaries.
+
+        Returns:
+            dict[str, float | int]: Polarity evaluation metrics containing accuracy
+                and the count of matched nodes.
+        """
         gold_map = {signal.node_id: signal.detected_signal for signal in gold_signals}
         pred_map = {
             signal.get("node_id"): signal.get("detected_signal")
@@ -83,7 +95,15 @@ class ExtractionEvaluator(BaseEvaluator):
 
     @staticmethod
     def _safe_div(numerator: float, denominator: float) -> float:
-        """Safe division helper."""
+        """Safely divide two numbers, returning 0.0 if the denominator is zero.
+
+        Args:
+            numerator: The division numerator.
+            denominator: The division denominator.
+
+        Returns:
+            float: The result of the division, or 0.0 if denominator is 0.
+        """
         if denominator == 0:
             return 0.0
         return numerator / denominator

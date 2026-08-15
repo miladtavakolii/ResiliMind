@@ -28,8 +28,17 @@ DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "evaluation" / "runtime"
 
 
 def load_cases(path: Path) -> list[EvaluationCase]:
-    """
-    Load evaluation cases from JSONL dataset.
+    """Load evaluation cases from a JSONL dataset file.
+
+    Args:
+        path: Path to the dataset JSONL file.
+
+    Returns:
+        List of parsed and validated EvaluationCase instances.
+
+    Raises:
+        FileNotFoundError: If the dataset file does not exist.
+        ValueError: If the dataset is empty or if JSON validation fails.
     """
     if not path.exists():
         raise FileNotFoundError(f"Evaluation dataset not found: {path}")
@@ -54,7 +63,14 @@ def load_cases(path: Path) -> list[EvaluationCase]:
 
 
 def serialize_message(message: BaseMessage) -> dict[str, Any]:
-    """Convert LangChain message into JSON format."""
+    """Convert a LangChain message object into a JSON-compatible dictionary.
+
+    Args:
+        message: LangChain message instance.
+
+    Returns:
+        Dictionary containing serialized message fields.
+    """
     return {
         "type": message.type,
         "content": message.content,
@@ -64,12 +80,27 @@ def serialize_message(message: BaseMessage) -> dict[str, Any]:
 
 
 def serialize_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
-    """Serialize workflow messages."""
+    """Serialize a list of LangChain workflow messages.
+
+    Args:
+        messages: List of LangChain message instances.
+
+    Returns:
+        List of serialized message dictionaries.
+    """
     return [serialize_message(message) for message in messages]
 
 
 def build_initial_state(*, user_id: int, user_message: str) -> dict[str, Any]:
-    """Build initial LangGraph state."""
+    """Build the initial state dictionary for the LangGraph workflow.
+
+    Args:
+        user_id: Identifier for the current conversation thread/user.
+        user_message: Input text prompt from the user.
+
+    Returns:
+        Dictionary representing the initial LangGraph workflow state.
+    """
     return {
         "user_id": user_id,
         "user_message": user_message,
@@ -84,8 +115,19 @@ def build_initial_state(*, user_id: int, user_message: str) -> dict[str, Any]:
     }
 
 
-def extract_turn_prediction(*, turn_index: int, user_message: str, final_state: dict[str, Any]) -> TurnPrediction:
-    """Extract workflow output into evaluation schema."""
+def extract_turn_prediction(
+    *, turn_index: int, user_message: str, final_state: dict[str, Any]
+) -> TurnPrediction:
+    """Extract workflow state output into a TurnPrediction schema.
+
+    Args:
+        turn_index: Zero-based turn index within the conversation.
+        user_message: User message for the current turn.
+        final_state: Resulting state dictionary after LangGraph execution.
+
+    Returns:
+        Populated TurnPrediction instance.
+    """
     return TurnPrediction(
         turn_index=turn_index,
         user_message=user_message,
@@ -102,7 +144,17 @@ def extract_turn_prediction(*, turn_index: int, user_message: str, final_state: 
 
 
 def run_case(app: Any, case: EvaluationCase, *, case_number: int, total_cases: int) -> CasePrediction:
-    """Execute one evaluation case through ResiliMind workflow."""
+    """Execute one evaluation case across all conversation turns through the workflow.
+
+    Args:
+        app: Compiled LangGraph workflow application.
+        case: Target EvaluationCase instance to execute.
+        case_number: Sequence number of the current case.
+        total_cases: Total number of cases being executed.
+
+    Returns:
+        CasePrediction containing executed turn predictions and execution status.
+    """
     thread_id = f"evaluation:{case.dataset_version}:{case.case_id}"
     user_id = case_number
     config = {"configurable": {"thread_id": thread_id}}
@@ -148,7 +200,12 @@ def run_case(app: Any, case: EvaluationCase, *, case_number: int, total_cases: i
 
 
 def write_predictions(predictions: list[CasePrediction], output_path: Path) -> None:
-    """Write raw workflow predictions."""
+    """Write workflow predictions to a JSON Lines file.
+
+    Args:
+        predictions: List of CasePrediction instances to serialize.
+        output_path: Destination file path for JSONL output.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as file:
         for prediction in predictions:
@@ -156,18 +213,35 @@ def write_predictions(predictions: list[CasePrediction], output_path: Path) -> N
 
 
 def write_json(data: Any, output_path: Path) -> None:
-    """Write JSON evaluation artifact."""
+    """Write an evaluation artifact to a formatted JSON file.
+
+    Args:
+        data: Serializable data object or dictionary.
+        output_path: Destination file path for JSON output.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def load_prediction_mapping(predictions: list[CasePrediction]) -> dict[str, dict[str, Any]]:
-    """Convert predictions into evaluator input format."""
+    """Convert a list of CasePrediction objects into an ID-mapped dictionary for evaluators.
+
+    Args:
+        predictions: List of executed CasePrediction instances.
+
+    Returns:
+        Mapping from case IDs to serialized prediction dictionaries.
+    """
     return {prediction.case_id: prediction.model_dump() for prediction in predictions}
 
 
-def write_case_results(results, output_path: Path) -> None:
-    """Store per-case evaluation results."""
+def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
+    """Store per-case evaluation results to a JSON Lines file.
+
+    Args:
+        results: Sequence of CaseEvaluationResult instances.
+        output_path: Destination file path for JSONL output.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as file:
         for result in results:
@@ -175,13 +249,21 @@ def write_case_results(results, output_path: Path) -> None:
 
 
 def configure_evaluation_environment(runtime_dir: Path) -> None:
-    """Configure isolated benchmark runtime."""
+    """Configure an isolated benchmark runtime environment directory.
+
+    Args:
+        runtime_dir: Target directory path for benchmark database and runtime files.
+    """
     runtime_dir.mkdir(parents=True, exist_ok=True)
     os.environ["DATA_DIR"] = str(runtime_dir.resolve())
 
 
 def build_evaluator_runner() -> EvaluationRunner:
-    """Create evaluation metric pipeline."""
+    """Instantiate and configure the evaluation pipeline runner with registered evaluators.
+
+    Returns:
+        EvaluationRunner configured with all active evaluators.
+    """
     return EvaluationRunner(
         evaluators=[
             SafetyEvaluator(),
@@ -194,7 +276,12 @@ def build_evaluator_runner() -> EvaluationRunner:
 
 
 def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[CasePrediction]) -> None:
-    """Execute metrics, aggregation and reporting."""
+    """Execute evaluation metrics calculation, aggregation, and artifact persistence.
+
+    Args:
+        cases: List of benchmark evaluation cases.
+        predictions: List of workflow prediction results.
+    """
     logger.info("Starting evaluation metrics...")
 
     runner = build_evaluator_runner()
@@ -212,7 +299,11 @@ def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[Ca
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse benchmark CLI arguments."""
+    """Parse benchmark command-line arguments.
+
+    Returns:
+        Parsed CLI argument namespace.
+    """
     parser = argparse.ArgumentParser(description="Run ResiliMind evaluation benchmark.")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULTS_DIR / "predictions.jsonl")
@@ -222,7 +313,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Execute complete evaluation pipeline."""
+    """Execute the end-to-end evaluation pipeline from CLI arguments."""
     args = parse_args()
 
     if args.limit is not None and args.limit <= 0:

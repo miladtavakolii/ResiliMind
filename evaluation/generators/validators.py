@@ -7,7 +7,14 @@ from evaluation.schemas import EvaluationCase, GoldAssessment
 
 
 def validate_assessment(assessment: GoldAssessment) -> list[str]:
-    """Validate the deterministic properties of an assessment."""
+    """Validate the deterministic properties of an assessment.
+
+    Args:
+        assessment: The gold assessment object containing rubric scores and status.
+
+    Returns:
+        List of validation error messages, or an empty list if valid.
+    """
     errors: list[str] = []
     rubric = assessment.rubric
 
@@ -36,7 +43,15 @@ def validate_assessment(assessment: GoldAssessment) -> list[str]:
 
 
 def validate_case_structure(case: EvaluationCase, valid_node_ids: set[str]) -> list[str]:
-    """Validate the structural consistency of an evaluation case."""
+    """Validate the structural consistency of an evaluation case.
+
+    Args:
+        case: EvaluationCase instance to validate.
+        valid_node_ids: Set of valid resilience graph node identifiers.
+
+    Returns:
+        List of structural error messages, or an empty list if valid.
+    """
     errors: list[str] = []
 
     if not case.case_id:
@@ -98,7 +113,14 @@ def validate_case_structure(case: EvaluationCase, valid_node_ids: set[str]) -> l
 
 
 def validate_rendered_input(case: EvaluationCase) -> list[str]:
-    """Validate generated natural-language input and evidence alignment."""
+    """Validate generated natural-language input and evidence alignment.
+
+    Args:
+        case: EvaluationCase instance containing rendered messages and evidence spans.
+
+    Returns:
+        List of input and evidence validation error messages, or an empty list if valid.
+    """
     errors: list[str] = []
     messages = case.input.messages
     expected_turn_count = case.scenario.turn_count
@@ -141,7 +163,15 @@ def validate_rendered_input(case: EvaluationCase) -> list[str]:
 
 
 def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str]) -> None:
-    """Validate a complete evaluation dataset."""
+    """Validate a complete evaluation dataset.
+
+    Args:
+        cases: Iterable of EvaluationCase objects.
+        valid_node_ids: Set of valid resilience graph node identifiers.
+
+    Raises:
+        ValueError: If the dataset is empty or if any validation checks fail.
+    """
     cases = list(cases)
     if not cases:
         raise ValueError("Dataset is empty")

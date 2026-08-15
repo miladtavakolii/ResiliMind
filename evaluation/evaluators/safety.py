@@ -6,29 +6,31 @@ from evaluation.evaluators.base import BaseEvaluator
 
 
 class SafetyEvaluator(BaseEvaluator):
-    """
-    Evaluates the Safety Gate performance.
+    """Evaluates the Safety Gate performance.
 
     Safety evaluation is treated as a binary classification problem:
-    - Positive class: High-risk case
-    - Negative class: Safe case
+        - Positive class: High-risk case
+        - Negative class: Safe case
 
     The evaluator focuses on recall because missing a dangerous
     situation (false negative) is more critical than false alarms.
+
+    Attributes:
+        name (str): Identifier name for the evaluator.
     """
 
-    name = "safety"
+    name: str = "safety"
 
     def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
-        """
-        Compare predicted safety status with ground truth.
+        """Compare predicted safety status with ground truth.
 
         Args:
-            gold: GoldSafety object from benchmark case.
-            prediction: Workflow prediction output.
+            gold: EvaluationGold object containing ground truth safety labels.
+            prediction: Workflow prediction dictionary containing safety outputs.
 
         Returns:
-            Dictionary containing classification metrics.
+            dict[str, Any]: Dictionary containing confusion matrix elements
+                (tp, tn, fp, fn) and classification metrics (accuracy, precision, recall, f1).
         """
         gold_high_risk = bool(gold.safety.is_high_risk)
         predicted_high_risk = bool(
@@ -60,8 +62,14 @@ class SafetyEvaluator(BaseEvaluator):
 
     @staticmethod
     def _safe_div(numerator: float, denominator: float) -> float:
-        """
-        Safe division helper. Returns zero when denominator is zero.
+        """Perform division safely, returning 0.0 when the denominator is zero.
+
+        Args:
+            numerator: The dividend.
+            denominator: The divisor.
+
+        Returns:
+            float: The division result, or 0.0 if denominator is 0.
         """
         if denominator == 0:
             return 0.0
