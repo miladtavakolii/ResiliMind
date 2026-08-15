@@ -6,7 +6,7 @@ from typing import Any
 
 from evaluation.evaluators.base import BaseEvaluator
 from evaluation.schemas import EvaluationCase
-from evaluation.schemas.evaluation_result import (
+from evaluation.schemas import (
     CaseEvaluationResult,
     EvaluationSummary,
 )

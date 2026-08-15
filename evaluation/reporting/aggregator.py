@@ -3,7 +3,7 @@ from __future__ import annotations
 from statistics import mean
 from typing import Any
 
-from evaluation.schemas.evaluation_result import (
+from evaluation.schemas import (
     CaseEvaluationResult,
 )
 

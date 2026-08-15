@@ -18,7 +18,7 @@ from evaluation.schemas import (
     EvaluationSummary,
 )
 
-from evaluation.runners.evaluation_runner import (
+from evaluation.evaluators.runner import (
     EvaluationRunner,
 )
 
