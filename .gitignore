@@ -13,3 +13,6 @@ wheels/
 data
 .env
 *.log
+evaluation/datasets
+evaluation/runtime
+evaluation/results
