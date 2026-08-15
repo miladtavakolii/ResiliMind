@@ -11,9 +11,11 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
 
 from evaluation.schemas import (
-    CasePrediction,
     EvaluationCase,
+    CasePrediction,
     TurnPrediction,
+    CaseEvaluationResult,
+    EvaluationSummary,
 )
 
 from evaluation.runners.evaluation_runner import (
