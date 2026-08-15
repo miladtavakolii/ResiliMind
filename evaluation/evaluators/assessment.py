@@ -11,7 +11,6 @@ class AssessmentEvaluator(BaseEvaluator):
     Evaluates the Assessor Agent score prediction quality.
 
     The Assessor predicts resilience dimensions:
-
     - severity
     - frequency
     - functional
@@ -23,58 +22,23 @@ class AssessmentEvaluator(BaseEvaluator):
 
     name = "assessment"
 
-    DIMENSIONS = (
-        "severity",
-        "frequency",
-        "functional",
-        "coping",
-    )
+    DIMENSIONS = ("severity", "frequency", "functional", "coping")
 
-    def evaluate(
-        self,
-        gold: Any,
-        prediction: dict[str, Any],
-    ) -> dict[str, Any]:
+    def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
         """
         Compare predicted assessment scores with ground truth.
-
-        Args:
-            gold:
-                EvaluationGold object.
-
-            prediction:
-                Workflow output containing assessments.
-
-        Returns:
-            Regression metrics.
         """
-
         gold_assessments = {
-            item.node_id: item.rubric
-            for item in (
-                gold.assessment.assessments
-            )
+            item.node_id: item.rubric for item in gold.assessment.assessments
         }
 
         predicted_assessments = {
             item.get("node_id"): item.get("rubric", {})
-            for item in (
-                prediction
-                .get("assessment", {})
-                .get("assessments", [])
-            )
+            for item in prediction.get("assessment", {}).get("assessments", [])
         }
 
-        errors = {
-            dimension: []
-            for dimension in self.DIMENSIONS
-        }
-
-        matched_nodes = (
-            gold_assessments.keys()
-            &
-            predicted_assessments.keys()
-        )
+        errors = {dimension: [] for dimension in self.DIMENSIONS}
+        matched_nodes = gold_assessments.keys() & predicted_assessments.keys()
 
         for node_id in matched_nodes:
             gold_rubric = gold_assessments[node_id]
@@ -83,67 +47,26 @@ class AssessmentEvaluator(BaseEvaluator):
             for dimension in self.DIMENSIONS:
                 if dimension in pred_rubric:
                     errors[dimension].append(
-                        abs(
-                            getattr(
-                                gold_rubric,
-                                dimension,
-                            )
-                            -
-                            pred_rubric[dimension]
-                        )
+                        abs(getattr(gold_rubric, dimension) - pred_rubric[dimension])
                     )
 
-        metrics = {}
+        metrics = {
+            dimension: self._calculate_metrics(values)
+            for dimension, values in errors.items()
+        }
 
-        for dimension, values in errors.items():
-            metrics[dimension] = (
-                self._calculate_metrics(values)
-            )
-
-        all_errors = [
-            value
-            for values in errors.values()
-            for value in values
-        ]
-
-        metrics["overall"] = (
-            self._calculate_metrics(
-                all_errors
-            )
-        )
-
-        metrics["matched_nodes"] = len(
-            matched_nodes
-        )
+        all_errors = [value for values in errors.values() for value in values]
+        metrics["overall"] = self._calculate_metrics(all_errors)
+        metrics["matched_nodes"] = len(matched_nodes)
 
         return metrics
 
-    def _calculate_metrics(
-        self,
-        errors: list[float],
-    ) -> dict[str, float]:
-        """
-        Calculate regression error metrics.
-        """
-
+    def _calculate_metrics(self, errors: list[float]) -> dict[str, float]:
+        """Calculate regression error metrics."""
         if not errors:
-            return {
-                "mae": 0.0,
-                "rmse": 0.0,
-            }
+            return {"mae": 0.0, "rmse": 0.0}
 
         mae = sum(errors) / len(errors)
+        rmse = math.sqrt(sum(error**2 for error in errors) / len(errors))
 
-        rmse = math.sqrt(
-            sum(
-                error ** 2
-                for error in errors
-            )
-            /
-            len(errors)
-        )
-
-        return {
-            "mae": mae,
-            "rmse": rmse,
-        }
+        return {"mae": mae, "rmse": rmse}

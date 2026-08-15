@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 from evaluation.evaluators.base import BaseEvaluator
@@ -14,7 +13,6 @@ class RoutingEvaluator(BaseEvaluator):
     next agent based on the case characteristics.
 
     Supported routes:
-
     - advisor
     - questioner
     - emergency_response
@@ -22,63 +20,32 @@ class RoutingEvaluator(BaseEvaluator):
 
     name = "routing"
 
-    ROUTES = (
-        "advisor",
-        "questioner",
-        "emergency_response",
-    )
+    ROUTES = ("advisor", "questioner", "emergency_response")
 
-    def evaluate(
-        self,
-        gold: Any,
-        prediction: dict[str, Any],
-    ) -> dict[str, Any]:
+    def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
         """
         Compare expected workflow route with predicted route.
 
         Args:
-            gold:
-                EvaluationGold object.
-
-            prediction:
-                Workflow execution output.
+            gold: EvaluationGold object.
+            prediction: Workflow execution output.
 
         Returns:
             Classification metrics.
         """
-
-        expected = (
-            gold.routing.expected_route
-        )
-
-        predicted = (
-            prediction
-            .get("routing", {})
-            .get("route")
-        )
+        expected = gold.routing.expected_route
+        predicted = prediction.get("routing", {}).get("route")
 
         if predicted not in self.ROUTES:
             predicted = "unknown"
 
         labels = list(self.ROUTES)
+        matrix = {label: {other: 0 for other in labels} for label in labels}
 
-        matrix = {
-            label: {
-                other: 0
-                for other in labels
-            }
-            for label in labels
-        }
-
-        if (
-            expected in labels
-            and predicted in labels
-        ):
+        if expected in labels and predicted in labels:
             matrix[expected][predicted] += 1
 
-        correct = int(
-            expected == predicted
-        )
+        correct = int(expected == predicted)
 
         return {
             "correct": correct,
