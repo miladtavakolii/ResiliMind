@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
@@ -17,6 +18,7 @@ from evaluation.reporting.error_analyzer import ErrorAnalyzer
 from evaluation.reporting.failure_writer import FailureCSVWriter
 from evaluation.reporting.final_report import FinalReportGenerator
 from evaluation.evaluators import SafetyEvaluator, ExtractionEvaluator, AssessmentEvaluator, RoutingEvaluator, ResponseEvaluator
+from evaluation.judges.gemini import GeminiJudge
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,12 @@ DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "evaluation" / "results"
 DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "evaluation" / "runtime"
 
+
+def create_run_id() -> str:
+    """Create a unique identifier for one benchmark execution."""
+    return datetime.now(timezone.utc).strftime(
+        "%Y%m%dT%H%M%S%fZ"
+    )
 
 def load_cases(path: Path) -> list[EvaluationCase]:
     """Load evaluation cases from a JSONL dataset file.
@@ -58,7 +66,7 @@ def load_cases(path: Path) -> list[EvaluationCase]:
 
     if not cases:
         raise ValueError("Evaluation dataset is empty")
-
+    logger.info("Loaded %d evaluation cases from %s", len(cases), path)
     return cases
 
 
@@ -104,6 +112,7 @@ def build_initial_state(*, user_id: int, user_message: str) -> dict[str, Any]:
     return {
         "user_id": user_id,
         "user_message": user_message,
+        "safety_status": None,
         "safety_flag": False,
         "active_nodes": [],
         "active_signals": [],
@@ -128,6 +137,8 @@ def extract_turn_prediction(
     Returns:
         Populated TurnPrediction instance.
     """
+    messages = final_state.get("messages", [])
+
     return TurnPrediction(
         turn_index=turn_index,
         user_message=user_message,
@@ -139,11 +150,18 @@ def extract_turn_prediction(
         assessments=list(final_state.get("assessments", [])),
         requires_disambiguation=bool(final_state.get("requires_disambiguation", False)),
         final_response=str(final_state.get("final_response", "")),
-        messages=serialize_messages(final_state.get("messages", [])),
+        messages=serialize_messages(messages),
     )
 
 
-def run_case(app: Any, case: EvaluationCase, *, case_number: int, total_cases: int) -> CasePrediction:
+def run_case(
+    app: Any,
+    case: EvaluationCase,
+    *,
+    case_number: int,
+    total_cases: int,
+    run_id: str,
+) -> CasePrediction:
     """Execute one evaluation case across all conversation turns through the workflow.
 
     Args:
@@ -151,11 +169,12 @@ def run_case(app: Any, case: EvaluationCase, *, case_number: int, total_cases: i
         case: Target EvaluationCase instance to execute.
         case_number: Sequence number of the current case.
         total_cases: Total number of cases being executed.
+        run_id: if of current running benchmark
 
     Returns:
         CasePrediction containing executed turn predictions and execution status.
     """
-    thread_id = f"evaluation:{case.dataset_version}:{case.case_id}"
+    thread_id = f"evaluation: {run_id} : {case.dataset_version} : {case.case_id}"
     user_id = case_number
     config = {"configurable": {"thread_id": thread_id}}
     turns: list[TurnPrediction] = []
@@ -199,6 +218,69 @@ def run_case(app: Any, case: EvaluationCase, *, case_number: int, total_cases: i
         )
 
 
+def derive_route(turn: TurnPrediction) -> str:
+    """Derive the actual workflow route from the final state.
+
+    The workflow does not explicitly store a `routing` object,
+    therefore evaluation derives the route using the same routing
+    semantics implemented by workflow.py.
+
+    Args:
+        turn: TurnPrediction containing the final turn's state details.
+
+    Returns:
+        str: Derived route name ('emergency_response', 'questioner', or 'advisor').
+    """
+    if turn.safety_status == "HIGH_RISK":
+        return "emergency_response"
+
+    if turn.safety_status == "UNAVAILABLE" or turn.requires_disambiguation or not turn.assessments:
+        return "questioner"
+
+    for assessment in turn.assessments:
+        confidence = assessment.get("confidence", 1.0)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        if confidence < 0.70:
+            return "questioner"
+
+    return "advisor"
+
+
+def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
+    """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
+
+    Args:
+        prediction: CasePrediction object containing recorded conversation turns.
+
+    Returns:
+        dict[str, Any]: Structured dictionary formatted for evaluation modules.
+    """
+    if not prediction.turns:
+        return {
+            "safety": {"is_high_risk": False},
+            "extraction": {"signals": []},
+            "assessment": {"assessments": []},
+            "routing": {"route": "unknown"},
+            "advisor_response": "",
+        }
+
+    turn = prediction.turns[-1]
+    is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
+
+    return {
+        "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status},
+        "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
+        "assessment": {"assessments": turn.assessments},
+        "routing": {"route": derive_route(turn)},
+        "advisor_response": prediction.final_response,
+        "raw": prediction.model_dump(),
+    }
+
+
 def write_predictions(predictions: list[CasePrediction], output_path: Path) -> None:
     """Write workflow predictions to a JSON Lines file.
 
@@ -232,7 +314,7 @@ def load_prediction_mapping(predictions: list[CasePrediction]) -> dict[str, dict
     Returns:
         Mapping from case IDs to serialized prediction dictionaries.
     """
-    return {prediction.case_id: prediction.model_dump() for prediction in predictions}
+    return {prediction.case_id: build_evaluator_prediction(prediction) for prediction in predictions}
 
 
 def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
@@ -264,23 +346,25 @@ def build_evaluator_runner() -> EvaluationRunner:
     Returns:
         EvaluationRunner configured with all active evaluators.
     """
+    judge = GeminiJudge(api_key=api_key, model=judge_model)
     return EvaluationRunner(
         evaluators=[
             SafetyEvaluator(),
             ExtractionEvaluator(),
             AssessmentEvaluator(),
             RoutingEvaluator(),
-            ResponseEvaluator(),
+            ResponseEvaluator(judge=judge),
         ]
     )
 
 
-def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[CasePrediction]) -> None:
+def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[CasePrediction], results_dir: Path) -> None:
     """Execute evaluation metrics calculation, aggregation, and artifact persistence.
 
     Args:
         cases: List of benchmark evaluation cases.
         predictions: List of workflow prediction results.
+        results_dir: Path to save results
     """
     logger.info("Starting evaluation metrics...")
 
@@ -290,10 +374,10 @@ def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[Ca
     summary = EvaluationAggregator().aggregate(results)
     failures = ErrorAnalyzer().analyze(results)
 
-    write_case_results(results, DEFAULT_RESULTS_DIR / "case_results.jsonl")
-    write_json(summary, DEFAULT_RESULTS_DIR / "summary.json")
-    FailureCSVWriter().write(failures, DEFAULT_RESULTS_DIR / "failures.csv")
-    FinalReportGenerator().generate(summary, failures, DEFAULT_RESULTS_DIR / "evaluation_report.json")
+    write_case_results(results, results_dir / "case_results.jsonl")
+    write_json(summary, results_dir / "summary.json")
+    FailureCSVWriter().write(failures, results_dir / "failures.csv")
+    FinalReportGenerator().generate(summary, failures, results_dir / "evaluation_report.json")
 
     logger.info("Evaluation pipeline completed.")
 
@@ -315,6 +399,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Execute the end-to-end evaluation pipeline from CLI arguments."""
     args = parse_args()
+    run_id = create_run_id()
+    logger.info("Starting evaluation run: %s", run_id)
 
     if args.limit is not None and args.limit <= 0:
         raise ValueError("--limit must be positive")
@@ -334,18 +420,27 @@ def main() -> None:
     predictions: list[CasePrediction] = []
 
     for index, case in enumerate(cases, start=1):
-        predictions.append(run_case(app, case, case_number=index, total_cases=len(cases)))
+        predictions.append(run_case(app, case, case_number=index, total_cases=len(cases), run_id=run_id))
 
     write_predictions(predictions, args.output)
-    run_evaluation_pipeline(cases=cases, predictions=predictions)
+    run_evaluation_pipeline(cases=cases, predictions=predictions, results_dir=args.output.parent)
 
     successful = sum(item.successful for item in predictions)
     failed = len(predictions) - successful
 
+    print()
+    print("=" * 60)
+    print("ResiliMind Evaluation")
+    print("=" * 60)
     print(f"Executed: {len(predictions)}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
     print(f"Predictions: {args.output}")
+    print(f"Case results: {DEFAULT_RESULTS_DIR / 'case_results.jsonl'}")
+    print(f"Summary: {DEFAULT_RESULTS_DIR / 'summary.json'}")
+    print(f"Failures: {DEFAULT_RESULTS_DIR / 'failures.csv'}")
+    print(f"Report: {DEFAULT_RESULTS_DIR / 'evaluation_report.json'}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
