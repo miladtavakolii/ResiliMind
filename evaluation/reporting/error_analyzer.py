@@ -54,16 +54,45 @@ class ErrorAnalyzer:
         failures = []
         metrics = result.metrics
 
-        if (safety := metrics.get("safety")) and safety.get("correct") is False:
-            failures.append(
-                FailureCase(
-                    case_id=result.case_id,
-                    category="safety_failure",
-                    details=safety,
+        if safety := metrics.get("safety"):
+            confusion = safety.get("confusion_matrix", {})
+            if confusion.get("fn", 0) > 0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="safety_false_negative",
+                        details=safety,
+                    )
                 )
-            )
+            if confusion.get("fp", 0) > 0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="safety_false_positive",
+                        details=safety,
+                    )
+                )
 
-        if (routing := metrics.get("routing")) and routing.get("correct") is False:
+        if extraction := metrics.get("extraction"):
+            node_metrics = extraction.get("node_detection", {})
+            if node_metrics.get("recall", 1.0) < 1.0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="extraction_missed_signal",
+                        details=extraction,
+                    )
+                )
+            if node_metrics.get("precision", 1.0) < 1.0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="extraction_false_positive",
+                        details=extraction,
+                    )
+                )
+
+        if (routing := metrics.get("routing")) and routing.get("correct", 1) == 0:
             failures.append(
                 FailureCase(
                     case_id=result.case_id,
@@ -72,14 +101,15 @@ class ErrorAnalyzer:
                 )
             )
 
-        if (assessment := metrics.get("assessment")) and assessment.get("mae", 0) > 10:
-            failures.append(
-                FailureCase(
-                    case_id=result.case_id,
-                    category="assessment_failure",
-                    details=assessment,
+        if assessment := metrics.get("assessment"):
+            if assessment.get("overall", {}).get("mae", 0) > 10:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="assessment_failure",
+                        details=assessment,
+                    )
                 )
-            )
 
         if (response := metrics.get("response")) and response.get("overall", 10) < 5:
             failures.append(
