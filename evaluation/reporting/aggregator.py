@@ -101,12 +101,19 @@ class EvaluationAggregator:
         Returns:
             dict[str, float]: Dictionary containing mean MAE across assessment dimensions.
         """
-        maes = [
-            metric.get("overall", {}).get("mae", 0)
-            for result in results
-            if (metric := result.metrics.get("assessment"))
+        metrics = [
+            m for result in results if (m := result.metrics.get("assessment"))
         ]
-        return {"mean_mae": mean(maes) if maes else 0}
+
+        if not metrics:
+            return {"mean_mae": 0.0, "mean_rmse": 0.0, "matched_nodes": 0}
+
+        overalls = [m.get("overall", {}) for m in metrics]
+        return {
+            "mean_mae": mean(o.get("mae", 0.0) for o in overalls),
+            "mean_rmse": mean(o.get("rmse", 0.0) for o in overalls),
+            "matched_nodes": sum(m.get("matched_nodes", 0) for m in metrics),
+        }
 
     def _aggregate_routing(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
         """Calculate aggregate workflow routing accuracy across evaluation results.
