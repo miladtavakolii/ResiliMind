@@ -386,18 +386,14 @@ class ScenarioGenerator:
             raise ValueError("High-risk cases must not generate assessments")
 
         if polarity == "positive":
-            ranges = {k: (18, 25) for k in ("severity", "frequency", "functional", "coping")}
+            values = {"severity": 22, "frequency": 22, "functional": 23, "coping": 23}
         elif polarity == "negative":
-            ranges = {k: (3, 18) for k in ("severity", "frequency", "functional", "coping")}
+            values = {"severity": 10, "frequency": 12, "functional": 10, "coping": 9}
         else:
-            ranges = {k: (8, 20) for k in ("severity", "frequency", "functional", "coping")}
+            values = {"severity": 14, "frequency": 15, "functional": 14, "coping": 15}
 
-        values = {name: self.rng.randint(*v_range) for name, v_range in ranges.items()}
-
-        if case_type in {"ambiguous", "adversarial"}:
-            values = {
-                k: max(5, min(22, v + self.rng.randint(-4, 4))) for k, v in values.items()
-            }
+        if difficulty == "hard":
+            values = {key: max(0, value - 2) for key, value in values.items()}
 
         return AssessmentRubric(**values)
 
