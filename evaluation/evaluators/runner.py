@@ -68,6 +68,12 @@ class EvaluationRunner:
         metrics = {}
         logger.info("[EvaluationRunner] Evaluating case %s", case.case_id)
 
+        if prediction.get("execution_error"):
+            return CaseEvaluationResult(
+                case_id=case.case_id,
+                metrics={"execution": {"successful": False, "error": prediction["execution_error"]}}
+            )
+
         for evaluator in self.evaluators:
             try:
                 metrics[evaluator.name] = evaluator.evaluate(
