@@ -124,13 +124,25 @@ class EvaluationAggregator:
         Returns:
             dict[str, float]: Dictionary containing overall routing accuracy.
         """
-        correct = 0
-        total = 0
+        labels = ("advisor", "questioner", "emergency_response")
+        matrix = {actual: {pred: 0 for pred in labels} for actual in labels}
+
+        total, correct = 0, 0
         for result in results:
-            if metric := result.metrics.get("routing"):
+            if not (metric := result.metrics.get("routing")):
+                continue
+
+            expected, predicted = metric.get("expected"), metric.get("predicted")
+            if expected in labels and predicted in labels:
+                matrix[expected][predicted] += 1
                 total += 1
-                correct += metric.get("correct", 0)
-        return {"accuracy": correct / total if total else 0}
+                if expected == predicted:
+                    correct += 1
+
+        return {
+            "accuracy": correct / total if total else 0.0,
+            "confusion_matrix": matrix,
+        }
 
     def _aggregate_response(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
         """Calculate aggregate qualitative response scores from LLM judge outputs.
