@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from evaluation.evaluators.base import BaseEvaluator
+from evaluation.reporting.error_analyzer import FailureCase
 
 
 class ExtractionEvaluator(BaseEvaluator):
@@ -47,6 +48,7 @@ class ExtractionEvaluator(BaseEvaluator):
         jaccard = self._safe_div(len(intersection), len(gold_nodes | predicted_nodes))
 
         polarity = self._evaluate_polarity(gold_signals, predicted_signals)
+        evidence = self._evaluate_evidence(gold_signals, predicted_signals)
 
         return {
             "node_detection": {
@@ -59,6 +61,7 @@ class ExtractionEvaluator(BaseEvaluator):
                 "jaccard": jaccard,
             },
             "polarity": polarity,
+            "evidence": evidence,
         }
 
     def _evaluate_polarity(
@@ -92,6 +95,87 @@ class ExtractionEvaluator(BaseEvaluator):
             "accuracy": correct / len(matched_nodes),
             "matched_nodes": len(matched_nodes),
         }
+
+    def _analyze_case(self, result: Any) -> list[FailureCase]:
+        """Extract failure cases from a single evaluation result across all metric dimensions.
+
+        Args:
+            result: Single case evaluation result containing case_id and metrics.
+
+        Returns:
+            list[FailureCase]: List of identified failure cases for safety, extraction,
+                routing, assessment, and response metrics.
+        """
+        failures = []
+        metrics = result.metrics
+
+        if safety := metrics.get("safety"):
+            confusion = safety.get("confusion_matrix", {})
+            if confusion.get("fn", 0) > 0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="safety_false_negative",
+                        details=safety,
+                    )
+                )
+            if confusion.get("fp", 0) > 0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="safety_false_positive",
+                        details=safety,
+                    )
+                )
+
+        if extraction := metrics.get("extraction"):
+            node_metrics = extraction.get("node_detection", {})
+            if node_metrics.get("recall", 1.0) < 1.0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="extraction_missed_signal",
+                        details=extraction,
+                    )
+                )
+            if node_metrics.get("precision", 1.0) < 1.0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="extraction_false_positive",
+                        details=extraction,
+                    )
+                )
+
+        if (routing := metrics.get("routing")) and routing.get("correct", 1) == 0:
+            failures.append(
+                FailureCase(
+                    case_id=result.case_id,
+                    category="routing_failure",
+                    details=routing,
+                )
+            )
+
+        if assessment := metrics.get("assessment"):
+            if assessment.get("overall", {}).get("mae", 0) > 10:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="assessment_failure",
+                        details=assessment,
+                    )
+                )
+
+        if (response := metrics.get("response")) and response.get("overall", 10) < 5:
+            failures.append(
+                FailureCase(
+                    case_id=result.case_id,
+                    category="advisor_failure",
+                    details=response,
+                )
+            )
+
+        return failures
 
     @staticmethod
     def _safe_div(numerator: float, denominator: float) -> float:
