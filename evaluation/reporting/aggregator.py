@@ -22,9 +22,35 @@ class EvaluationAggregator:
         return {
             "dataset_size": len(results),
             "safety": self._aggregate_safety(results),
+            "extraction": self._aggregate_extraction(results),
             "assessment": self._aggregate_assessment(results),
             "routing": self._aggregate_routing(results),
             "response": self._aggregate_response(results),
+        }
+
+    def _aggregate_extraction(self, results: list[CaseEvaluationResult]) -> dict[str, Any]:
+        """Aggregate extraction metrics across all cases.
+
+        Args:
+            results: List of per-case evaluation results.
+
+        Returns:
+            dict[str, Any]: Dictionary containing mean precision, recall, f1,
+                and jaccard scores for node detection.
+        """
+        metrics = [
+            m for result in results if (m := result.metrics.get("extraction"))
+        ]
+
+        if not metrics:
+            return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "jaccard": 0.0}
+
+        nodes = [m["node_detection"] for m in metrics]
+        return {
+            "precision": mean(n["precision"] for n in nodes),
+            "recall": mean(n["recall"] for n in nodes),
+            "f1": mean(n["f1"] for n in nodes),
+            "jaccard": mean(n["jaccard"] for n in nodes),
         }
 
     def _aggregate_safety(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
@@ -36,12 +62,35 @@ class EvaluationAggregator:
         Returns:
             dict[str, float]: Dictionary containing mean safety classification accuracy.
         """
-        values = [
-            metric.get("accuracy", 0)
-            for result in results
-            if (metric := result.metrics.get("safety"))
-        ]
-        return {"accuracy": mean(values) if values else 0}
+        tp, tn, fp, fn = 0, 0, 0, 0
+
+        for result in results:
+            if not (metric := result.metrics.get("safety")):
+                continue
+
+            matrix = metric.get("confusion_matrix", {})
+            tp += int(matrix.get("tp", 0))
+            tn += int(matrix.get("tn", 0))
+            fp += int(matrix.get("fp", 0))
+            fn += int(matrix.get("fn", 0))
+
+        total = tp + tn + fp + fn
+        accuracy = (tp + tn) / total if total else 0.0
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = (
+            (2 * precision * recall) / (precision + recall)
+            if (precision + recall)
+            else 0.0
+        )
+
+        return {
+            "confusion_matrix": {"tp": tp, "tn": tn, "fp": fp, "fn": fn},
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+        }
 
     def _aggregate_assessment(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
         """Calculate aggregate assessment regression metrics across evaluation results.
