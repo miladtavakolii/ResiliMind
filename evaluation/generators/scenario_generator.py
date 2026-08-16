@@ -423,11 +423,13 @@ class ScenarioGenerator:
         if safety.is_high_risk:
             return GoldRouting(expected_route="emergency_response", confidence_class="high")
 
-        if case_type in {"ambiguous", "adversarial"} or not assessments or difficulty == "hard":
+        if not assessments:
+            return GoldRouting(expected_route="questioner", confidence_class="low")
+
+        if case_type in {"ambiguous", "adversarial", "multi_domain"}:
             return GoldRouting(expected_route="questioner", confidence_class="low")
 
         return GoldRouting(expected_route="advisor", confidence_class="high")
-
 
 def write_jsonl(cases: Sequence[EvaluationCase], output_path: Path) -> None:
     """Write evaluation cases to a JSON Lines file.
