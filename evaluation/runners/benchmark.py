@@ -11,14 +11,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
 
-from evaluation.schemas import EvaluationCase, CasePrediction, TurnPrediction, CaseEvaluationResult, EvaluationSummary
-from evaluation.evaluators.runner import EvaluationRunner
-from evaluation.reporting.aggregator import EvaluationAggregator
-from evaluation.reporting.error_analyzer import ErrorAnalyzer
-from evaluation.reporting.failure_writer import FailureCSVWriter
-from evaluation.reporting.final_report import FinalReportGenerator
-from evaluation.evaluators import SafetyEvaluator, ExtractionEvaluator, AssessmentEvaluator, RoutingEvaluator, ResponseEvaluator
-from evaluation.judges.gemini import GeminiJudge
+from evaluation.schemas import EvaluationCase, CasePrediction, TurnPrediction
 
 logger = logging.getLogger(__name__)
 
@@ -218,70 +211,6 @@ def run_case(
         )
 
 
-def derive_route(turn: TurnPrediction) -> str:
-    """Derive the actual workflow route from the final state.
-
-    The workflow does not explicitly store a `routing` object,
-    therefore evaluation derives the route using the same routing
-    semantics implemented by workflow.py.
-
-    Args:
-        turn: TurnPrediction containing the final turn's state details.
-
-    Returns:
-        str: Derived route name ('emergency_response', 'questioner', or 'advisor').
-    """
-    if turn.safety_status == "HIGH_RISK":
-        return "emergency_response"
-
-    if turn.safety_status == "UNAVAILABLE" or turn.requires_disambiguation or not turn.assessments:
-        return "questioner"
-
-    for assessment in turn.assessments:
-        confidence = assessment.get("confidence", 1.0)
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError):
-            confidence = 0.0
-
-        if confidence < 0.70:
-            return "questioner"
-
-    return "advisor"
-
-
-def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
-    """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
-
-    Args:
-        prediction: CasePrediction object containing recorded conversation turns.
-
-    Returns:
-        dict[str, Any]: Structured dictionary formatted for evaluation modules.
-    """
-    if not prediction.turns:
-        return {
-            "safety": {"is_high_risk": False},
-            "extraction": {"signals": []},
-            "assessment": {"assessments": []},
-            "routing": {"route": "unknown"},
-            "advisor_response": "",
-        }
-
-    turn = prediction.turns[-1]
-    is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
-
-    return {
-        "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status},
-        "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
-        "assessment": {"assessments": turn.assessments},
-        "routing": {"route": derive_route(turn)},
-        "advisor_response": prediction.final_response,
-        "user_context": "\n".join(item.user_message for item in prediction.turns),
-        "raw": prediction.model_dump(),
-    }
-
-
 def write_predictions(predictions: list[CasePrediction], output_path: Path) -> None:
     """Write workflow predictions to a JSON Lines file.
 
@@ -295,42 +224,6 @@ def write_predictions(predictions: list[CasePrediction], output_path: Path) -> N
             file.write(json.dumps(prediction.model_dump(), ensure_ascii=False) + "\n")
 
 
-def write_json(data: Any, output_path: Path) -> None:
-    """Write an evaluation artifact to a formatted JSON file.
-
-    Args:
-        data: Serializable data object or dictionary.
-        output_path: Destination file path for JSON output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def load_prediction_mapping(predictions: list[CasePrediction]) -> dict[str, dict[str, Any]]:
-    """Convert a list of CasePrediction objects into an ID-mapped dictionary for evaluators.
-
-    Args:
-        predictions: List of executed CasePrediction instances.
-
-    Returns:
-        Mapping from case IDs to serialized prediction dictionaries.
-    """
-    return {prediction.case_id: build_evaluator_prediction(prediction) for prediction in predictions}
-
-
-def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
-    """Store per-case evaluation results to a JSON Lines file.
-
-    Args:
-        results: Sequence of CaseEvaluationResult instances.
-        output_path: Destination file path for JSONL output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as file:
-        for result in results:
-            file.write(json.dumps(result.model_dump(), ensure_ascii=False) + "\n")
-
-
 def configure_evaluation_environment(runtime_dir: Path) -> None:
     """Configure an isolated benchmark runtime environment directory.
 
@@ -339,54 +232,6 @@ def configure_evaluation_environment(runtime_dir: Path) -> None:
     """
     runtime_dir.mkdir(parents=True, exist_ok=True)
     os.environ["DATA_DIR"] = str(runtime_dir.resolve())
-
-
-def build_evaluator_runner() -> EvaluationRunner:
-    """Instantiate and configure the evaluation pipeline runner with registered evaluators.
-
-    Returns:
-        EvaluationRunner configured with all active evaluators.
-    """
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
-
-    judge = os.getenv("GEMINI_MODEL","gemini-3.5-flash-lite")
-
-    return EvaluationRunner(
-        evaluators=[
-            SafetyEvaluator(),
-            ExtractionEvaluator(),
-            AssessmentEvaluator(),
-            RoutingEvaluator(),
-            ResponseEvaluator(judge=judge),
-        ]
-    )
-
-
-def run_evaluation_pipeline(*, cases: list[EvaluationCase], predictions: list[CasePrediction], results_dir: Path) -> None:
-    """Execute evaluation metrics calculation, aggregation, and artifact persistence.
-
-    Args:
-        cases: List of benchmark evaluation cases.
-        predictions: List of workflow prediction results.
-        results_dir: Path to save results
-    """
-    logger.info("Starting evaluation metrics...")
-
-    runner = build_evaluator_runner()
-    prediction_map = load_prediction_mapping(predictions)
-    results = runner.evaluate_dataset(cases, prediction_map)
-    summary = EvaluationAggregator().aggregate(results)
-    failures = ErrorAnalyzer().analyze(results)
-
-    write_case_results(results, results_dir / "case_results.jsonl")
-    write_json(summary, results_dir / "summary.json")
-    FailureCSVWriter().write(failures, results_dir / "failures.csv")
-    FinalReportGenerator().generate(summary, failures, results_dir / "evaluation_report.json")
-
-    logger.info("Evaluation pipeline completed.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -430,7 +275,6 @@ def main() -> None:
         predictions.append(run_case(app, case, case_number=index, total_cases=len(cases), run_id=run_id))
 
     write_predictions(predictions, args.output)
-    run_evaluation_pipeline(cases=cases, predictions=predictions, results_dir=args.output.parent)
 
     successful = sum(item.successful for item in predictions)
     failed = len(predictions) - successful
