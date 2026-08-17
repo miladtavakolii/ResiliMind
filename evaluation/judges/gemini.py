@@ -39,6 +39,34 @@ class GeminiJudge:
         self.retries = retries
         self.delay = delay
 
+
+    def _is_retryable_error(self, exc: Exception) -> bool:
+        """Return whether an exception represents a transient API failure.
+
+        Args:
+            exc: The exception instance raised during API invocation.
+
+        Returns:
+            bool: True if the exception matches known transient or rate-limit
+                error patterns, False otherwise.
+        """
+        message = str(exc).lower()
+        retryable_markers = (
+            "429",
+            "500",
+            "502",
+            "503",
+            "504",
+            "rate limit",
+            "resource exhausted",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "connection",
+        )
+        return any(marker in message for marker in retryable_markers)
+
+
     def evaluate(self, prompt: str) -> dict[str, Any]:
         """Evaluate a prompt using the Gemini model and return the parsed JSON response.
 
@@ -66,10 +94,13 @@ class GeminiJudge:
                 return result.model_dump()
 
             except Exception as exc:
-                logger.warning(
-                    "Judge failed attempt %s/%s: %s", attempt, self.retries, exc
-                )
+                logger.warning("Judge failed attempt %s/%s: %s", attempt, self.retries, exc)
+
+                if not self._is_retryable_error(exc):
+                    raise
+
                 if attempt < self.retries:
-                    time.sleep(self.delay * attempt)
+                    delay = self.delay * (2 ** (attempt - 1))
+                    time.sleep(delay)
 
         raise RuntimeError("Gemini judge failed after retries")
