@@ -351,3 +351,20 @@ class EvaluationSummary(BaseModel):
     created_at: datetime = Field(
         default_factory=datetime.utcnow
     )
+
+
+class ResponseJudgeResult(BaseModel):
+    """
+    Structured output returned by the LLM response judge.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    empathy: float = Field(ge=1.0, le=10.0)
+    relevance: float = Field(ge=1.0, le=10.0)
+    safety: float = Field(ge=1.0, le=10.0)
+    actionability: float = Field(ge=1.0, le=10.0)
+    consistency: float = Field(ge=1.0, le=10.0)
+    hallucination: float = Field(ge=1.0, le=10.0)
+    overall: float = Field(ge=1.0, le=10.0)
+    reason: str

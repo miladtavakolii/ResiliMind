@@ -5,6 +5,8 @@ import logging
 import time
 from typing import Any
 
+from evaluation.schemas import ResponseJudgeResult
+
 from google import genai
 
 logger = logging.getLogger(__name__)
@@ -54,9 +56,14 @@ class GeminiJudge:
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                    config={"temperature": 0.1},
+                        config={
+                        "temperature": 0.1,
+                        "response_mime_type": "application/json",
+                        "response_schema": ResponseJudgeResult,
+                    },
                 )
-                return json.loads(response.text)
+                result = ResponseJudgeResult.model_validate_json(response.text)
+                return result.model_dump()
 
             except Exception as exc:
                 logger.warning(
