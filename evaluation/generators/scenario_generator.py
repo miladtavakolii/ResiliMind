@@ -495,7 +495,7 @@ def main() -> None:
     generator = ScenarioGenerator(graph_path=args.graph, seed=args.seed)
     cases = generator.generate(count=args.count)
 
-    validate_dataset(cases, valid_node_ids=set(generator.nodes.keys()))
+    validate_dataset(cases, valid_node_ids=set(generator.nodes.keys()), require_rendered=False)
     write_jsonl(cases, output_path=args.output)
 
     print(f"Generated {len(cases)} scenarios.")

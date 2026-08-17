@@ -112,11 +112,12 @@ def validate_case_structure(case: EvaluationCase, valid_node_ids: set[str]) -> l
     return errors
 
 
-def validate_rendered_input(case: EvaluationCase) -> list[str]:
+def validate_rendered_input(case: EvaluationCase, *, require_rendered: bool = False) -> list[str]:
     """Validate generated natural-language input and evidence alignment.
 
     Args:
         case: EvaluationCase instance containing rendered messages and evidence spans.
+        require_rendered: If True, enforce that rendered input messages are present in the case.
 
     Returns:
         List of input and evidence validation error messages, or an empty list if valid.
@@ -125,44 +126,46 @@ def validate_rendered_input(case: EvaluationCase) -> list[str]:
     messages = case.input.messages
     expected_turn_count = case.scenario.turn_count
 
-    if len(messages) != expected_turn_count:
-        errors.append(
-            f"{case.case_id}: expected {expected_turn_count} messages, got {len(messages)}"
-        )
+    if require_rendered:
+        if len(messages) != expected_turn_count:
+            errors.append(
+                f"{case.case_id}: expected {expected_turn_count} messages, got {len(messages)}"
+            )
 
     for index, message in enumerate(messages):
         if not message.strip():
             errors.append(f"{case.case_id}: message {index} is empty")
 
-    signals = case.gold.extraction.active_signals
-    for signal in signals:
-        if not signal.evidence:
-            errors.append(f"{case.case_id}: missing evidence for {signal.node_id}")
-            continue
+    if require_rendered:
+        signals = case.gold.extraction.active_signals
+        for signal in signals:
+            if not signal.evidence:
+                errors.append(f"{case.case_id}: missing evidence for {signal.node_id}")
+                continue
 
-        if signal.evidence_message_index is None:
-            errors.append(
-                f"{case.case_id}: missing evidence message index for {signal.node_id}"
-            )
-            continue
+            if signal.evidence_message_index is None:
+                errors.append(
+                    f"{case.case_id}: missing evidence message index for {signal.node_id}"
+                )
+                continue
 
-        message_index = signal.evidence_message_index
-        if not 0 <= message_index < len(messages):
-            errors.append(
-                f"{case.case_id}: invalid evidence message index {message_index} for {signal.node_id}"
-            )
-            continue
+            message_index = signal.evidence_message_index
+            if not 0 <= message_index < len(messages):
+                errors.append(
+                    f"{case.case_id}: invalid evidence message index {message_index} for {signal.node_id}"
+                )
+                continue
 
-        message = messages[message_index]
-        if signal.evidence not in message:
-            errors.append(
-                f"{case.case_id}: evidence for {signal.node_id} is not an exact substring of the referenced message"
-            )
+            message = messages[message_index]
+            if signal.evidence not in message:
+                errors.append(
+                    f"{case.case_id}: evidence for {signal.node_id} is not an exact substring of the referenced message"
+                )
 
     return errors
 
 
-def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str]) -> None:
+def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str], require_rendered: bool = False) -> None:
     """Validate a complete evaluation dataset.
 
     Args:
@@ -187,7 +190,7 @@ def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str]) 
 
     for case in cases:
         errors.extend(validate_case_structure(case, valid_node_ids=valid_node_ids))
-        errors.extend(validate_rendered_input(case))
+        errors.extend(validate_rendered_input(case, require_rendered=require_rendered))
 
     if errors:
         formatted_errors = "\n".join(f"- {error}" for error in errors)

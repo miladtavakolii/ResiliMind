@@ -14,7 +14,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from evaluation.schemas import EvaluationCase
-from evaluation.generators.validators import validate_case
+from evaluation.generators.validators import validate_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT_PATH = PROJECT_ROOT / "evaluation" / "prompts" / "scenario_renderer.txt"
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "scenarios.jsonl"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
+GRAPH_PATH = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
 
 
 class RenderedMessage(BaseModel):
@@ -428,6 +429,22 @@ def main() -> None:
     )
 
     rendered_cases = renderer.render_dataset(cases, skip_failures=args.skip_failures)
+    with GRAPH_PATH.open("r", encoding="utf-8") as file:
+        graph = json.load(file)
+
+    valid_node_ids = set(graph["nodes"].keys())
+
+    errors = validate_dataset(
+        cases,
+        valid_node_ids=valid_node_ids,
+        require_rendered=True,
+    )
+    if errors:
+        formatted_errors = "\n".join(f"- {error}" for error in errors)
+        raise ValueError(
+            f"Rendered dataset validation failed:\n{formatted_errors}"
+        )
+    
     write_cases(rendered_cases, args.output)
 
     print(f"Rendered {len(rendered_cases)} cases.")
