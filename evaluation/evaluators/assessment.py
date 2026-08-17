@@ -48,6 +48,8 @@ class AssessmentEvaluator(BaseEvaluator):
 
         errors = {dimension: [] for dimension in self.DIMENSIONS}
         matched_nodes = gold_assessments.keys() & predicted_assessments.keys()
+        status_correct = 0
+        status_total = 0
 
         for node_id in matched_nodes:
             gold_rubric = gold_assessments[node_id]
@@ -59,6 +61,25 @@ class AssessmentEvaluator(BaseEvaluator):
                         abs(getattr(gold_rubric, dimension) - pred_rubric[dimension])
                     )
 
+            predicted_status = (
+                next(
+                    (
+                        item.get("status")
+                        for item in prediction
+                        .get("assessment", {})
+                        .get("assessments", [])
+                        if item.get("node_id") == node_id
+                    ),
+                    None,
+                )
+            )
+
+            if predicted_status is not None:
+                status_total += 1
+
+                if predicted_status == gold_rubric.status:
+                    status_correct += 1
+
         metrics = {
             dimension: self._calculate_metrics(values)
             for dimension, values in errors.items()
@@ -67,6 +88,10 @@ class AssessmentEvaluator(BaseEvaluator):
         all_errors = [value for values in errors.values() for value in values]
         metrics["overall"] = self._calculate_metrics(all_errors)
         metrics["matched_nodes"] = len(matched_nodes)
+        metrics["status"] = {
+            "accuracy": (status_correct / status_total if status_total else 0.0),
+            "correct": status_correct, "total": status_total
+            }
 
         return metrics
 
