@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Sequence
 
 from evaluation.evaluators.base import BaseEvaluator
-from evaluation.reporting.error_analyzer import FailureCase
-
 
 class ExtractionEvaluator(BaseEvaluator):
     """Evaluates the Extractor Agent performance.
@@ -95,87 +94,125 @@ class ExtractionEvaluator(BaseEvaluator):
             "accuracy": correct / len(matched_nodes),
             "matched_nodes": len(matched_nodes),
         }
+    
+    def _evaluate_evidence(
+        self,
+        gold_signals: Sequence[Any],
+        predicted_signals: Sequence[dict[str, Any]],
+    ) -> dict[str, float | int]:
+        """Evaluate evidence spans for nodes correctly identified by the extractor.
 
-    def _analyze_case(self, result: Any) -> list[FailureCase]:
-        """Extract failure cases from a single evaluation result across all metric dimensions.
+        Evidence is evaluated only on matched node IDs so that node-detection
+        failures and evidence-quality failures remain separate metrics.
 
         Args:
-            result: Single case evaluation result containing case_id and metrics.
+            gold_signals: Sequence of ground-truth signal objects with node_id and evidence.
+            predicted_signals: Sequence of predicted signal dictionaries.
 
         Returns:
-            list[FailureCase]: List of identified failure cases for safety, extraction,
-                routing, assessment, and response metrics.
+            dict[str, float | int]: Dictionary containing exact match, substring match,
+                token F1 scores, and matched node counts.
         """
-        failures = []
-        metrics = result.metrics
+        gold_map = {signal.node_id: signal.evidence or "" for signal in gold_signals}
+        predicted_map = {
+            signal.get("node_id"): signal.get("evidence", "")
+            for signal in predicted_signals
+            if signal.get("node_id")
+        }
 
-        if safety := metrics.get("safety"):
-            confusion = safety.get("confusion_matrix", {})
-            if confusion.get("fn", 0) > 0:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="safety_false_negative",
-                        details=safety,
-                    )
-                )
-            if confusion.get("fp", 0) > 0:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="safety_false_positive",
-                        details=safety,
-                    )
-                )
+        matched_nodes = gold_map.keys() & predicted_map.keys()
+        if not matched_nodes:
+            return {
+                "exact_match": 0.0,
+                "substring_match": 0.0,
+                "token_f1": 0.0,
+                "matched_nodes": 0,
+            }
 
-        if extraction := metrics.get("extraction"):
-            node_metrics = extraction.get("node_detection", {})
-            if node_metrics.get("recall", 1.0) < 1.0:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="extraction_missed_signal",
-                        details=extraction,
-                    )
-                )
-            if node_metrics.get("precision", 1.0) < 1.0:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="extraction_false_positive",
-                        details=extraction,
-                    )
-                )
+        exact_matches = 0
+        substring_matches = 0
+        token_f1_scores: list[float] = []
 
-        if (routing := metrics.get("routing")) and routing.get("correct", 1) == 0:
-            failures.append(
-                FailureCase(
-                    case_id=result.case_id,
-                    category="routing_failure",
-                    details=routing,
-                )
+        for node_id in matched_nodes:
+            gold_evidence = self._normalize_evidence(gold_map[node_id])
+            predicted_evidence = self._normalize_evidence(predicted_map[node_id])
+
+            if not gold_evidence:
+                continue
+
+            if gold_evidence == predicted_evidence:
+                exact_matches += 1
+
+            if (
+                gold_evidence in predicted_evidence
+                or predicted_evidence in gold_evidence
+            ):
+                substring_matches += 1
+
+            token_f1_scores.append(
+                self._token_f1(gold_evidence, predicted_evidence)
             )
 
-        if assessment := metrics.get("assessment"):
-            if assessment.get("overall", {}).get("mae", 0) > 10:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="assessment_failure",
-                        details=assessment,
-                    )
-                )
+        evaluated = len(token_f1_scores)
+        if evaluated == 0:
+            return {
+                "exact_match": 0.0,
+                "substring_match": 0.0,
+                "token_f1": 0.0,
+                "matched_nodes": len(matched_nodes),
+            }
 
-        if (response := metrics.get("response")) and response.get("overall", 10) < 5:
-            failures.append(
-                FailureCase(
-                    case_id=result.case_id,
-                    category="advisor_failure",
-                    details=response,
-                )
-            )
+        return {
+            "exact_match": exact_matches / evaluated,
+            "substring_match": substring_matches / evaluated,
+            "token_f1": sum(token_f1_scores) / evaluated,
+            "matched_nodes": len(matched_nodes),
+        }
 
-        return failures
+    @staticmethod
+    def _normalize_evidence(text: str) -> str:
+        """Normalize whitespace and case for evidence comparison.
+
+        Args:
+            text: Raw evidence string to normalize.
+
+        Returns:
+            str: Normalized lowercase evidence string with collapsed whitespace.
+        """
+        return " ".join(text.strip().lower().split())
+
+    @staticmethod
+    def _token_f1(gold: str, prediction: str) -> float:
+        """Calculate token-level F1 for two evidence spans.
+
+        Args:
+            gold: Normalized ground-truth evidence text.
+            prediction: Normalized predicted evidence text.
+
+        Returns:
+            float: Harmonic mean of token-level precision and recall.
+        """
+        gold_tokens = gold.split()
+        prediction_tokens = prediction.split()
+
+        if not gold_tokens or not prediction_tokens:
+            return 0.0
+
+        gold_counts = Counter(gold_tokens)
+        prediction_counts = Counter(prediction_tokens)
+
+        overlap = sum(
+            min(gold_counts[token], prediction_counts[token])
+            for token in (gold_counts.keys() & prediction_counts.keys())
+        )
+
+        if overlap == 0:
+            return 0.0
+
+        precision = overlap / len(prediction_tokens)
+        recall = overlap / len(gold_tokens)
+
+        return 2 * precision * recall / (precision + recall)
 
     @staticmethod
     def _safe_div(numerator: float, denominator: float) -> float:
