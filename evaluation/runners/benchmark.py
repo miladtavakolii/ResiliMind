@@ -347,7 +347,13 @@ def build_evaluator_runner() -> EvaluationRunner:
     Returns:
         EvaluationRunner configured with all active evaluators.
     """
-    judge = GeminiJudge(api_key=api_key, model=judge_model)
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
+
+    judge = os.getenv("GEMINI_MODEL","gemini-3.5-flash-lite")
+
     return EvaluationRunner(
         evaluators=[
             SafetyEvaluator(),
