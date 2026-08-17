@@ -277,6 +277,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
         "assessment": {"assessments": turn.assessments},
         "routing": {"route": derive_route(turn)},
         "advisor_response": prediction.final_response,
+        "user_context": "\n".join(item.user_message for item in prediction.turns),
         "raw": prediction.model_dump(),
     }
 

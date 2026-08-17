@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 from evaluation.evaluators.base import BaseEvaluator
 from evaluation.judges.gemini import GeminiJudge
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+PROMPT_PATH = PROJECT_ROOT / "prompts" / "response_judge.txt"
 
 class ResponseEvaluator(BaseEvaluator):
     """Evaluates final advisor responses using an LLM judge.
@@ -26,6 +30,7 @@ class ResponseEvaluator(BaseEvaluator):
             judge: GeminiJudge instance configured for LLM-based evaluation.
         """
         self.judge = judge
+        self.prompt_template = (PROMPT_PATH.read_text(encoding="utf-8"))
 
     def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
         """Evaluate the advisor response against ground truth data using the LLM judge.
@@ -39,36 +44,37 @@ class ResponseEvaluator(BaseEvaluator):
                 or an error dict if the response is missing.
         """
         response = prediction.get("advisor_response")
+        user_context = prediction.get("user_context","")
         if not response:
             return {"error": "missing response"}
 
-        prompt = self._build_prompt(gold, response)
+        prompt = self._build_prompt(gold, response, assessment=gold.assessment.model_dump(), response=response)
         return self.judge.evaluate(prompt)
 
-    def _build_prompt(self, gold: Any, response: str) -> str:
-        """Construct the prompt string for the LLM judge evaluation.
+    def _build_prompt(
+        self,
+        *,
+        user_context: str,
+        signals: list[dict[str, Any]],
+        assessment: dict[str, Any],
+        response: str,
+    ) -> str:
+        """Build the prompt from the repository judge template.
 
         Args:
-            gold: EvaluationGold object containing ground truth signals and assessment.
-            response: The generated advisor response text.
+            user_context: Aggregated text or conversation history from the user.
+            signals: List of extracted resilience signal dictionaries.
+            assessment: Assessment dictionary containing resilience scores and rubrics.
+            response: Generated advisor response text to be evaluated.
 
         Returns:
-            str: Formatted prompt string for the LLM judge.
+            str: Formatted prompt string ready for LLM judge evaluation.
         """
-        signals = [
-            {"node_id": item.node_id, "signal": item.detected_signal}
-            for item in gold.extraction.active_signals
-        ]
-
-        return f"""Evaluate this AI advisor response.
-
-Ground truth signals:
-{signals}
-
-Assessment:
-{gold.assessment.model_dump()}
-
-Advisor response:
-{response}
-
-Return JSON only."""
+        return (
+            f"{self.prompt_template}\n\n"
+            f"=== USER CONTEXT ===\n{user_context}\n\n"
+            f"=== EXTRACTED SIGNALS ===\n{signals}\n\n"
+            f"=== ASSESSMENT ===\n{assessment}\n\n"
+            f"=== ADVISOR RESPONSE ===\n{response}\n\n"
+            "Return ONLY the JSON object defined by the output schema."
+        )
