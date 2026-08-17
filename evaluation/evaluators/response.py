@@ -47,8 +47,9 @@ class ResponseEvaluator(BaseEvaluator):
         user_context = prediction.get("user_context","")
         if not response:
             return {"error": "missing response"}
+        signals = prediction.get("extraction", {}).get("signals", [])
 
-        prompt = self._build_prompt(gold, response, assessment=gold.assessment.model_dump(), response=response)
+        prompt = self._build_prompt(user_context=user_context,signals=signals,assessment=gold.assessment.model_dump(),response=response)
         return self.judge.evaluate(prompt)
 
     def _build_prompt(
