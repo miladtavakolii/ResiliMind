@@ -32,16 +32,48 @@ def render_chat_interface(app: Any, config: Dict[str, Any]) -> None:
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
-            with st.spinner("در حال تحلیل پیام، واکشی از گراف دانش و ارزیابی..."):
-                logger.debug("[UI-Chat] Invoking process_user_message service layer...")
-                # Call pure service layer
-                result: ProcessResult = process_user_message(app, config, user_input, st.session_state.user_id)
+            
+            status_container = st.empty()
+            status_container.info("⏳ در حال تحلیل پیام، واکشی از گراف دانش و ارزیابی...")
+            message_placeholder = st.empty()
+            
+            class StreamlitStreamHandler:
+                def __init__(self, container, status_box):
+                    self.container = container
+                    self.status_box = status_box
+                    self.text = ""
+                    self.first_token = True
+
+                def on_llm_new_token(self, token: str) -> None:
+                    if self.first_token:
+                        self.status_box.empty()
+                        self.first_token = False
+                    
+                    self.text += token
+                    self.container.markdown(self.text.replace("\n", "  \n") + " ▌")
+
+            stream_handler = StreamlitStreamHandler(message_placeholder, status_container)
+            
+            if "configurable" not in config:
+                config["configurable"] = {}
+            config["configurable"]["stream_handler"] = stream_handler
+
+            logger.debug("[UI-Chat] Invoking process_user_message service layer with streaming...")
+            
+            result = process_user_message(app, config, user_input, st.session_state.user_id)
+            st.session_state.last_state = result.state
+            
+            response_text = result.final_response
+            if not response_text:
+                response_text = result.state.get("final_response", "")
                 
-                # UI explicitly manages its own session state based on service output
-                st.session_state.last_state = result.state
-                logger.debug("[UI-Chat] Updated session state with latest workflow result.")
-                
-                st.markdown(result.final_response)
-                st.session_state.messages.append({"role": "assistant", "content": result.final_response})
-                logger.info("[UI-Chat] Assistant response rendered and appended to session history. Triggering rerun.")
-                st.rerun()
+            if not response_text:
+                status_container.empty()
+                response_text = "⚠️ **خطا در سیستم:** گراف پردازش را تمام کرد اما ایجنت مشاور متنی تولید نکرد."
+                logger.error(f"[UI-Chat] Empty response text. Graph State Dump: {result.state.keys()}")
+
+            formatted_response = response_text.replace("\n", "  \n")
+            message_placeholder.markdown(formatted_response)
+            
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            logger.info("[UI-Chat] Assistant streaming completed and saved.")

@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any, List
 import networkx as nx
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 import re
 
 from .state import AgentState
@@ -222,7 +223,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def questioner_node(state: AgentState) -> Dict[str, Any]:
+def questioner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """
     Generates a targeted, empathetic clarification question when input is ambiguous,
     using the full conversational memory.
@@ -238,25 +239,29 @@ def questioner_node(state: AgentState) -> Dict[str, Any]:
     
     # Fetch the full chat history from the graph state
     messages_history = state.get("messages", [])
-    
+
+    stream_handler = config.get("configurable", {}).get("stream_handler")
     conversational_llm = llm_engine.get_conversational_llm()
     prompt = prompts.get_questioner_prompt()
     chain = prompt | conversational_llm    
-    response = chain.invoke({
+    question_text = ""
+    for chunk in chain.stream({
         "user_message": state.get("user_message", ""),
         "subgraph_context": context,
         "messages": messages_history
-    })
+    }):
+        question_text += chunk.content
+        if stream_handler:
+            stream_handler.on_llm_new_token(chunk.content)
 
-    question_text: str = response.content
-    logger.debug("[Questioner] Clarification question successfully generated.")
+    logger.debug("[Questioner] Clarification question successfully streamed.")
     return {
         "final_response": question_text,
         "messages": [AIMessage(content=question_text)]
     }
 
 
-def advisor_node(state: AgentState) -> Dict[str, Any]:
+def advisor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """
     Generates tailored psychological advice and interventions using active graph guidance
     combined with the user's historical resilience profile and full conversational memory.
@@ -306,18 +311,26 @@ def advisor_node(state: AgentState) -> Dict[str, Any]:
         f"=== USER HISTORICAL RESILIENCE PROFILE ===\n{history_context}"
     )
 
+    stream_handler = config.get("configurable", {}).get("stream_handler")
     conversational_llm = llm_engine.get_conversational_llm()
     prompt = prompts.get_advisor_prompt()
     chain = prompt | conversational_llm    
-    response = chain.invoke({
+    advice_text = ""
+    for chunk in chain.stream({
         "user_message": state.get("user_message", ""),
         "subgraph_context": full_context,
         "assessments": str(assessments),
         "messages": messages_history
-    })
-    
-    advice_text: str = response.content
-    logger.debug("[Advisor] Advice successfully generated.")
+    }):
+        advice_text += chunk.content
+        if stream_handler:
+            stream_handler.on_llm_new_token(chunk.content)
+
+    if not advice_text or not advice_text.strip():
+        logger.error("[Advisor] LLM returned an empty response.")
+        advice_text = "متأسفانه در پردازش پاسخ خطایی رخ داد. لطفاً صفحه را رفرش کرده یا نشست جدیدی آغاز کنید."
+    else:
+        logger.debug("[Advisor] Advice successfully streamed and generated.")
     
     return {
         "final_response": advice_text,
