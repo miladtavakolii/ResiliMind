@@ -120,4 +120,38 @@ class ErrorAnalyzer:
                 )
             )
 
+        if extraction := metrics.get("extraction"):
+            evidence = extraction.get("evidence", {})
+            if evidence.get("exact_match", 1.0) < 1.0:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="evidence_mismatch",
+                        details=extraction,
+                    )
+                )
+
+        if response := metrics.get("response"):
+            if response.get("overall", 10) < 5:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="advisor_quality_failure",
+                        details=response,
+                    )
+                )
+
+        if assessment := metrics.get("assessment"):
+            status = assessment.get("status", {})
+            if 0 < status.get("correct", 0) < status.get("total", 0) or (
+                status.get("total", 0) > 0 and status.get("correct", 0) < status.get("total", 0)
+            ):
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="assessment_status_failure",
+                        details=assessment,
+                    )
+                )
+                
         return failures
