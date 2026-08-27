@@ -297,6 +297,7 @@ class TurnPrediction(BaseModel):
     user_message: str
     safety_status: str | None = None
     safety_flag: bool = False
+    safety_risk_category: str = "SAFE"
     active_nodes: list[str] = Field(default_factory=list)
     active_signals: list[dict[str, Any]] = Field(default_factory=list)
     subgraph_context: str = ""

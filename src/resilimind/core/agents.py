@@ -403,8 +403,9 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
     if any(phrase in normalized_msg for phrase in crisis_phrases):
         logger.warning(f"[Safety] Fast heuristic triggered high-risk flag on normalized input.")
         return {
-            "safety_status": "HIGH_RISK", 
-            "safety_flag": True
+            "safety_status": "HIGH_RISK",
+            "safety_flag": True,
+            "safety_risk_category": "SELF_HARM",
         }
         
     # 3. LLM-based Safety Classification (Context-aware fallback)
@@ -415,21 +416,24 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         if result.is_high_risk:
             logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
             return {
-                "safety_status": "HIGH_RISK", 
-                "safety_flag": True
+                "safety_status": "HIGH_RISK",
+                "safety_flag": True,
+                "safety_risk_category": result.risk_category,
             }
             
         logger.debug("[Safety] Input evaluated as SAFE.")
         return {
-            "safety_status": "SAFE", 
-            "safety_flag": False
+            "safety_status": "SAFE",
+            "safety_flag": False,
+            "safety_risk_category": "SAFE",
         }
         
     except Exception as e:
         logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
         return {
-            "safety_status": "UNAVAILABLE", 
-            "safety_flag": False
+            "safety_status": "UNAVAILABLE",
+            "safety_flag": False,
+            "safety_risk_category": "SAFE",
         }
 
 

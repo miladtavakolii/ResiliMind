@@ -7,7 +7,7 @@ from langgraph.graph.message import add_messages
 class AgentState(TypedDict):
     """
     Represents the internal shared state of the LangGraph workflow.
-    
+
     Data is passed and mutated through this TypedDict across all agent nodes 
     and conditional edge routers during execution.
 
@@ -24,26 +24,27 @@ class AgentState(TypedDict):
         messages (Annotated[List[BaseMessage], add_messages]): Conversational message history managed 
             incrementally by LangGraph's reducer.
     """
-    
+
     # 1. User Input & Session Metadata
     user_id: int
     user_message: str
-    
+
     # 2. Safety Gate Classification
     safety_status: Literal["SAFE", "HIGH_RISK", "UNAVAILABLE"]
+    safety_risk_category: Literal["SAFE", "SELF_HARM", "VIOLENCE", "SEVERE_ABUSE"]
     safety_flag: bool
-    
+
     # 3. Extractor Agent Outputs
     active_nodes: List[str]
     active_signals: List[Dict[str, Any]]
-    
+
     # 4. Graph Retriever Output
     subgraph_context: str
-    
+
     # 5. Assessor Agent Outputs
     assessments: List[Dict[str, Any]]
     requires_disambiguation: bool
-    
+
     # 6. Final Terminal Output
     final_response: str
 

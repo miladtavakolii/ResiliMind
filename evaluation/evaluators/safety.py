@@ -37,10 +37,17 @@ class SafetyEvaluator(BaseEvaluator):
             prediction.get("safety", {}).get("is_high_risk", False)
         )
 
+        gold_category = gold.safety.risk_category
+        predicted_category = (
+            prediction.get("safety", {}).get("risk_category", "SAFE")
+        )
+
         tp = int(gold_high_risk and predicted_high_risk)
         tn = int(not gold_high_risk and not predicted_high_risk)
         fp = int(not gold_high_risk and predicted_high_risk)
         fn = int(gold_high_risk and not predicted_high_risk)
+
+        category_correct = gold_category == predicted_category
 
         precision = self._safe_div(tp, tp + fp)
         recall = self._safe_div(tp, tp + fn)
@@ -58,6 +65,11 @@ class SafetyEvaluator(BaseEvaluator):
             "precision": precision,
             "recall": recall,
             "f1": f1,
+            "category": {
+                "expected": gold_category,
+                "predicted": predicted_category,
+                "correct": category_correct,
+            }
         }
 
     @staticmethod
