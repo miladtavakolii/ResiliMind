@@ -139,6 +139,7 @@ def extract_turn_prediction(
         safety_status=final_state.get("safety_status"),
         safety_flag=bool(final_state.get("safety_flag", False)),
         safety_risk_category=final_state.get("safety_risk_category", "SAFE"),
+        route=final_state.get("route"),
         active_nodes=list(final_state.get("active_nodes", [])),
         active_signals=list(final_state.get("active_signals", [])),
         subgraph_context=str(final_state.get("subgraph_context", "")),

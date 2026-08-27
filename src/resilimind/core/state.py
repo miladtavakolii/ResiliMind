@@ -44,6 +44,7 @@ class AgentState(TypedDict):
     # 5. Assessor Agent Outputs
     assessments: List[Dict[str, Any]]
     requires_disambiguation: bool
+    route: Literal["advisor", "questioner", "emergency_response", "service_unavailable"]
 
     # 6. Final Terminal Output
     final_response: str

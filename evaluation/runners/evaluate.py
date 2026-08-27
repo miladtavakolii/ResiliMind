@@ -193,38 +193,6 @@ def build_evaluator_runner() -> EvaluationRunner:
     )
 
 
-def derive_route(turn: TurnPrediction) -> str:
-    """Derive the actual workflow route from the final state.
-
-    The workflow does not explicitly store a `routing` object,
-    therefore evaluation derives the route using the same routing
-    semantics implemented by workflow.py.
-
-    Args:
-        turn: TurnPrediction containing the final turn's state details.
-
-    Returns:
-        str: Derived route name ('emergency_response', 'questioner', or 'advisor').
-    """
-    if turn.safety_status == "HIGH_RISK":
-        return "emergency_response"
-
-    if turn.safety_status == "UNAVAILABLE" or turn.requires_disambiguation or not turn.assessments:
-        return "questioner"
-
-    for assessment in turn.assessments:
-        confidence = assessment.get("confidence", 1.0)
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError):
-            confidence = 0.0
-
-        if confidence < 0.70:
-            return "questioner"
-
-    return "advisor"
-
-
 def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
 
@@ -250,7 +218,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
         "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status},
         "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
         "assessment": {"assessments": turn.assessments},
-        "routing": {"route": derive_route(turn)},
+        "routing": {"route": turn.route},
         "advisor_response": prediction.final_response,
         "user_context": "\n".join(item.user_message for item in prediction.turns),
         "raw": prediction.model_dump(),

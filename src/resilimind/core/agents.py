@@ -256,6 +256,7 @@ def questioner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
 
     logger.debug("[Questioner] Clarification question successfully streamed.")
     return {
+        "route": "questioner",
         "final_response": question_text,
         "messages": [AIMessage(content=question_text)]
     }
@@ -333,6 +334,7 @@ def advisor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         logger.debug("[Advisor] Advice successfully streamed and generated.")
     
     return {
+        "route": "advisor",
         "final_response": advice_text,
         "messages": [AIMessage(content=advice_text)]
     }
@@ -456,6 +458,7 @@ def service_unavailable_node(state: AgentState) -> Dict[str, Any]:
         "Please try again in a few minutes or contact the help desk if you need immediate support."
     )
     return {
+        "route": "service_unavailable",
         "final_response": unavailable_text,
         "messages": [AIMessage(content=unavailable_text)]
     }
@@ -478,6 +481,7 @@ def emergency_response_node(state: AgentState) -> Dict[str, Any]:
     emergency_text: str = prompts.EMERGENCY_RESPONSE_TEMPLATE
     
     return {
+        "route": "emergency_response",
         "final_response": emergency_text,
         "messages": [AIMessage(content=emergency_text)]
     }
