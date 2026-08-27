@@ -86,13 +86,15 @@ class ScenarioGenerator:
             ValueError: If the top-level 'nodes' key is missing.
         """
         if not self.graph_path.exists():
-            raise FileNotFoundError(f"Knowledge graph not found: {self.graph_path}")
+            raise FileNotFoundError(
+                f"Knowledge graph not found: {self.graph_path}")
 
         with self.graph_path.open("r", encoding="utf-8") as file:
             graph = json.load(file)
 
         if "nodes" not in graph:
-            raise ValueError("Knowledge graph must contain a top-level 'nodes' object")
+            raise ValueError(
+                "Knowledge graph must contain a top-level 'nodes' object")
 
         return graph
 
@@ -163,7 +165,8 @@ class ScenarioGenerator:
         floors = [int(value) for value in raw]
         remainder = count - sum(floors)
 
-        fractional = sorted(range(len(raw)), key=lambda i: raw[i] - floors[i], reverse=True)
+        fractional = sorted(
+            range(len(raw)), key=lambda i: raw[i] - floors[i], reverse=True)
         for i in fractional[:remainder]:
             floors[i] += 1
 
@@ -208,7 +211,8 @@ class ScenarioGenerator:
         )
 
         safety = self._generate_safety(case_type=case_type)
-        signals = self._generate_signals(domain=domain, case_type=case_type, safety=safety)
+        signals = self._generate_signals(
+            domain=domain, case_type=case_type, safety=safety)
         assessments = self._generate_assessments(
             signals=signals, difficulty=difficulty, case_type=case_type
         )
@@ -251,7 +255,8 @@ class ScenarioGenerator:
         Raises:
             ValueError: If no valid domains are found in the graph.
         """
-        domains = sorted({node["domain"] for node in self.nodes.values() if "domain" in node})
+        domains = sorted({node["domain"]
+                         for node in self.nodes.values() if "domain" in node})
         if not domains:
             raise ValueError("No domains found in knowledge graph")
         return self.rng.choice(domains)
@@ -338,7 +343,8 @@ class ScenarioGenerator:
             else:
                 polarity = self.rng.choice(["positive", "negative"])
 
-            signals.append(GoldSignal(node_id=node_id, detected_signal=polarity, evidence=None))
+            signals.append(GoldSignal(node_id=node_id,
+                           detected_signal=polarity, evidence=None))
 
         return signals
 
@@ -362,13 +368,14 @@ class ScenarioGenerator:
                 difficulty=difficulty,
                 case_type=case_type,
             )
-            assessments.append(GoldAssessment(node_id=signal.node_id, rubric=scores))
+            assessments.append(GoldAssessment(
+                node_id=signal.node_id, rubric=scores))
         return assessments
 
     def _generate_rubric(
         self, *, polarity: str, difficulty: str, case_type: str
     ) -> AssessmentRubric:
-        """Generate a four-dimensional resilience rubric assessment.
+        """Generate a deterministic assessment profile from scenario semantics..
 
         Args:
             polarity: Signal polarity ('positive', 'negative', or 'mixed').
@@ -386,11 +393,14 @@ class ScenarioGenerator:
             raise ValueError("High-risk cases must not generate assessments")
 
         if polarity == "positive":
-            values = {"severity": 22, "frequency": 22, "functional": 23, "coping": 23}
+            values = {"severity": 22, "frequency": 22,
+                      "functional": 23, "coping": 23}
         elif polarity == "negative":
-            values = {"severity": 10, "frequency": 12, "functional": 10, "coping": 9}
+            values = {"severity": 10, "frequency": 12,
+                      "functional": 10, "coping": 9}
         else:
-            values = {"severity": 14, "frequency": 15, "functional": 14, "coping": 15}
+            values = {"severity": 14, "frequency": 15,
+                      "functional": 14, "coping": 15}
 
         if difficulty == "hard":
             values = {key: max(0, value - 2) for key, value in values.items()}
@@ -427,6 +437,7 @@ class ScenarioGenerator:
 
         return GoldRouting(expected_route="advisor", confidence_class="high")
 
+
 def write_jsonl(cases: Sequence[EvaluationCase], output_path: Path) -> None:
     """Write evaluation cases to a JSON Lines file.
 
@@ -437,7 +448,8 @@ def write_jsonl(cases: Sequence[EvaluationCase], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as file:
         for case in cases:
-            file.write(json.dumps(case.model_dump(), ensure_ascii=False) + "\n")
+            file.write(json.dumps(case.model_dump(),
+                       ensure_ascii=False) + "\n")
 
 
 def load_jsonl(input_path: Path) -> list[EvaluationCase]:
@@ -461,7 +473,8 @@ def load_jsonl(input_path: Path) -> list[EvaluationCase]:
             try:
                 cases.append(EvaluationCase.model_validate(json.loads(line)))
             except Exception as exc:
-                raise ValueError(f"Invalid JSONL record at line {line_number}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSONL record at line {line_number}: {exc}") from exc
     return cases
 
 
@@ -474,7 +487,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate deterministic synthetic evaluation scenarios for ResiliMind."
     )
-    parser.add_argument("--count", type=int, default=100, help="Number of scenarios to generate.")
+    parser.add_argument("--count", type=int, default=100,
+                        help="Number of scenarios to generate.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument(
         "--graph", type=Path, default=DEFAULT_GRAPH_PATH, help="Path to final_resilience_graph.json."
@@ -495,7 +509,8 @@ def main() -> None:
     generator = ScenarioGenerator(graph_path=args.graph, seed=args.seed)
     cases = generator.generate(count=args.count)
 
-    validate_dataset(cases, valid_node_ids=set(generator.nodes.keys()), require_rendered=False)
+    validate_dataset(cases, valid_node_ids=set(
+        generator.nodes.keys()), require_rendered=False)
     write_jsonl(cases, output_path=args.output)
 
     print(f"Generated {len(cases)} scenarios.")
