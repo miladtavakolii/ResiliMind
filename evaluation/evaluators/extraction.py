@@ -12,8 +12,9 @@ class ExtractionEvaluator(BaseEvaluator):
     active resilience graph nodes and their associated signal polarity.
 
     Evaluation levels:
-        1. Node extraction: Precision, Recall, F1, Jaccard similarity
-        2. Signal polarity: Accuracy over correctly extracted nodes
+        1. Node extraction: Precision, Recall, F1, Jaccard
+        2. Signal polarity: Accuracy
+        3. Evidence alignment: Exact Match, Substring Match, Token F1
     """
 
     name: str = "extraction"
