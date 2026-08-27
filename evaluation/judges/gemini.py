@@ -85,7 +85,7 @@ class GeminiJudge:
                     model=self.model,
                     contents=prompt,
                         config={
-                        "temperature": 0.1,
+                        "temperature": 0.0,
                         "response_mime_type": "application/json",
                         "response_schema": ResponseJudgeResult,
                     },
