@@ -4,6 +4,7 @@ from statistics import mean
 from typing import Any
 
 from evaluation.schemas import CaseEvaluationResult
+from evaluation.metrics.classification import classification_report
 
 
 class EvaluationAggregator:
@@ -139,20 +140,26 @@ class EvaluationAggregator:
         labels = ("advisor", "questioner", "emergency_response")
         matrix = {actual: {pred: 0 for pred in labels} for actual in labels}
 
+        pairs = []
         total, correct = 0, 0
         for result in results:
-            if not (metric := result.metrics.get("routing")):
+            metric = result.metrics.get("routing")
+            if not metric:
                 continue
 
             expected, predicted = metric.get("expected"), metric.get("predicted")
             if expected in labels and predicted in labels:
+                pairs.append((expected, predicted))
                 matrix[expected][predicted] += 1
                 total += 1
                 if expected == predicted:
                     correct += 1
 
+        classification = classification_report(pairs)
         return {
-            "accuracy": correct / total if total else 0.0,
+            "accuracy": classification["accuracy"],
+            "macro": classification["macro"],
+            "per_class": classification["per_class"],
             "confusion_matrix": matrix,
         }
 
