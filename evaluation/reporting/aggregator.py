@@ -45,12 +45,24 @@ class EvaluationAggregator:
         if not metrics:
             return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "jaccard": 0.0}
 
+        evidence = [m["evidence"] for m in metrics if "evidence" in m]
+
         nodes = [m["node_detection"] for m in metrics]
         return {
-            "precision": mean(n["precision"] for n in nodes),
-            "recall": mean(n["recall"] for n in nodes),
-            "f1": mean(n["f1"] for n in nodes),
-            "jaccard": mean(n["jaccard"] for n in nodes),
+            "node_detection": {
+                "precision": mean(n["precision"] for n in nodes),
+                "recall": mean(n["recall"] for n in nodes),
+                "f1": mean(n["f1"] for n in nodes),
+                "jaccard": mean(n["jaccard"] for n in nodes),
+            },
+            "polarity_accuracy": mean(
+                m["polarity"]["accuracy"] for m in metrics if m.get("polarity")
+            ),
+            "evidence": {
+                "exact_match": mean(e["exact_match"] for e in evidence),
+                "substring_match": mean(e["substring_match"] for e in evidence),
+                "token_f1": mean(e["token_f1"] for e in evidence),
+            },
         }
 
     def _aggregate_safety(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
