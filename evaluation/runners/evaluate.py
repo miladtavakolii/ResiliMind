@@ -178,7 +178,7 @@ def build_evaluator_runner() -> EvaluationRunner:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
-    model = os.getenv("GEMINI_MODEL","gemini-3.5-flash-lite")
+    model = os.getenv("GEMINI_JUDGE_MODEL","gemini-3.5-flash-lite")
 
     judge = GeminiJudge(api_key=api_key, model=model)
 
