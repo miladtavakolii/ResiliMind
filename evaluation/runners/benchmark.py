@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 from datetime import datetime, timezone
+import hashlib
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
@@ -149,6 +150,18 @@ def extract_turn_prediction(
         messages=serialize_messages(messages),
     )
 
+def build_evaluation_user_id(run_id: str, case_id: str) -> int:
+    """Build a deterministic isolated synthetic user ID.
+
+    Args:
+        run_id: Identifier for the current evaluation run.
+        case_id: Unique benchmark case identifier.
+
+    Returns:
+        int: Deterministic pseudo-random integer user ID generated from the hash.
+    """
+    digest = hashlib.sha256(f"{run_id}:{case_id}".encode("utf-8")).hexdigest()
+    return int(digest[:12], 16)
 
 def run_case(
     app: Any,
@@ -171,7 +184,7 @@ def run_case(
         CasePrediction containing executed turn predictions and execution status.
     """
     thread_id = f"evaluation: {run_id} : {case.dataset_version} : {case.case_id}"
-    user_id = case_number
+    user_id = build_evaluation_user_id(run_id, case.case_id)
     config = {"configurable": {"thread_id": thread_id}}
     turns: list[TurnPrediction] = []
 
