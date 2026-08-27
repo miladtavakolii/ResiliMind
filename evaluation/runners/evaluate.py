@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from pydantic import ValidationError
 from collections.abc import Sequence
+from dotenv import load_dotenv
 
 from evaluation.schemas import EvaluationCase, CasePrediction, CaseEvaluationResult, TurnPrediction
 from evaluation.evaluators.runner import EvaluationRunner
@@ -354,6 +355,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run standalone evaluation over existing benchmark predictions."""
     args = parse_args()
+    load_dotenv()
 
     cases = load_cases(args.dataset)
     predictions = load_predictions(args.predictions)
