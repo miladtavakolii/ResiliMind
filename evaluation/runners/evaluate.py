@@ -193,6 +193,28 @@ def build_evaluator_runner() -> EvaluationRunner:
         ]
     )
 
+def normalize_assessments(
+    assessments: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normalize application assessment output for evaluation.
+
+    Maps the four-dimensional scoring output stored under ``scores`` to the
+    ``rubric`` key expected by evaluation modules.
+
+    Args:
+        assessments: List of raw assessment dictionaries produced by the application.
+
+    Returns:
+        list[dict[str, Any]]: List of normalized assessment dictionaries containing
+            the ``rubric`` key.
+    """
+    normalized = []
+    for assessment in assessments:
+        item = dict(assessment)
+        if "rubric" not in item:
+            item["rubric"] = dict(item.get("scores", {}))
+        normalized.append(item)
+    return normalized
 
 def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
@@ -218,7 +240,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     return {
         "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status},
         "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
-        "assessment": {"assessments": turn.assessments},
+        "assessment": {"assessments": normalize_assessments(turn.assessments)},
         "routing": {"route": turn.route},
         "advisor_response": prediction.final_response,
         "user_context": "\n".join(item.user_message for item in prediction.turns),
