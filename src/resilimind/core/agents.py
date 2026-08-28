@@ -201,7 +201,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
         evidence_text = signal_data.get("evidence", "")
 
         # Recalculate true confidence
-        true_confidence = calculate_composite_confidence(
+        routing_confidence = calculate_composite_confidence(
             raw_confidence=assessment_dict["confidence"],
             status=assessment_dict["status"],
             signal_polarity=signal_polarity,
@@ -209,12 +209,12 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
         )
         
         # Override the LLM's self-reported confidence
-        assessment_dict["confidence"] = true_confidence
+        assessment_dict["confidence"] = routing_confidence
         assessments_list.append(assessment_dict)
 
         # Re-evaluate routing logic based on the heuristic confidence score
-        if true_confidence < 0.70:
-            logger.warning(f"[Assessor] Low confidence detected for node {node_id} ({true_confidence}). Flagging disambiguation.")
+        if routing_confidence < 0.70:
+            logger.warning(f"[Assessor] Low confidence detected for node {node_id} ({routing_confidence}). Flagging disambiguation.")
             requires_disambiguation_override = True
 
     return {
