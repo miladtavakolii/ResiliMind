@@ -165,6 +165,29 @@ def validate_rendered_input(case: EvaluationCase, *, require_rendered: bool = Fa
     return errors
 
 
+def validate_scenario_gold_alignment(case: EvaluationCase) -> list[str]:
+    errors: list[str] = []
+    scenario = case.scenario
+    expected = {
+        "severity": {"low": 22, "moderate": 16, "high": 8}[scenario.severity_level],
+        "frequency": {"rare": 22, "episodic": 16, "chronic": 8}[scenario.frequency_level],
+        "functional": {"none": 24, "mild": 18, "moderate": 12, "severe": 6}[scenario.functional_level],
+        "coping": {"strong": 24, "moderate": 16, "weak": 8}[scenario.coping_level],
+    }
+
+    for assessment in case.gold.assessment.assessments:
+        rubric = assessment.rubric
+        for dimension, expected_value in expected.items():
+            actual_value = getattr(rubric, dimension)
+            if actual_value != expected_value:
+                errors.append(
+                    f"{case.case_id}: {assessment.node_id} {dimension}={actual_value}, "
+                    f"expected {expected_value} from scenario profile"
+                )
+
+    return errors
+
+
 def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str], require_rendered: bool = False) -> None:
     """Validate a complete evaluation dataset.
 
@@ -190,6 +213,7 @@ def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str], 
 
     for case in cases:
         errors.extend(validate_case_structure(case, valid_node_ids=valid_node_ids))
+        errors.extend(validate_scenario_gold_alignment(case))
         errors.extend(validate_rendered_input(case, require_rendered=require_rendered))
 
     if errors:
