@@ -226,10 +226,10 @@ class ScenarioRenderer:
             "safety_category": case.gold.safety.risk_category,
             "signals": signals,
               "assessment_profile":{
-                "severity":"high",
-                "frequency":"chronic",
-                "functional":"moderate",
-                "coping":"weak"
+                "severity": case.scenario.severity_level,
+                "frequency": case.scenario.frequency_level,
+                "functional": case.scenario.functional_level,
+                "coping": case.scenario.coping_level,
             }
         }
 
