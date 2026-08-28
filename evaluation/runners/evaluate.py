@@ -264,6 +264,41 @@ def build_prediction_mapping(
         for prediction in predictions
     }
 
+def get_turn_gold(case: EvaluationCase, turn_index: int) -> EvaluationCase:
+    """Return a copy of the gold annotations containing only the signals that belong to one turn."""
+    turn_case = case.model_copy(deep=True)
+    turn_case.gold.extraction.active_signals = [
+        signal
+        for signal in turn_case.gold.extraction.active_signals
+        if signal.evidence_message_index == turn_index
+    ]
+    return turn_case
+
+
+def build_turn_prediction(turn: TurnPrediction) -> dict[str, Any]:
+    """Build evaluator input for one conversation turn."""
+    is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
+
+    return {
+        "safety": {
+            "is_high_risk": is_high_risk,
+            "status": turn.safety_status,
+            "risk_category": turn.safety_risk_category,
+        },
+        "extraction": {
+            "signals": turn.active_signals,
+            "active_nodes": turn.active_nodes,
+        },
+        "assessment": {
+            "assessments": normalize_assessments(turn.assessments),
+        },
+        "routing": {
+            "route": turn.route,
+        },
+        "advisor_response": turn.final_response,
+        "user_context": turn.user_message,
+    }
+
 
 def evaluate_dataset(
     cases: list[EvaluationCase],
@@ -279,9 +314,49 @@ def evaluate_dataset(
         Per-case evaluation results.
     """
     runner = build_evaluator_runner()
-    prediction_mapping = build_prediction_mapping(predictions)
-    return runner.evaluate_dataset(cases=cases, predictions=prediction_mapping)
+    prediction_map = {pred.case_id: pred for pred in predictions}
+    results: list[CaseEvaluationResult] = []
 
+    for case in cases:
+        prediction = prediction_map[case.case_id]
+        case_result = runner.evaluate_case(
+            case,
+            build_evaluator_prediction(prediction),
+        )
+
+        safety_scores = []
+        extraction_scores = []
+
+        for turn_index, turn in enumerate(prediction.turns):
+            turn_gold = get_turn_gold(case, turn_index)
+            turn_prediction = build_turn_prediction(turn)
+
+            safety_scores.append(
+                runner.evaluators[0].evaluate(turn_gold.gold, turn_prediction)
+            )
+            extraction_scores.append(
+                runner.evaluators[1].evaluate(turn_gold.gold, turn_prediction)
+            )
+
+        if safety_scores:
+            case_result.metrics["safety"] = safety_scores[-1]
+
+        if extraction_scores:
+            averaged = {}
+            for key in extraction_scores[0]:
+                values = [
+                    score[key]
+                    for score in extraction_scores
+                    if isinstance(score.get(key), (int, float))
+                ]
+                if values:
+                    averaged[key] = sum(values) / len(values)
+
+            case_result.metrics["extraction"] = averaged
+
+        results.append(case_result)
+
+    return results
 
 def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
     """Store per-case evaluation results to a JSON Lines file.
