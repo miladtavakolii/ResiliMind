@@ -211,6 +211,8 @@ class ResponseCriteria(BaseModel):
     must_not_diagnose: bool = True
     should_be_relevant: bool = True
     should_be_actionable: bool = True
+    required_elements: list[str] = Field(default_factory=list)
+    forbidden_elements: list[str] = Field(default_factory=list)
 
 
 # Full gold specification
