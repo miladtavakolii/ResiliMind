@@ -218,18 +218,6 @@ class ScenarioRenderer:
             for signal in case.gold.extraction.active_signals
         ]
 
-        assessment_levels = []
-        for assessment in case.gold.assessment.assessments:
-            total = assessment.total_score
-            if total >= 70:
-                level = "relatively strong resilience"
-            elif total >= 40:
-                level = "moderate or mixed resilience"
-            else:
-                level = "low resilience or significant difficulty"
-
-            assessment_levels.append({"concept": assessment.node_id, "level": level})
-
         scenario = {
             "domain": case.scenario.domain,
             "difficulty": case.scenario.difficulty,
@@ -237,7 +225,12 @@ class ScenarioRenderer:
             "turn_count": case.scenario.turn_count,
             "safety_category": case.gold.safety.risk_category,
             "signals": signals,
-            "assessment_levels": assessment_levels,
+              "assessment_profile":{
+                "severity":"high",
+                "frequency":"chronic",
+                "functional":"moderate",
+                "coping":"weak"
+            }
         }
 
         return json.dumps(scenario, ensure_ascii=False, indent=2)

@@ -202,20 +202,23 @@ class ScenarioGenerator:
 
         domain = self._choose_domain(case_type=case_type)
         turn_count = self._choose_turn_count(case_type=case_type)
+        profile = self._sample_assessment_profile(difficulty=difficulty, case_type=case_type)
 
         scenario = ScenarioSpec(
             domain=domain,
-            difficulty=difficulty,  # type: ignore[arg-type]
-            case_type=case_type,  # type: ignore[arg-type]
+            difficulty=difficulty,
+            case_type=case_type,
             turn_count=turn_count,
+            severity_level=profile["severity"],
+            frequency_level=profile["frequency"],
+            functional_level=profile["functional"],
+            coping_level=profile["coping"],
         )
 
         safety = self._generate_safety(case_type=case_type)
         signals = self._generate_signals(
             domain=domain, case_type=case_type, safety=safety)
-        assessments = self._generate_assessments(
-            signals=signals, difficulty=difficulty, case_type=case_type
-        )
+        assessments = self._generate_assessments(signals=signals, scenario=scenario)
         routing = self._generate_routing(
             safety=safety,
             difficulty=difficulty,
@@ -275,6 +278,48 @@ class ScenarioGenerator:
         if case_type in {"adversarial", "ambiguous"}:
             return self.rng.choice([1, 2])
         return 1
+
+    def _sample_assessment_profile(self, *, difficulty: str, case_type: str) -> dict[str, str]:
+        """Sample independent latent assessment dimensions based on difficulty and case type.
+
+        Args:
+            difficulty: Difficulty level of the scenario (e.g., 'easy', 'moderate', 'hard').
+            case_type: Case type category (e.g., 'high_risk', 'normal', 'ambiguous').
+
+        Returns:
+            dict[str, str]: Mapping of assessment dimensions ('severity', 'frequency',
+                'functional', 'coping') to their sampled qualitative levels.
+        """
+        if case_type == "high_risk":
+            return {
+                "severity": "high",
+                "frequency": "chronic",
+                "functional": "severe",
+                "coping": "weak",
+            }
+
+        if difficulty == "easy":
+            return {
+                "severity": self.rng.choice(["low", "moderate"]),
+                "frequency": self.rng.choice(["rare", "episodic"]),
+                "functional": self.rng.choice(["none", "mild"]),
+                "coping": self.rng.choice(["strong", "moderate"]),
+            }
+
+        if difficulty == "moderate":
+            return {
+                "severity": self.rng.choice(["moderate", "high"]),
+                "frequency": self.rng.choice(["episodic", "chronic"]),
+                "functional": self.rng.choice(["mild", "moderate"]),
+                "coping": self.rng.choice(["moderate", "weak"]),
+            }
+
+        return {
+            "severity": self.rng.choice(["moderate", "high"]),
+            "frequency": self.rng.choice(["episodic", "chronic"]),
+            "functional": self.rng.choice(["moderate", "severe"]),
+            "coping": self.rng.choice(["weak", "moderate"]),
+        }
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
         """Generate ground-truth safety annotations.
@@ -349,63 +394,46 @@ class ScenarioGenerator:
         return signals
 
     def _generate_assessments(
-        self, *, signals: Sequence[GoldSignal], difficulty: str, case_type: str
+        self, *, signals: Sequence[GoldSignal], scenario: ScenarioSpec
     ) -> list[GoldAssessment]:
         """Generate ground-truth rubric assessments for detected signals.
 
         Args:
             signals: Sequence of gold signals to score.
-            difficulty: Scenario difficulty rating.
-            case_type: Scenario case type category.
+            scenario: Ground-truth scenario specification containing domain,
+                difficulty, and case type.
 
         Returns:
             list[GoldAssessment]: Assessment items for each signal.
         """
         assessments = []
         for signal in signals:
-            scores = self._generate_rubric(
-                polarity=signal.detected_signal,
-                difficulty=difficulty,
-                case_type=case_type,
-            )
+            scores = self._generate_rubric(scenario=scenario)
             assessments.append(GoldAssessment(
                 node_id=signal.node_id, rubric=scores))
         return assessments
 
-    def _generate_rubric(
-        self, *, polarity: str, difficulty: str, case_type: str
-    ) -> AssessmentRubric:
-        """Generate a deterministic assessment profile from scenario semantics..
+    def _generate_rubric(self, *, scenario: ScenarioSpec) -> AssessmentRubric:
+        """Generate a 4-dimensional assessment rubric from latent scenario levels.
 
         Args:
-            polarity: Signal polarity ('positive', 'negative', or 'mixed').
-            difficulty: Scenario difficulty rating.
-            case_type: Scenario case type category.
+            scenario: Ground-truth scenario specification containing qualitative
+                severity, frequency, functional, and coping levels.
 
         Returns:
-            AssessmentRubric: Generated rubric containing scores for severity,
-                frequency, functional impact, and coping capacity.
-
-        Raises:
-            ValueError: If called on a high-risk case type.
+            AssessmentRubric: Rubric instance populated with mapped numerical scores.
         """
-        if case_type == "high_risk":
-            raise ValueError("High-risk cases must not generate assessments")
+        severity_map = {"low": 22, "moderate": 16, "high": 8}
+        frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
+        functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
+        coping_map = {"strong": 24, "moderate": 16, "weak": 8}
 
-        if polarity == "positive":
-            values = {"severity": 22, "frequency": 22,
-                      "functional": 23, "coping": 23}
-        elif polarity == "negative":
-            values = {"severity": 10, "frequency": 12,
-                      "functional": 10, "coping": 9}
-        else:
-            values = {"severity": 14, "frequency": 15,
-                      "functional": 14, "coping": 15}
-
-        if difficulty == "hard":
-            values = {key: max(0, value - 2) for key, value in values.items()}
-
-        return AssessmentRubric(**values)
+        return AssessmentRubric(
+            severity=severity_map[scenario.severity_level],
+            frequency=frequency_map[scenario.frequency_level],
+            functional=functional_map[scenario.functional_level],
+            coping=coping_map[scenario.coping_level],
+        )
 
     def _generate_routing(
         self,

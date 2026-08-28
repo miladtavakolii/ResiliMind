@@ -19,6 +19,15 @@ Generate a realistic Persian user conversation that:
 
 The generated conversation will later be passed to the actual ResiliMind system as an unseen evaluation input.
 
+Also preserve the latent assessment profile.
+
+The generated conversation should naturally express:
+- emotional severity,
+- symptom frequency,
+- functional impact,
+- coping behavior.
+
+Express these dimensions implicitly through realistic user language rather than naming them directly.
 ## Critical Ground-Truth Rule
 
 The provided scenario is the ground truth.
@@ -187,6 +196,17 @@ For low-resilience cases:
 * difficulties should be substantial;
 * functioning may be meaningfully affected;
 * coping may be limited, ineffective, or strained.
+
+The assessment profile contains four independent latent dimensions.
+
+Respect each one individually:
+
+- Severity should affect emotional intensity.
+- Frequency should affect how often the experience occurs.
+- Functional should affect everyday functioning.
+- Coping should affect how effectively the person manages the situation.
+
+Do not collapse these dimensions into a single overall severity impression.
 
 Do not convert a mild problem into a crisis.
 

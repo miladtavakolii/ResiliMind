@@ -72,6 +72,11 @@ class ScenarioSpec(BaseModel):
     # Number of user turns that will be generated in the next stage.
     turn_count: int = Field(default=1, ge=1, le=5)
 
+    severity_level: Literal["low", "moderate", "high"]
+    frequency_level: Literal["rare", "episodic", "chronic"]
+    functional_level: Literal["none", "mild", "moderate", "severe"]
+    coping_level: Literal["strong", "moderate", "weak"]
+
 
 # Safety
 class GoldSafety(BaseModel):
