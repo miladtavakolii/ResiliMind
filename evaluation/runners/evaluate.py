@@ -238,7 +238,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
 
     return {
-        "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status},
+        "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status, "risk_category": turn.safety_risk_category},
         "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
         "assessment": {"assessments": normalize_assessments(turn.assessments)},
         "routing": {"route": turn.route},
