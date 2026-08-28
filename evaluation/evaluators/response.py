@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 PROMPT_PATH = PROJECT_ROOT / "prompts" / "response_judge.txt"
 
+
 class ResponseEvaluator(BaseEvaluator):
     """Evaluates final advisor responses using an LLM judge.
 
@@ -44,12 +45,13 @@ class ResponseEvaluator(BaseEvaluator):
                 or an error dict if the response is missing.
         """
         response = prediction.get("advisor_response")
-        user_context = prediction.get("user_context","")
+        user_context = prediction.get("user_context", "")
         if not response:
             return {"error": "missing response"}
         signals = prediction.get("extraction", {}).get("signals", [])
 
-        prompt = self._build_prompt(user_context=user_context,signals=signals,assessment=gold.assessment.model_dump(),response=response)
+        prompt = self._build_prompt(user_context=user_context, signals=signals, assessment=gold.assessment.model_dump(),
+                                    response=response, response_criteria=gold.response_criteria.model_dump())
         return self.judge.evaluate(prompt)
 
     def _build_prompt(
@@ -59,6 +61,7 @@ class ResponseEvaluator(BaseEvaluator):
         signals: list[dict[str, Any]],
         assessment: dict[str, Any],
         response: str,
+        response_criteria: dict[str, Any]
     ) -> str:
         """Build the prompt from the repository judge template.
 
@@ -67,6 +70,7 @@ class ResponseEvaluator(BaseEvaluator):
             signals: List of extracted resilience signal dictionaries.
             assessment: Assessment dictionary containing resilience scores and rubrics.
             response: Generated advisor response text to be evaluated.
+            response_criteria: Dictionary containing required and forbidden response elements.
 
         Returns:
             str: Formatted prompt string ready for LLM judge evaluation.
@@ -76,6 +80,10 @@ class ResponseEvaluator(BaseEvaluator):
             f"=== USER CONTEXT ===\n{user_context}\n\n"
             f"=== EXTRACTED SIGNALS ===\n{signals}\n\n"
             f"=== ASSESSMENT ===\n{assessment}\n\n"
+            f"=== REQUIRED ELEMENTS ===\n"
+            f"{response_criteria.get('required_elements', [])}\n\n"
+            f"=== FORBIDDEN ELEMENTS ===\n"
+            f"{response_criteria.get('forbidden_elements', [])}\n\n"
             f"=== ADVISOR RESPONSE ===\n{response}\n\n"
             "Return ONLY the JSON object defined by the output schema."
         )
