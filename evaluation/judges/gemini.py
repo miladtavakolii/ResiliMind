@@ -8,6 +8,7 @@ from typing import Any
 from evaluation.schemas import ResponseJudgeResult
 
 from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,14 @@ class GeminiJudge:
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                        config={
-                        "temperature": 0.0,
-                        "response_mime_type": "application/json",
-                        "response_schema": ResponseJudgeResult,
-                    },
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        response_mime_type="application/json",
+                        response_schema=ResponseJudgeResult,
+                    ),
                 )
+                if not response.text:
+                    raise ValueError("Gemini returned an empty response")
                 result = ResponseJudgeResult.model_validate_json(response.text)
                 return result.model_dump()
 
