@@ -24,21 +24,31 @@ class GeminiJudge:
         *,
         api_key: str,
         model: str = "gemini-3.5-flash-lite",
-        retries: int = 5,
-        delay: float = 3.0,
+        max_retries: int = 5,
+        retry_delay: float = 3.0,
+        request_delay: float = 2.0,
     ) -> None:
         """Initialize the Gemini judge.
 
         Args:
             api_key: Google Gemini API key.
             model: Gemini model identifier used for evaluation.
-            retries: Maximum number of retry attempts upon failure.
-            delay: Base delay in seconds between retries.
+            max_retries: Maximum number of retry attempts upon failure.
+            retry_delay: Base delay in seconds between retries.
+            request_delay: Delay between two requsets.
         """
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        if retry_delay < 0:
+            raise ValueError("retry_delay must be >= 0")
+        if request_delay < 0:
+            raise ValueError("request_delay must be >= 0")
+
         self.client = genai.Client(api_key=api_key)
         self.model = model
-        self.retries = retries
-        self.delay = delay
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.request_delay = request_delay
 
 
     def _is_retryable_error(self, exc: Exception) -> bool:
@@ -80,8 +90,17 @@ class GeminiJudge:
         Raises:
             RuntimeError: If the request fails across all retry attempts.
         """
-        for attempt in range(1, self.retries + 1):
+        last_error = None
+
+        for attempt in range(self.max_retries + 1):
             try:
+                if attempt == 0:
+                    logger.info(
+                        "Waiting %.1f seconds before Gemini request...",
+                        self.request_delay,
+                    )
+                    time.sleep(self.request_delay)
+
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
@@ -97,13 +116,18 @@ class GeminiJudge:
                 return result.model_dump()
 
             except Exception as exc:
-                logger.warning("Judge failed attempt %s/%s: %s", attempt, self.retries, exc)
+                last_error = exc
+                logger.warning("Judge failed attempt %d/%d: %s", attempt + 1, self.max_retries + 1, exc)
 
                 if not self._is_retryable_error(exc):
                     raise
 
-                if attempt < self.retries:
-                    delay = self.delay * (2 ** (attempt - 1))
-                    time.sleep(delay)
+                if attempt >= self.max_retries:
+                    break
 
-        raise RuntimeError("Gemini judge failed after retries")
+                delay = self.retry_delay * (2**attempt)
+
+                logger.info("Retrying in %.1f seconds...", delay)
+                time.sleep(delay)
+
+        raise RuntimeError(f"Gemini judge failed after {self.max_retries + 1} attempts") from last_error

@@ -26,6 +26,10 @@ DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.
 DEFAULT_PREDICTIONS_PATH = PROJECT_ROOT / "evaluation" / "results" / "predictions.jsonl"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "evaluation" / "results"
 
+GEMINI_MAX_RETRIES = 5
+GEMINI_RETRY_DELAY = 5
+GEMINI_REQUEST_DELAY = 5
+
 
 def load_cases(path: Path) -> list[EvaluationCase]:
     """Load and validate evaluation cases from a JSONL file.
@@ -170,8 +174,12 @@ def validate_dataset_versions(
             f"Dataset version mismatch: cases={case_version}, predictions={prediction_version}"
         )
 
-def build_evaluator_runner() -> EvaluationRunner:
+def build_evaluator_runner(max_retries: int, retry_delay: float, request_delay: float) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
+    Args:
+        max_retries: Maximum number of retry attempts upon failure.
+        retry_delay: Base delay in seconds between retries.
+        request_delay: Delay between two requsets.
 
     Returns:
         EvaluationRunner configured with all active evaluators.
@@ -181,7 +189,7 @@ def build_evaluator_runner() -> EvaluationRunner:
         raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
     model = os.getenv("GEMINI_JUDGE_MODEL","gemini-3.5-flash-lite")
 
-    judge = GeminiJudge(api_key=api_key, model=model)
+    judge = GeminiJudge(api_key=api_key, model=model, max_retries=max_retries, retry_delay=retry_delay, request_delay=request_delay)
 
     return EvaluationRunner(
         evaluators=[
@@ -303,17 +311,23 @@ def build_turn_prediction(turn: TurnPrediction) -> dict[str, Any]:
 def evaluate_dataset(
     cases: list[EvaluationCase],
     predictions: list[CasePrediction],
+    max_retries: int,
+    retry_delay: float,
+    request_delay: float,
 ) -> list[CaseEvaluationResult]:
     """Run all registered evaluators over the benchmark dataset.
 
     Args:
         cases: Ground-truth evaluation cases.
         predictions: Benchmark predictions.
+        max_retries: Maximum number of retry attempts upon failure.
+        retry_delay: Base delay in seconds between retries.
+        request_delay: Delay between two requsets.
 
     Returns:
         Per-case evaluation results.
     """
-    runner = build_evaluator_runner()
+    runner = build_evaluator_runner(max_retries, retry_delay, request_delay)
     prediction_map = {pred.case_id: pred for pred in predictions}
     results: list[CaseEvaluationResult] = []
 
@@ -446,6 +460,24 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_DIR,
         help="Directory for evaluation artifacts.",
     )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=GEMINI_MAX_RETRIES,
+        help="Maximum number of retry attempts upon failure.",
+    )
+    parser.add_argument(
+        "--retry-delay",
+        type=float,
+        default=GEMINI_RETRY_DELAY,
+        help="Base delay in seconds between retries.",
+    )
+    parser.add_argument(
+        "--request-delay",
+        type=float,
+        default=GEMINI_REQUEST_DELAY,
+        help="Delay between two requsets.",
+    )
     return parser.parse_args()
 
 
@@ -466,7 +498,7 @@ def main() -> None:
         args.predictions,
     )
 
-    results = evaluate_dataset(cases=cases, predictions=predictions)
+    results = evaluate_dataset(cases=cases, predictions=predictions, max_retries=args.max_retries, retry_delay=args.retry_delay, request_delay=args.request_delay)
 
     summary = EvaluationAggregator().aggregate(results)
     summary = build_final_summary(summary, predictions)
