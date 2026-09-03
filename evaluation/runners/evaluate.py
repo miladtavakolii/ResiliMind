@@ -333,42 +333,7 @@ def evaluate_dataset(
 
     for case in cases:
         prediction = prediction_map[case.case_id]
-        case_result = runner.evaluate_case(
-            case,
-            build_evaluator_prediction(prediction),
-        )
-
-        safety_scores = []
-        extraction_scores = []
-
-        for turn_index, turn in enumerate(prediction.turns):
-            turn_gold = get_turn_gold(case, turn_index)
-            turn_prediction = build_turn_prediction(turn)
-
-            safety_scores.append(
-                runner.evaluators[0].evaluate(turn_gold.gold, turn_prediction)
-            )
-            extraction_scores.append(
-                runner.evaluators[1].evaluate(turn_gold.gold, turn_prediction)
-            )
-
-        if safety_scores:
-            case_result.metrics["safety"] = safety_scores[-1]
-
-        if extraction_scores:
-            averaged = {}
-            for key in extraction_scores[0]:
-                values = [
-                    score[key]
-                    for score in extraction_scores
-                    if isinstance(score.get(key), (int, float))
-                ]
-                if values:
-                    averaged[key] = sum(values) / len(values)
-
-            case_result.metrics["extraction"] = averaged
-
-        results.append(case_result)
+        results.append(runner.evaluate_case(case, build_evaluator_prediction(prediction)))
 
     return results
 
