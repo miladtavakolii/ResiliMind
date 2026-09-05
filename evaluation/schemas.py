@@ -109,12 +109,28 @@ class GoldSignal(BaseModel):
     node_id: str
     detected_signal: Polarity
 
-    # Filled during the text-generation stage.
     evidence: str | None = None
-    evidence_message_index: int | None = Field(
-        default=None,
-        ge=0,
-    )
+    evidence_message_index: int | None = Field(default=None, ge=0)
+
+    evidence_start: int | None = Field(default=None, ge=0)
+    evidence_end: int | None = Field(default=None, ge=0)
+
+
+class EvidenceSpan(BaseModel):
+    """Exact evidence location inside a rendered message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str
+    message_index: int = Field(ge=0)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_span(self) -> "EvidenceSpan":
+        if self.end <= self.start:
+            raise ValueError("Evidence end must be greater than start")
+        return self
 
 
 class GoldExtraction(BaseModel):
