@@ -136,6 +136,15 @@ Rules:
 - Evidence must directly support the corresponding signal.
 - The markers are temporary and will be removed automatically.
 
+Evidence markers must wrap only the minimal useful phrase.
+Do not include spaces immediately inside markers.
+
+Correct:
+[[EVIDENCE:IND_ECO_02]]مشکل مالی دارم[[/EVIDENCE:IND_ECO_02]]
+
+Incorrect:
+[[EVIDENCE:IND_ECO_02]] مشکل مالی دارم [[/EVIDENCE:IND_ECO_02]]
+
 Example:
 
 این مدت تمرکز کردن برام خیلی سخت شده.
