@@ -188,12 +188,29 @@ class ScenarioRenderer:
             EvaluationCase: Updated case with rendered messages and attached evidence.
         """
         prompt = self._build_user_prompt(case)
-        rendered = self._generate(prompt=prompt)
+        for attempt in range(self.max_retries + 1):
+            rendered = self._generate(prompt=prompt)
 
-        evidence = self._extract_evidence(case, rendered)
-        messages = self._clean_messages(rendered.messages)
+            evidence = self._extract_evidence(case, rendered)
+            messages = self._clean_messages(rendered.messages)
 
-        self._validate_rendered_output(case=case, messages=messages, evidence=evidence)
+            try:
+                self._validate_rendered_output(
+                    case=case,
+                    messages=messages,
+                    evidence=evidence,
+                )
+                break
+            except ValueError:
+                if attempt >= self.max_retries:
+                    raise
+                logger.warning(
+                    "%s: invalid generation, retrying (%d/%d)",
+                    case.case_id,
+                    attempt + 1,
+                    self.max_retries,
+                )
+        
         case.input.messages = messages
         self._attach_evidence(case=case, evidence=evidence)
 
