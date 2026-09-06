@@ -153,6 +153,9 @@ class ScenarioRenderer:
                         temperature=self.temperature,
                         response_mime_type="application/json",
                         response_schema=ScenarioRenderOutput,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                            disable=True
+                        ),
                     ),
                 )
                 if not response.text:
