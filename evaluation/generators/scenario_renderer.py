@@ -47,8 +47,6 @@ class ScenarioRenderOutput(BaseModel):
 
     Attributes:
         messages (list[RenderedMessage]): List of rendered user messages.
-        evidence (list[RenderedEvidence]): Extracted evidence items corresponding
-            to active resilience signals.
     """
 
     messages: list[RenderedMessage] = Field(min_length=1)
