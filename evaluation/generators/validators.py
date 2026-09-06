@@ -157,9 +157,16 @@ def validate_rendered_input(case: EvaluationCase, *, require_rendered: bool = Fa
                 continue
 
             message = messages[message_index]
-            if signal.evidence not in message:
+            if signal.evidence_start is None or signal.evidence_end is None:
                 errors.append(
-                    f"{case.case_id}: evidence for {signal.node_id} is not an exact substring of the referenced message"
+                    f"{case.case_id}: missing evidence span for {signal.node_id}"
+                )
+                continue
+
+            span = message[signal.evidence_start : signal.evidence_end]
+            if span != signal.evidence:
+                errors.append(
+                    f"{case.case_id}: evidence span mismatch for {signal.node_id}"
                 )
 
     return errors

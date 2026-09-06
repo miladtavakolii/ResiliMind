@@ -6,8 +6,9 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Any
 from dotenv import load_dotenv
+import re
+from typing import Any
 
 from google import genai
 from google.genai import types
@@ -24,6 +25,12 @@ DEFAULT_INPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "scenario
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
 GRAPH_PATH = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
 
+EVIDENCE_PATTERN = re.compile(
+    r"\[\[EVIDENCE:(?P<node_id>[A-Za-z0-9_]+)\]\]"
+    r"(?P<text>.*?)"
+    r"\[\[/EVIDENCE:(?P=node_id)\]\]",
+    re.DOTALL,
+)
 
 class RenderedMessage(BaseModel):
     """Represent a single generated user message.
@@ -33,20 +40,6 @@ class RenderedMessage(BaseModel):
     """
 
     content: str = Field(min_length=1)
-
-
-class RenderedEvidence(BaseModel):
-    """Represent evidence associated with a generated signal.
-
-    Attributes:
-        node_id (str): Target resilience graph node ID.
-        evidence (str): Exact textual substring extracted from the conversation.
-        message_index (int): Zero-based index of the message containing the evidence.
-    """
-
-    node_id: str
-    evidence: str = Field(min_length=1)
-    message_index: int = Field(ge=0)
 
 
 class ScenarioRenderOutput(BaseModel):
@@ -59,7 +52,6 @@ class ScenarioRenderOutput(BaseModel):
     """
 
     messages: list[RenderedMessage] = Field(min_length=1)
-    evidence: list[RenderedEvidence] = Field(default_factory=list)
 
 
 class ScenarioRenderer:
@@ -197,10 +189,12 @@ class ScenarioRenderer:
         prompt = self._build_user_prompt(case)
         rendered = self._generate(prompt=prompt)
 
-        self._validate_rendered_output(case=case, output=rendered)
+        evidence = self._extract_evidence(case, rendered)
+        messages = self._clean_messages(rendered.messages)
 
-        case.input.messages = [message.content for message in rendered.messages]
-        self._attach_evidence(case=case, evidence=rendered.evidence)
+        self._validate_rendered_output(case=case, messages=messages, evidence=evidence)
+        case.input.messages = messages
+        self._attach_evidence(case=case, evidence=evidence)
 
         return case
 
@@ -235,65 +229,148 @@ class ScenarioRenderer:
 
         return json.dumps(scenario, ensure_ascii=False, indent=2)
 
-    def _validate_rendered_output(
-        self, *, case: EvaluationCase, output: ScenarioRenderOutput
-    ) -> None:
-        """Validate Gemini output against the latent scenario constraints.
+    def _clean_messages(self, messages: list[RenderedMessage]) -> list[str]:
+        """Strip evidence annotation markup from rendered messages.
+
+        Replaces evidence markup patterns with their underlying plain-text content
+        to produce clean, readable user messages.
 
         Args:
-            case: EvaluationCase specification.
-            output: Structured model response to validate.
+            messages: List of RenderedMessage instances containing annotated text.
+
+        Returns:
+            list[str]: Cleaned message content strings without annotation tags.
+        """
+        cleaned = []
+
+        for message in messages:
+            text = EVIDENCE_PATTERN.sub(
+                lambda m: m.group("text"),
+                message.content,
+            )
+            cleaned.append(text)
+
+        return cleaned
+
+    def _extract_evidence(
+        self, case: EvaluationCase, output: ScenarioRenderOutput
+    ) -> list[dict[str, Any]]:
+        """Extract evidence spans from rendered scenario messages based on regex patterns.
+
+        Args:
+            case: Target EvaluationCase instance containing gold active signals.
+            output: ScenarioRenderOutput containing rendered message objects.
+
+        Returns:
+            list[dict[str, Any]]: List of extracted evidence records containing
+                node_id, message_index, character span offsets, and raw text.
 
         Raises:
-            ValueError: If message counts mismatch, unknown signal evidence is returned,
-                indices are invalid, or evidence substrings are missing.
+            ValueError: If an extracted evidence node_id is not part of the expected
+                gold active signals for the case.
+        """
+        expected = {
+            signal.node_id
+            for signal in case.gold.extraction.active_signals
+        }
+
+        extracted = []
+
+        for message_index, message_obj in enumerate(output.messages):
+            message = message_obj.content
+
+            for match in EVIDENCE_PATTERN.finditer(message):
+                node_id = match.group("node_id")
+
+                if node_id not in expected:
+                    raise ValueError(
+                        f"{case.case_id}: unexpected evidence node {node_id}"
+                    )
+
+                start = match.start("text")
+                end = match.end("text")
+
+                extracted.append(
+                    {
+                        "node_id": node_id,
+                        "message_index": message_index,
+                        "start": start,
+                        "end": end,
+                        "evidence": match.group("text"),
+                    }
+                )
+
+        return extracted
+
+    def _validate_rendered_output(
+        self,
+        *,
+        case: EvaluationCase,
+        messages: list[str],
+        evidence: list[dict[str, Any]],
+    ) -> None:
+        """Validate rendered messages and extracted evidence spans against case expectations.
+
+        Args:
+            case: EvaluationCase instance containing scenario requirements and gold signals.
+            messages: List of rendered user message strings.
+            evidence: List of extracted evidence span dictionaries.
+
+        Raises:
+            ValueError: If message counts do not match expected turn counts, unknown signals
+                are referenced, required signals lack evidence, duplicate evidence records
+                are detected, message indices are out of bounds, or character offsets do not
+                match the underlying message substrings.
         """
         expected_turns = case.scenario.turn_count
-        if len(output.messages) != expected_turns:
+        if len(messages) != expected_turns:
             raise ValueError(
-                f"{case.case_id}: expected {expected_turns} messages, got {len(output.messages)}"
+                f"{case.case_id}: expected {expected_turns} messages, got {len(messages)}"
             )
 
-        signal_node_ids = {signal.node_id for signal in case.gold.extraction.active_signals}
-        evidence_node_ids = {item.node_id for item in output.evidence}
+        signal_ids = {s.node_id for s in case.gold.extraction.active_signals}
+        evidence_ids = {item["node_id"] for item in evidence}
 
-        unexpected_nodes = evidence_node_ids - signal_node_ids
-        if unexpected_nodes:
+        if unexpected := evidence_ids - signal_ids:
             raise ValueError(
-                f"{case.case_id}: evidence returned for unknown signals: {sorted(unexpected_nodes)}"
+                f"{case.case_id}: evidence returned for unknown signals: {sorted(unexpected)}"
             )
+        if missing := signal_ids - evidence_ids:
+            raise ValueError(
+                f"{case.case_id}: missing evidence for signals: {sorted(missing)}"
+            )
+        if len(evidence) != len(evidence_ids):
+            raise ValueError(f"{case.case_id}: duplicate evidence entries detected")
 
-        for item in output.evidence:
-            if item.message_index >= len(output.messages):
+        for item in evidence:
+            message_index = item["message_index"]
+            if not 0 <= message_index < len(messages):
                 raise ValueError(
-                    f"{case.case_id}: evidence for {item.node_id} references invalid message index {item.message_index}"
+                    f"{case.case_id}: invalid message index {message_index} for {item['node_id']}"
                 )
 
-            message = output.messages[item.message_index].content
-            if item.evidence not in message:
+            message = messages[message_index]
+            if message[item["start"] : item["end"]] != item["evidence"]:
                 raise ValueError(
-                    f"{case.case_id}: evidence for {item.node_id} is not an exact substring of the referenced message"
+                    f"{case.case_id}: invalid evidence span for {item['node_id']}"
                 )
-
-        missing_evidence = signal_node_ids - evidence_node_ids
-        if missing_evidence:
-            raise ValueError(
-                f"{case.case_id}: missing evidence for signals: {sorted(missing_evidence)}"
-            )
 
     def _attach_evidence(
-        self, *, case: EvaluationCase, evidence: list[RenderedEvidence]
+        self,
+        *,
+        case: EvaluationCase,
+        evidence: list[dict[str, Any]],
     ) -> None:
         """Attach validated evidence spans to their corresponding gold signals.
 
         Args:
-            case: The evaluation case whose signals will be updated.
-            evidence: Sequence of verified RenderedEvidence instances.
+            case: The evaluation case whose signals will be updated in-place.
+            evidence: List of verified evidence records containing offsets and text.
 
         Raises:
-            ValueError: If a required signal is missing associated evidence.
+            ValueError: If a required gold signal is missing associated evidence.
         """
-        evidence_by_node = {item.node_id: item for item in evidence}
+        evidence_by_node = {item["node_id"]: item for item in evidence}
 
         for signal in case.gold.extraction.active_signals:
             item = evidence_by_node.get(signal.node_id)
@@ -302,9 +379,10 @@ class ScenarioRenderer:
                     f"{case.case_id}: missing evidence for {signal.node_id}"
                 )
 
-            signal.evidence = item.evidence
-            signal.evidence_message_index = item.message_index
-
+            signal.evidence = item["evidence"]
+            signal.evidence_message_index = item["message_index"]
+            signal.evidence_start = item["start"]
+            signal.evidence_end = item["end"]
     def render_dataset(
         self, cases: list[EvaluationCase], *, skip_failures: bool = False
     ) -> list[EvaluationCase]:
