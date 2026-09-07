@@ -303,10 +303,6 @@ def main() -> None:
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
     print(f"Predictions: {args.output}")
-    print(f"Case results: {DEFAULT_RESULTS_DIR / 'case_results.jsonl'}")
-    print(f"Summary: {DEFAULT_RESULTS_DIR / 'summary.json'}")
-    print(f"Failures: {DEFAULT_RESULTS_DIR / 'failures.csv'}")
-    print(f"Report: {DEFAULT_RESULTS_DIR / 'evaluation_report.json'}")
     print("=" * 60)
 
 
