@@ -36,7 +36,14 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     user_msg: str = state.get("user_message", "")
     
     extractor_chain = llm_engine.get_extractor_runner(prompts.EXTRACTOR_SYSTEM_PROMPT)
-    result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
+    raw_result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
+
+    if raw_result.get("parsed") is None:
+        raw = raw_result.get("raw")
+        logger.error("[Extractor] Structured output parsing failed. Raw model output: %r", raw)
+        raise ValueError(f"Extractor returned invalid structured output: {raw!r}")
+
+    result: ExtractionOutput = raw_result["parsed"]
     signals_list: List[Dict[str, Any]] = [
         signal.model_dump() for signal in result.active_signals
     ]
@@ -179,10 +186,17 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
 
     # 3. Invoke LLM chain with evidence payload
     assessor_chain = llm_engine.get_assessor_runner(prompts.ASSESSOR_SYSTEM_PROMPT)
-    result: AssessmentOutput = assessor_chain.invoke({
+    raw_result = assessor_chain.invoke({
         "user_message": enriched_input,
         "subgraph_context": context
     })
+
+    if raw_result.get("parsed") is None:
+        raw = raw_result.get("raw")
+        logger.error("[Assessor] Structured output parsing failed. Raw model output: %r", raw)
+        raise ValueError(f"Assessor returned invalid structured output: {raw!r}")
+
+    result: AssessmentOutput = raw_result["parsed"]
     
     # Create a quick lookup for active signals to match with assessments
     signal_lookup = {sig['node_id']: sig for sig in active_signals}
@@ -413,7 +427,14 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
     # 3. LLM-based Safety Classification (Context-aware fallback)
     try:
         safety_chain: Any = llm_engine.get_safety_runner(prompts.SAFETY_CLASSIFIER_PROMPT)
-        result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
+        raw_result: SafetyOutput = safety_chain.invoke({"user_message": user_msg})
+        
+        if raw_result.get("parsed") is None:
+            raw = raw_result.get("raw")
+            logger.error("[Safety] Structured output parsing failed. Raw model output: %r", raw)
+            raise ValueError(f"Safety returned invalid structured output: {raw!r}")
+
+        result: SafetyOutput = raw_result["parsed"]
         
         if result.is_high_risk:
             logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")

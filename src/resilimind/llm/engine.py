@@ -84,7 +84,7 @@ class LLMEngine:
                 base_url=self.base_url, 
                 temperature=0.0
             )
-            self._safety_llm = llm.with_structured_output(SafetyOutput)
+            self._safety_llm = llm.with_structured_output(SafetyOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -111,7 +111,7 @@ class LLMEngine:
                 base_url=self.base_url, 
                 temperature=0.0
             )
-            self._extractor_llm = llm.with_structured_output(ExtractionOutput)
+            self._extractor_llm = llm.with_structured_output(ExtractionOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -133,13 +133,15 @@ class LLMEngine:
                             `AssessmentOutput` Pydantic object.
         """
         if self._assessor_llm is None:
-            logger.debug("[LLMEngine] Initializing cached assessor LLM runner (temp=0.2)...")
+            logger.debug("[LLMEngine] Initializing cached assessor LLM runner (temp=0.0)...")
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
-                temperature=0.2
+                temperature=0.0,
+                num_ctx=8192,
+                num_predict=2048,
             )
-            self._assessor_llm = llm.with_structured_output(AssessmentOutput)
+            self._assessor_llm = llm.with_structured_output(AssessmentOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
