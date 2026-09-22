@@ -41,7 +41,8 @@ def build_extractor_graph_context() -> str:
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node_data.get('name_fa', '')}\n"
-            f"Domain: {node_data.get('domain_fa', node_data.get('domain', ''))}\n"
+            f"Domain: {node_data.get('domain', '')}\n"
+            f"Domain (FA): {node_data.get('domain_fa', '')}\n"
             f"Definition: {node_data.get('description', '')}\n"
             f"Positive cues: {', '.join(positive)}\n"
             f"Negative cues: {', '.join(negative)}"

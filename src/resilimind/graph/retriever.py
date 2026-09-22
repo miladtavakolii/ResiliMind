@@ -34,6 +34,7 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
         # Format Node Basic Info
         block: str = f"=== Node: {node_id} ({node_data.get('name_fa', '')}) ===\n"
         block += f"Domain: {node_data.get('domain', '')}\n"
+        block += f"Domain (FA): {node_data.get('domain_fa', '')}\n"
         block += f"Description: {node_data.get('description', '')}\n\n"
 
         # Format Status Levels

@@ -45,7 +45,9 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
         G.add_node(
             node_id,
             name_fa=node_attrs.get("name_fa"),
-            domain=node_attrs.get("domain_fa"),
+            name_en=node_attrs.get("name_en"),
+            domain=node_attrs.get("domain"),
+            domain_fa=node_attrs.get("domain_fa"),
             description=node_attrs.get("description"),
             cues=node_attrs.get("cues", {}),
             status_levels=node_attrs.get("status_levels", {}),
