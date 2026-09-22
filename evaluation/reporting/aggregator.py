@@ -137,7 +137,7 @@ class EvaluationAggregator:
         Returns:
             dict[str, float]: Dictionary containing overall routing accuracy.
         """
-        labels = ("advisor", "questioner", "emergency_response")
+        labels = ("advisor", "questioner", "emergency_response", "unknown")
         matrix = {actual: {pred: 0 for pred in labels} for actual in labels}
 
         pairs = []
@@ -148,7 +148,8 @@ class EvaluationAggregator:
                 continue
 
             expected, predicted = metric.get("expected"), metric.get("predicted")
-            if expected in labels and predicted in labels:
+            if expected in labels:
+                predicted = predicted if predicted in labels else "unknown"
                 pairs.append((expected, predicted))
                 matrix[expected][predicted] += 1
                 total += 1

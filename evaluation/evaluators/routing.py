@@ -22,7 +22,7 @@ class RoutingEvaluator(BaseEvaluator):
     """
 
     name: str = "routing"
-    ROUTES: tuple[str, ...] = ("advisor", "questioner", "emergency_response")
+    ROUTES: tuple[str, ...] = ("advisor", "questioner", "emergency_response", "unknown")
 
     def evaluate(self, gold: Any, prediction: dict[str, Any]) -> dict[str, Any]:
         """Compare expected workflow route with predicted route.
