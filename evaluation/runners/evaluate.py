@@ -224,7 +224,7 @@ def normalize_assessments(
         normalized.append(item)
     return normalized
 
-def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
+def build_evaluator_prbuild_evaluator_predictionediction(prediction: CasePrediction) -> dict[str, Any]:
     """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
 
     Args:
@@ -233,25 +233,83 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     Returns:
         dict[str, Any]: Structured dictionary formatted for evaluation modules.
     """
-    if not prediction.turns:
+    if not prediction.successful:
         return {
-            "safety": {"is_high_risk": False},
-            "extraction": {"signals": []},
+            "execution_error": prediction.error or "unknown execution error",
+            "safety": {},
+            "extraction": {"signals": [], "active_nodes": []},
             "assessment": {"assessments": []},
             "routing": {"route": "unknown"},
-            "advisor_response": "",
+            "final_response": prediction.final_response,
+            "user_context": "\n".join(
+                turn.user_message
+                for turn in prediction.turns
+            ),
+            "raw": prediction.model_dump(),
         }
 
-    turn = prediction.turns[-1]
-    is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
+    if not prediction.turns:
+        return {
+            "execution_error": "no turns were recorded",
+            "safety": {},
+            "extraction": {"signals": [], "active_nodes": []},
+            "assessment": {"assessments": []},
+            "routing": {"route": "unknown"},
+            "final_response": "",
+            "user_context": "",
+            "raw": prediction.model_dump(),
+        }
+
+    all_signals = [
+        signal
+        for turn in prediction.turns
+        for signal in turn.active_signals
+    ]
+
+    all_nodes = list(
+        dict.fromkeys(
+            node_id
+            for turn in prediction.turns
+            for node_id in turn.active_nodes
+        )
+    )
+
+    latest_assessments: dict[str, dict[str, Any]] = {}
+
+    for turn in prediction.turns:
+        for assessment in normalize_assessments(turn.assessments):
+            node_id = assessment.get("node_id")
+            if node_id:
+                latest_assessments[node_id] = assessment
+
+    final_turn = prediction.turns[-1]
+
+    is_high_risk = any(
+        turn.safety_status == "HIGH_RISK" or turn.safety_flag
+        for turn in prediction.turns
+    )
 
     return {
-        "safety": {"is_high_risk": is_high_risk, "status": turn.safety_status, "risk_category": turn.safety_risk_category},
-        "extraction": {"signals": turn.active_signals, "active_nodes": turn.active_nodes},
-        "assessment": {"assessments": normalize_assessments(turn.assessments)},
-        "routing": {"route": turn.route},
-        "advisor_response": prediction.final_response,
-        "user_context": "\n".join(item.user_message for item in prediction.turns),
+        "safety": {
+            "is_high_risk": is_high_risk,
+            "status": final_turn.safety_status,
+            "risk_category": final_turn.safety_risk_category,
+        },
+        "extraction": {
+            "signals": all_signals,
+            "active_nodes": all_nodes,
+        },
+        "assessment": {
+            "assessments": list(latest_assessments.values()),
+        },
+        "routing": {
+            "route": final_turn.route,
+        },
+        "final_response": prediction.final_response,
+        "user_context": "\n".join(
+            turn.user_message
+            for turn in prediction.turns
+        ),
         "raw": prediction.model_dump(),
     }
 
