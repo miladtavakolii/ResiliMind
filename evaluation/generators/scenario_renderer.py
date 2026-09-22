@@ -872,7 +872,7 @@ def main() -> None:
     valid_node_ids = set(graph["nodes"].keys())
 
     errors = validate_dataset(
-        cases,
+        rendered_cases,
         valid_node_ids=valid_node_ids,
         require_rendered=True,
     )
