@@ -385,12 +385,21 @@ class ScenarioRenderer:
                     messages=messages,
                 )
 
-                if not audit.valid:
+                audit_errors = (
+                    audit.missing_target_signals
+                    + audit.unintended_signal_nodes
+                    + audit.polarity_errors
+                    + audit.evidence_issues
+                )
+
+                if not audit.valid or audit_errors:
                     raise ValueError(
                         f"{case.case_id}: semantic audit failed: "
                         f"missing={audit.missing_target_signals}, "
                         f"unintended={audit.unintended_signal_nodes}, "
-                        f"polarity={audit.polarity_errors}"
+                        f"polarity={audit.polarity_errors}, "
+                        f"evidence={audit.evidence_issues}, "
+                        f"explanation={audit.explanation}"
                     )
 
                 break
