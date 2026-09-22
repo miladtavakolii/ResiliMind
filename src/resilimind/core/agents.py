@@ -1,3 +1,4 @@
+from collections import Counter
 import logging
 from typing import Dict, Any, List
 import networkx as nx
@@ -237,6 +238,63 @@ def calculate_composite_confidence(
     return final_conf
 
 
+def validate_assessment_result(result: AssessmentOutput, active_signals: list[dict[str, Any]]) -> AssessmentOutput:
+    """Validate assessor output against active signals and graph topology.
+
+    Verifies 1-to-1 parity between assessed nodes and active extraction signals,
+    confirms node existence in the knowledge graph, checks for duplicate
+    assessments, and ensures each assessment's category matches the node's domain.
+
+    Args:
+        result: AssessmentOutput instance containing scored node assessments.
+        active_signals: List of extracted active signal dictionaries for the turn.
+
+    Returns:
+        AssessmentOutput: The validated assessment output instance.
+
+    Raises:
+        ValueError: If duplicate assessments are found, unknown or inactive nodes
+            are assessed, active nodes are omitted, or an assessment category
+            mismatches the node's domain in the resilience graph.
+    """
+    valid_node_ids = set(resilience_graph.nodes)
+    signal_set = {signal["node_id"] for signal in active_signals}
+
+    assessment_ids = [assessment.node_id for assessment in result.assessments]
+    assessment_set = set(assessment_ids)
+
+    if len(assessment_ids) != len(assessment_set):
+        counts = Counter(assessment_ids)
+        duplicate_ids = sorted(
+            node_id for node_id, count in counts.items() if count > 1
+        )
+        raise ValueError(
+            f"Assessor returned duplicate assessments: {duplicate_ids}"
+        )
+
+    if unknown_ids := sorted(assessment_set - valid_node_ids):
+        raise ValueError(f"Assessor returned unknown nodes: {unknown_ids}")
+
+    if extra_ids := sorted(assessment_set - signal_set):
+        raise ValueError(
+            f"Assessor returned assessments for inactive nodes: {extra_ids}"
+        )
+
+    if missing_ids := sorted(signal_set - assessment_set):
+        raise ValueError(
+            f"Assessor missing assessments for active nodes: {missing_ids}"
+        )
+
+    for assessment in result.assessments:
+        expected_domain = resilience_graph.nodes[assessment.node_id].get("domain")
+        if assessment.category != expected_domain:
+            raise ValueError(
+                f"Assessor returned wrong category for {assessment.node_id}: "
+                f"expected={expected_domain}, got={assessment.category}"
+            )
+
+    return result
+
 def assessor_node(state: AgentState) -> Dict[str, Any]:
     """
     Evaluates resilience levels using extracted evidence and polarity signals,
@@ -253,6 +311,12 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     user_msg: str = state.get("user_message", "")
     context: str = state.get("subgraph_context", "")
     active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
+    if not active_signals:
+        logger.info("[Assessor] No active signals. Skipping assessment.")
+        return {
+            "assessments": [],
+            "requires_disambiguation": False,
+        }
 
     # 1. Format extracted signals & evidence substrings for prompt ingestion
     if active_signals:
@@ -289,11 +353,15 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
         raise ValueError(f"Assessor returned invalid structured output: {raw!r}")
 
     result: AssessmentOutput = raw_result["parsed"]
+    result = validate_assessment_result(
+        result=result,
+        active_signals=active_signals,
+    )
     
     # Create a quick lookup for active signals to match with assessments
     signal_lookup = {sig['node_id']: sig for sig in active_signals}
     
-    requires_disambiguation_override = False
+    requires_disambiguation_override = result.requires_disambiguation
     assessments_list: List[Dict[str, Any]] = []
 
     # 4. Compute heuristic routing confidence from multiple signals
