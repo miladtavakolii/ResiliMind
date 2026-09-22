@@ -54,6 +54,17 @@ class ErrorAnalyzer:
         failures = []
         metrics = result.metrics
 
+        if execution := metrics.get("execution"):
+            if not execution.get("successful", True):
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="execution_failure",
+                        details=execution,
+                    )
+                )
+                return failures
+            
         if safety := metrics.get("safety"):
             confusion = safety.get("confusion_matrix", {})
             if confusion.get("fn", 0) > 0:
