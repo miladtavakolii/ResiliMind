@@ -361,41 +361,66 @@ class ScenarioGenerator:
         if safety.is_high_risk:
             return []
 
-        candidates = [
-            node_id for node_id, node in self.nodes.items() if node.get("domain") == domain
+        domain_candidates = [
+            node_id
+            for node_id, node in self.nodes.items()
+            if node.get("domain") == domain
         ]
-        if not candidates:
+
+        if not domain_candidates:
             raise ValueError(f"No graph nodes found for domain {domain}")
 
         if case_type == "multi_domain":
-            other_domains = [
-                d for d in {node["domain"] for node in self.nodes.values()} if d != domain
+            other_domains = sorted(
+                {
+                    node["domain"]
+                    for node in self.nodes.values()
+                    if node.get("domain") and node.get("domain") != domain
+                }
+            )
+
+            if not other_domains:
+                raise ValueError("Multi-domain case requires at least two domains")
+
+            second_domain = self.rng.choice(other_domains)
+            second_candidates = [
+                node_id
+                for node_id, node in self.nodes.items()
+                if node.get("domain") == second_domain
             ]
-            if other_domains:
-                second_domain = self.rng.choice(other_domains)
-                candidates += [
-                    node_id
-                    for node_id, node in self.nodes.items()
-                    if node.get("domain") == second_domain
-                ]
 
-        number_of_signals = 1
-        if case_type in {"mixed_signal", "multi_domain"}:
-            number_of_signals = min(2, len(candidates))
+            selected = [
+                self.rng.choice(domain_candidates),
+                self.rng.choice(second_candidates),
+            ]
 
-        selected = self.rng.sample(candidates, k=number_of_signals)
-        signals = []
+        else:
+            number_of_signals = 2 if case_type == "mixed_signal" else 1
+            number_of_signals = min(number_of_signals, len(domain_candidates))
+            selected = self.rng.sample(
+                domain_candidates,
+                k=number_of_signals,
+            )
+
+        signals: list[GoldSignal] = []
 
         for node_id in selected:
-            if case_type == "mixed_signal":
-                polarity = self.rng.choice(["positive", "negative", "mixed"])
+            if case_type == "mixed_signal" and len(selected) == 1:
+                polarity = "mixed"
+            elif case_type == "mixed_signal":
+                polarity = self.rng.choice(["positive", "negative"])
             elif case_type in {"ambiguous", "adversarial"}:
                 polarity = self.rng.choice(["negative", "mixed"])
             else:
                 polarity = self.rng.choice(["positive", "negative"])
 
-            signals.append(GoldSignal(node_id=node_id,
-                           detected_signal=polarity, evidence=None))
+            signals.append(
+                GoldSignal(
+                    node_id=node_id,
+                    detected_signal=polarity,
+                    evidence=None,
+                )
+            )
 
         return signals
 
