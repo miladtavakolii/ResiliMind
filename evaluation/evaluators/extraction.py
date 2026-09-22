@@ -144,10 +144,7 @@ class ExtractionEvaluator(BaseEvaluator):
             if gold_evidence == predicted_evidence:
                 exact_matches += 1
 
-            if (
-                gold_evidence in predicted_evidence
-                or predicted_evidence in gold_evidence
-            ):
+            if gold_evidence and gold_evidence in predicted_evidence:
                 substring_matches += 1
 
             token_f1_scores.append(
