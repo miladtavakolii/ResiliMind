@@ -52,6 +52,53 @@ def build_extractor_graph_context() -> str:
         + "\n\n".join(blocks)
     )
 
+def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
+    """Validate extractor evidence and node consistency against the knowledge graph.
+
+    Verifies that all extracted signals reference known graph nodes, contain no duplicate
+    node IDs, have non-empty evidence strings, and ensure that every evidence span is
+    present as an exact substring within the original user message.
+
+    Args:
+        result: ExtractionOutput instance containing candidate active signals.
+        user_message: Raw user message text against which evidence substrings are verified.
+
+    Returns:
+        ExtractionOutput: The validated extraction output instance.
+
+    Raises:
+        ValueError: If a signal references an unknown node, duplicate nodes are present,
+            evidence is empty, or evidence text does not appear in the user message.
+    """
+    valid_node_ids = set(resilience_graph.nodes)
+    seen_nodes: set[str] = set()
+
+    for signal in result.active_signals:
+        if signal.node_id not in valid_node_ids:
+            raise ValueError(
+                f"Extractor returned unknown node: {signal.node_id}"
+            )
+
+        if signal.node_id in seen_nodes:
+            raise ValueError(
+                f"Extractor returned duplicate node: {signal.node_id}"
+            )
+        seen_nodes.add(signal.node_id)
+
+        evidence = signal.evidence.strip()
+        if not evidence:
+            raise ValueError(
+                f"Extractor returned empty evidence for {signal.node_id}"
+            )
+
+        if evidence not in user_message:
+            raise ValueError(
+                f"Extractor evidence is not an exact substring for "
+                f"{signal.node_id}: {evidence!r}"
+            )
+
+    return result
+
 def extractor_node(state: AgentState) -> Dict[str, Any]:
     """
     Analyzes the user's input message to extract active resilience nodes 
@@ -83,6 +130,11 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
         raise ValueError(f"Extractor returned invalid structured output: {raw!r}")
 
     result: ExtractionOutput = raw_result["parsed"]
+
+    result = validate_extraction_result(
+        result=result,
+        user_message=user_msg,
+    )
     signals_list: List[Dict[str, Any]] = [
         signal.model_dump() for signal in result.active_signals
     ]
