@@ -486,15 +486,27 @@ class ScenarioGenerator:
             GoldRouting: Expected route and confidence class.
         """
         if safety.is_high_risk:
-            return GoldRouting(expected_route="emergency_response", confidence_class="high")
+            return GoldRouting(
+                expected_route="emergency_response",
+                confidence_class="high",
+            )
 
         if not assessments:
-            return GoldRouting(expected_route="questioner", confidence_class="low")
+            return GoldRouting(
+                expected_route="questioner",
+                confidence_class="low",
+            )
 
-        if case_type in {"ambiguous", "adversarial", "multi_domain"}:
-            return GoldRouting(expected_route="questioner", confidence_class="low")
+        if case_type == "ambiguous":
+            return GoldRouting(
+                expected_route="questioner",
+                confidence_class="low",
+            )
 
-        return GoldRouting(expected_route="advisor", confidence_class="high")
+        return GoldRouting(
+            expected_route="advisor",
+            confidence_class="high",
+        )
 
     def _generate_response_criteria(
         self,
