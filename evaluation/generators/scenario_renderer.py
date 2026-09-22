@@ -221,6 +221,14 @@ class ScenarioRenderer:
                 "messages": messages,
             }
 
+            if self.request_delay > 0:
+                logger.info(
+                    "%s: sleeping %.1f seconds before semantic audit...",
+                    case.case_id,
+                    self.request_delay,
+                )
+                time.sleep(self.request_delay)
+
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[
@@ -362,13 +370,19 @@ class ScenarioRenderer:
                 if attempt >= self.max_retries:
                     raise
 
+                delay = self.retry_delay * (2**attempt)
+
                 logger.warning(
-                    "%s: invalid rendering on attempt %d/%d: %s. Retrying...",
+                    "%s: invalid rendering on attempt %d/%d: %s. "
+                    "Retrying in %.1f seconds...",
                     case.case_id,
                     attempt + 1,
                     self.max_retries + 1,
                     exc,
+                    delay,
                 )
+
+                time.sleep(delay)
 
                 prompt = self._build_retry_prompt(
                     base_prompt=base_prompt,
