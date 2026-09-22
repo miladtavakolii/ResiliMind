@@ -40,58 +40,59 @@ class AssessmentEvaluator(BaseEvaluator):
         gold_assessments = {
             item.node_id: item.rubric for item in gold.assessment.assessments
         }
-
         predicted_assessments = {
             item.get("node_id"): item.get("rubric", {})
             for item in prediction.get("assessment", {}).get("assessments", [])
+            if item.get("node_id")
         }
 
-        errors = {dimension: [] for dimension in self.DIMENSIONS}
-        matched_nodes = gold_assessments.keys() & predicted_assessments.keys()
-        status_correct = 0
-        status_total = 0
+        gold_nodes = set(gold_assessments)
+        predicted_nodes = set(predicted_assessments)
+        matched_nodes = gold_nodes & predicted_nodes
+        missing_nodes = sorted(gold_nodes - predicted_nodes)
+        unexpected_nodes = sorted(predicted_nodes - gold_nodes)
 
+        errors = {dimension: [] for dimension in self.DIMENSIONS}
         for node_id in matched_nodes:
             gold_rubric = gold_assessments[node_id]
             pred_rubric = predicted_assessments[node_id]
 
             for dimension in self.DIMENSIONS:
-                if dimension in pred_rubric:
-                    errors[dimension].append(
-                        abs(getattr(gold_rubric, dimension) - pred_rubric[dimension])
-                    )
-
-            predicted_status = (
-                next(
-                    (
-                        item.get("status")
-                        for item in prediction
-                        .get("assessment", {})
-                        .get("assessments", [])
-                        if item.get("node_id") == node_id
-                    ),
-                    None,
+                if dimension not in pred_rubric:
+                    continue
+                errors[dimension].append(
+                    abs(getattr(gold_rubric, dimension) - pred_rubric[dimension])
                 )
-            )
 
-            if predicted_status is not None:
-                status_total += 1
+        status_correct = 0
+        status_total = len(gold_nodes)
+        prediction_items = {
+            item.get("node_id"): item
+            for item in prediction.get("assessment", {}).get("assessments", [])
+        }
 
-                if predicted_status == gold_rubric.status:
-                    status_correct += 1
+        for node_id in gold_nodes:
+            gold_status = gold_assessments[node_id].status
+            predicted_item = prediction_items.get(node_id)
+            if predicted_item and predicted_item.get("status") == gold_status:
+                status_correct += 1
 
         metrics = {
             dimension: self._calculate_metrics(values)
             for dimension, values in errors.items()
         }
-
         all_errors = [value for values in errors.values() for value in values]
+
         metrics["overall"] = self._calculate_metrics(all_errors)
         metrics["matched_nodes"] = len(matched_nodes)
+        metrics["missing_nodes"] = missing_nodes
+        metrics["unexpected_nodes"] = unexpected_nodes
+        metrics["coverage"] = len(matched_nodes) / len(gold_nodes) if gold_nodes else 1.0
         metrics["status"] = {
-            "accuracy": (status_correct / status_total if status_total else 0.0),
-            "correct": status_correct, "total": status_total
-            }
+            "accuracy": status_correct / status_total if status_total else 1.0,
+            "correct": status_correct,
+            "total": status_total,
+        }
 
         return metrics
 
