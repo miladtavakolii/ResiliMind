@@ -20,6 +20,37 @@ logger = logging.getLogger(__name__)
 llm_engine: LLMEngine = LLMEngine()
 resilience_graph: nx.DiGraph = load_resilience_graph()
 
+def build_extractor_graph_context() -> str:
+    """Build compact semantic definitions for all resilience graph nodes.
+
+    Iterates deterministically through the global resilience knowledge graph nodes,
+    formatting each node's identifiers, Persian names, domain categories, descriptions,
+    and polarity cues into a structured plain-text prompt block.
+
+    Returns:
+        str: Formatted knowledge graph context string containing node definitions
+            and semantic cues for extraction prompt injection.
+    """
+    blocks = []
+
+    for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
+        cues = node_data.get("cues", {})
+        positive = cues.get("positive_keywords", [])
+        negative = cues.get("negative_keywords", [])
+
+        blocks.append(
+            f"Node ID: {node_id}\n"
+            f"Name: {node_data.get('name_fa', '')}\n"
+            f"Domain: {node_data.get('domain_fa', node_data.get('domain', ''))}\n"
+            f"Definition: {node_data.get('description', '')}\n"
+            f"Positive cues: {', '.join(positive)}\n"
+            f"Negative cues: {', '.join(negative)}"
+        )
+
+    return (
+        "=== KNOWLEDGE GRAPH SEMANTIC DEFINITIONS ===\n"
+        + "\n\n".join(blocks)
+    )
 
 def extractor_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -35,7 +66,15 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     logger.info("[Extractor] Extractor Agent is analyzing input...")
     user_msg: str = state.get("user_message", "")
     
-    extractor_chain = llm_engine.get_extractor_runner(prompts.EXTRACTOR_SYSTEM_PROMPT)
+    logger.info("[Extractor] Extractor Agent is analyzing input...")
+    user_msg: str = state.get("user_message", "")
+
+    extractor_prompt = (
+        f"{prompts.EXTRACTOR_SYSTEM_PROMPT}\n\n"
+        f"{build_extractor_graph_context()}"
+    )
+
+    extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)
     raw_result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
 
     if raw_result.get("parsed") is None:
