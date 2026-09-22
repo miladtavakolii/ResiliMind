@@ -328,7 +328,8 @@ class ScenarioRenderer:
         Returns:
             EvaluationCase: Updated case with rendered messages and attached evidence.
         """
-        prompt = self._build_user_prompt(case)
+        base_prompt = self._build_user_prompt(case)
+        prompt = base_prompt
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -367,6 +368,11 @@ class ScenarioRenderer:
                     attempt + 1,
                     self.max_retries + 1,
                     exc,
+                )
+
+                prompt = self._build_retry_prompt(
+                    base_prompt=base_prompt,
+                    error=str(exc),
                 )
 
         case.input.messages = messages
@@ -473,6 +479,33 @@ class ScenarioRenderer:
             scenario,
             ensure_ascii=False,
             indent=2,
+        )
+
+    def _build_retry_prompt(
+        self,
+        base_prompt: str,
+        error: str,
+    ) -> str:
+        """Construct a refined retry prompt incorporating validation failure details.
+
+        Appends the validation error message and formatting constraints to the base
+        generation prompt to instruct the model to produce a valid conversation structure.
+
+        Args:
+            base_prompt: Original base generation prompt provided to the model.
+            error: Validation error message or trace from the failed attempt.
+
+        Returns:
+            str: Augmented prompt string formatted for retry execution.
+        """
+        return (
+            f"{base_prompt}\n\n"
+            "=== PREVIOUS GENERATION FAILED VALIDATION ===\n"
+            f"{error}\n\n"
+            "Regenerate the conversation from scratch.\n"
+            "Do not repeat the previous invalid structure.\n"
+            "Every target signal must have exactly one evidence marker.\n"
+            "Do not output multiple evidence markers for the same target node.\n"
         )
 
     def _clean_messages(self, messages: list[RenderedMessage]) -> list[str]:
