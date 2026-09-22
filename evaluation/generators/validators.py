@@ -213,18 +213,34 @@ def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str], 
     case_ids = [case.case_id for case in cases]
 
     duplicate_case_ids = [
-        case_id for case_id, count in Counter(case_ids).items() if count > 1
+        case_id
+        for case_id, count in Counter(case_ids).items()
+        if count > 1
     ]
     for case_id in duplicate_case_ids:
         errors.append(f"Duplicate case_id: {case_id}")
 
     for case in cases:
-        errors.extend(validate_case_structure(case, valid_node_ids=valid_node_ids))
+        errors.extend(
+            validate_case_structure(
+                case,
+                valid_node_ids=valid_node_ids,
+            )
+        )
         errors.extend(validate_scenario_gold_alignment(case))
-        errors.extend(validate_rendered_input(case, require_rendered=require_rendered))
+        errors.extend(
+            validate_rendered_input(
+                case,
+                require_rendered=require_rendered,
+            )
+        )
 
     if errors:
-        formatted_errors = "\n".join(f"- {error}" for error in errors)
+        formatted_errors = "\n".join(
+            f"- {error}"
+            for error in errors
+        )
         raise ValueError(
-            f"Dataset validation failed with {len(errors)} error(s):\n{formatted_errors}"
+            f"Dataset validation failed with {len(errors)} error(s):\n"
+            f"{formatted_errors}"
         )

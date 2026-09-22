@@ -1103,22 +1103,11 @@ def main() -> None:
 
     valid_node_ids = set(renderer.nodes)
 
-    errors = validate_dataset(
+    validate_dataset(
         rendered_cases,
         valid_node_ids=valid_node_ids,
         require_rendered=True,
     )
-
-    if errors:
-        formatted_errors = "\n".join(
-            f"- {error}"
-            for error in errors
-        )
-
-        raise ValueError(
-            f"Rendered dataset validation failed:\n"
-            f"{formatted_errors}"
-        )
 
     write_cases(
         rendered_cases,
