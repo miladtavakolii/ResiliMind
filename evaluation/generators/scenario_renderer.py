@@ -9,6 +9,7 @@ import time
 from dotenv import load_dotenv
 import re
 from typing import Any
+from collections import Counter
 
 from google import genai
 from google.genai import types
@@ -606,8 +607,18 @@ class ScenarioRenderer:
             raise ValueError(
                 f"{case.case_id}: missing evidence for signals: {sorted(missing)}"
             )
-        if len(evidence) != len(evidence_ids):
-            raise ValueError(f"{case.case_id}: duplicate evidence entries detected")
+        evidence_counts = Counter(item["node_id"] for item in evidence)
+        duplicates = [
+            node_id
+            for node_id, count in evidence_counts.items()
+            if count > 1
+        ]
+
+        if duplicates:
+            raise ValueError(
+                f"{case.case_id}: duplicate evidence markers for nodes: "
+                f"{sorted(duplicates)}"
+            )
 
         for item in evidence:
             message_index = item["message_index"]
