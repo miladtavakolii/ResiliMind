@@ -102,7 +102,7 @@ class ScenarioRenderer:
             prompt_path: Path to the rendering prompt text file.
             audit_prompt_path: Path to the audit prompt text file.
             graph_path: Path to the knowledge graph JSON file.
-            max_retries: Maximum retry attempts on API errors.
+            max_retries: Maximum retry attempts for generation, audit, and validation failures.
             retry_delay: Base delay in seconds for exponential backoff.
             request_delay: Delay in seconds between API calls to avoid rate limits.
 
@@ -221,40 +221,69 @@ class ScenarioRenderer:
                 "messages": messages,
             }
 
-            if self.request_delay > 0:
-                logger.info(
-                    "%s: sleeping %.1f seconds before semantic audit...",
-                    case.case_id,
-                    self.request_delay,
-                )
-                time.sleep(self.request_delay)
+            last_error: Exception | None = None
 
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=[
-                    self.audit_prompt,
-                    json.dumps(
-                        audit_input,
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.0,
-                    response_mime_type="application/json",
-                    response_schema=ScenarioRenderAudit,
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                        disable=True
-                    ),
-                ),
-            )
+            for attempt in range(self.max_retries + 1):
+                try:
+                    if attempt == 0 and self.request_delay > 0:
+                        logger.info(
+                            "%s: sleeping %.1f seconds before semantic audit...",
+                            case.case_id,
+                            self.request_delay,
+                        )
+                        time.sleep(self.request_delay)
 
-            if not response.text:
-                raise ValueError(
-                    f"{case.case_id}: semantic audit returned empty response"
-                )
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=[
+                            self.audit_prompt,
+                            json.dumps(
+                                audit_input,
+                                ensure_ascii=False,
+                                indent=2,
+                            ),
+                        ],
+                        config=types.GenerateContentConfig(
+                            temperature=0.0,
+                            response_mime_type="application/json",
+                            response_schema=ScenarioRenderAudit,
+                            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                                disable=True
+                            ),
+                        ),
+                    )
 
-            return ScenarioRenderAudit.model_validate_json(response.text)
+                    if not response.text:
+                        raise ValueError(
+                            f"{case.case_id}: semantic audit returned empty response"
+                        )
+
+                    return ScenarioRenderAudit.model_validate_json(response.text)
+
+                except Exception as exc:
+                    last_error = exc
+
+                    if attempt >= self.max_retries:
+                        break
+
+                    delay = self.retry_delay * (2**attempt)
+
+                    logger.warning(
+                        "%s: semantic audit failed on attempt %d/%d: %s. "
+                        "Retrying in %.1f seconds...",
+                        case.case_id,
+                        attempt + 1,
+                        self.max_retries + 1,
+                        exc,
+                        delay,
+                    )
+
+                    time.sleep(delay)
+
+            raise RuntimeError(
+                f"{case.case_id}: semantic audit failed after "
+                f"{self.max_retries + 1} attempts"
+            ) from last_error
 
     def _load_nodes(self) -> dict[str, dict[str, Any]]:
         """Retrieve node definitions from the loaded knowledge graph.
