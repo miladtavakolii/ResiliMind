@@ -74,8 +74,9 @@ class ScenarioRenderer:
         *,
         model_name: str = "gemini-2.5-flash",
         api_key: str | None = None,
-        temperature: float = 0.7,
+        temperature: float = 0.4,
         prompt_path: Path = DEFAULT_PROMPT_PATH,
+        graph_path: Path = GRAPH_PATH,
         max_retries: int = 3,
         retry_delay: float = 2.0,
         request_delay: float = 1.0,
@@ -107,6 +108,9 @@ class ScenarioRenderer:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.request_delay = request_delay
+        self.graph_path = Path(graph_path)
+        self.graph = self._load_graph()
+        self.nodes = self._load_nodes()
 
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -114,6 +118,35 @@ class ScenarioRenderer:
 
         self.client = genai.Client(api_key=api_key)
         self.system_prompt = self._load_prompt()
+
+    def _load_graph(self) -> dict[str, Any]:
+        """Load and validate the knowledge graph from disk.
+
+        Returns:
+            dict[str, Any]: Parsed knowledge graph containing validated nodes.
+
+        Raises:
+            FileNotFoundError: If the knowledge graph file does not exist.
+            ValueError: If the JSON payload lacks a valid top-level 'nodes' dictionary.
+        """
+        if not self.graph_path.exists():
+            raise FileNotFoundError(f"Knowledge graph not found: {self.graph_path}")
+
+        with self.graph_path.open("r", encoding="utf-8") as file:
+            graph = json.load(file)
+
+        if "nodes" not in graph or not isinstance(graph["nodes"], dict):
+            raise ValueError("Knowledge graph must contain a valid 'nodes' object")
+
+        return graph
+
+    def _load_nodes(self) -> dict[str, dict[str, Any]]:
+        """Retrieve node definitions from the loaded knowledge graph.
+
+        Returns:
+            dict[str, dict[str, Any]]: Mapping of node IDs to their attributes and metadata.
+        """
+        return self.graph["nodes"]
 
     def _load_prompt(self) -> str:
         """Load the rendering system prompt from disk.
@@ -217,35 +250,102 @@ class ScenarioRenderer:
         return case
 
     def _build_user_prompt(self, case: EvaluationCase) -> str:
-        """Build the Gemini prompt from a latent evaluation scenario.
+        """Construct a formatted JSON prompt describing the latent scenario for the renderer.
+
+        Aggregates target graph node signals, semantic cues, domain-confusable distractor
+        nodes, and latent clinical assessment levels into a structured payload for Gemini.
 
         Args:
-            case: Evaluation case to serialize into a generation prompt.
+            case: Target EvaluationCase containing scenario constraints and gold signals.
 
         Returns:
-            str: JSON string summarizing scenario characteristics and requirements.
+            str: Indented JSON string representing the complete scenario rendering prompt.
+
+        Raises:
+            ValueError: If a gold active signal references a node ID missing from the graph.
         """
-        signals = [
-            {"concept": signal.node_id, "polarity": signal.detected_signal}
+        active_signals = []
+
+        target_ids = {
+            signal.node_id
             for signal in case.gold.extraction.active_signals
-        ]
+        }
+
+        for signal in case.gold.extraction.active_signals:
+            node = self.nodes.get(signal.node_id)
+            if node is None:
+                raise ValueError(
+                    f"{case.case_id}: unknown graph node {signal.node_id}"
+                )
+
+            cues = node.get("cues", {})
+
+            if signal.detected_signal == "positive":
+                polarity_cues = cues.get("positive_keywords", [])
+            elif signal.detected_signal == "negative":
+                polarity_cues = cues.get("negative_keywords", [])
+            else:
+                polarity_cues = (
+                    cues.get("positive_keywords", [])
+                    + cues.get("negative_keywords", [])
+                )
+
+            active_signals.append(
+                {
+                    "node_id": signal.node_id,
+                    "name_fa": node.get("name_fa", ""),
+                    "name_en": node.get("name_en", ""),
+                    "domain_fa": node.get("domain_fa", ""),
+                    "description": node.get("description", ""),
+                    "polarity": signal.detected_signal,
+                    "semantic_cues": polarity_cues,
+                }
+            )
+
+        target_domains = {
+            self.nodes[signal.node_id].get("domain")
+            for signal in case.gold.extraction.active_signals
+            if signal.node_id in self.nodes
+        }
+
+        confusable_nodes = []
+
+        for node_id, node in self.nodes.items():
+            if node_id in target_ids:
+                continue
+
+            if node.get("domain") not in target_domains:
+                continue
+
+            confusable_nodes.append(
+                {
+                    "node_id": node_id,
+                    "name_fa": node.get("name_fa", ""),
+                    "name_en": node.get("name_en", ""),
+                    "description": node.get("description", ""),
+                }
+            )
 
         scenario = {
-            "domain": case.scenario.domain,
-            "difficulty": case.scenario.difficulty,
             "case_type": case.scenario.case_type,
+            "difficulty": case.scenario.difficulty,
             "turn_count": case.scenario.turn_count,
             "safety_category": case.gold.safety.risk_category,
-            "signals": signals,
-              "assessment_profile":{
+            "target_signals": active_signals,
+            "confusable_nodes": confusable_nodes,
+            "assessment_profile": {
                 "severity": case.scenario.severity_level,
                 "frequency": case.scenario.frequency_level,
                 "functional": case.scenario.functional_level,
                 "coping": case.scenario.coping_level,
-            }
+            },
         }
 
-        return json.dumps(scenario, ensure_ascii=False, indent=2)
+        return json.dumps(
+            scenario,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     def _clean_messages(self, messages: list[RenderedMessage]) -> list[str]:
         """Strip evidence annotation markup from rendered messages.
@@ -499,7 +599,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT_PATH, help="Path to the latent scenarios JSONL file.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH, help="Path for the rendered cases JSONL file.")
     parser.add_argument("--model", type=str, default=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), help="Gemini model used for scenario rendering.")
-    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature.")
+    parser.add_argument("--temperature", type=float, default=0.4, help="Sampling temperature.")
     parser.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT_PATH, help="Path to the rendering system prompt.")
     parser.add_argument("--limit", type=int, default=None, help="Render only the first N cases.")
     parser.add_argument("--skip-failures", action="store_true", help="Skip cases that fail rendering.")
