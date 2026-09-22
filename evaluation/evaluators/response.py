@@ -44,7 +44,7 @@ class ResponseEvaluator(BaseEvaluator):
             dict[str, Any]: Dictionary containing evaluation metrics from the judge,
                 or an error dict if the response is missing.
         """
-        response = prediction.get("advisor_response")
+        response = prediction.get("final_response")
         user_context = prediction.get("user_context", "")
         if not response:
             return {"error": "missing response"}
