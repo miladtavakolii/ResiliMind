@@ -134,6 +134,10 @@ Do not create additional symptoms or resilience concepts to represent severity, 
 For example, if severity is high for a financial target, make the financial difficulty stronger.
 Do not add insomnia, anxiety, family conflict, social isolation, or physical symptoms unless they are target signals.
 
+A target node must be marked exactly once across the entire conversation.
+If the same target concept appears naturally in multiple turns, mark evidence for it in only one turn and leave later mentions unmarked.
+Do not repeat the same NODE_ID in multiple evidence markers.
+
 ## 7. Conversation realism
 
 Use natural Persian.
