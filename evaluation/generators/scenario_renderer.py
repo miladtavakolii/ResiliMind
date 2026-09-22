@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT_PATH = PROJECT_ROOT / "evaluation" / "prompts" / "scenario_renderer.txt"
+DEFAULT_AUDIT_PROMPT_PATH = PROJECT_ROOT / "evaluation" / "prompts" / "scenario_renderer_audit.txt"
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "scenarios.jsonl"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
 GRAPH_PATH = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
@@ -51,6 +52,15 @@ class ScenarioRenderOutput(BaseModel):
 
     messages: list[RenderedMessage] = Field(min_length=1)
 
+class ScenarioRenderAudit(BaseModel):
+    """Semantic validation result for a rendered evaluation case."""
+
+    valid: bool
+    missing_target_signals: list[str] = Field(default_factory=list)
+    unintended_signal_nodes: list[str] = Field(default_factory=list)
+    polarity_errors: list[str] = Field(default_factory=list)
+    evidence_issues: list[str] = Field(default_factory=list)
+    explanation: str = ""
 
 class ScenarioRenderer:
     """Render latent evaluation scenarios into natural Persian conversations.
@@ -76,6 +86,7 @@ class ScenarioRenderer:
         api_key: str | None = None,
         temperature: float = 0.4,
         prompt_path: Path = DEFAULT_PROMPT_PATH,
+        audit_prompt_path: Path = DEFAULT_AUDIT_PROMPT_PATH,
         graph_path: Path = GRAPH_PATH,
         max_retries: int = 3,
         retry_delay: float = 2.0,
@@ -88,6 +99,8 @@ class ScenarioRenderer:
             api_key: Optional Gemini API key. If omitted, fetched from GEMINI_API_KEY.
             temperature: Sampling temperature for generation diversity.
             prompt_path: Path to the rendering prompt text file.
+            audit_prompt_path: Path to the audit prompt text file.
+            graph_path: Path to the knowledge graph JSON file.
             max_retries: Maximum retry attempts on API errors.
             retry_delay: Base delay in seconds for exponential backoff.
             request_delay: Delay in seconds between API calls to avoid rate limits.
@@ -105,6 +118,7 @@ class ScenarioRenderer:
         self.model_name = model_name
         self.temperature = temperature
         self.prompt_path = prompt_path
+        self.audit_prompt_path = audit_prompt_path
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.request_delay = request_delay
@@ -118,6 +132,7 @@ class ScenarioRenderer:
 
         self.client = genai.Client(api_key=api_key)
         self.system_prompt = self._load_prompt()
+        self.audit_prompt = self._load_audit_prompt()
 
     def _load_graph(self) -> dict[str, Any]:
         """Load and validate the knowledge graph from disk.
@@ -139,6 +154,98 @@ class ScenarioRenderer:
             raise ValueError("Knowledge graph must contain a valid 'nodes' object")
 
         return graph
+
+    def _load_audit_prompt(self) -> str:
+        if not self.audit_prompt_path.exists():
+            raise FileNotFoundError(
+                f"Audit prompt not found: {self.audit_prompt_path}"
+            )
+        return self.audit_prompt_path.read_text(encoding="utf-8")
+
+    def _audit_rendered_output(
+            self,
+            *,
+            case: EvaluationCase,
+            messages: list[str],
+        ) -> ScenarioRenderAudit:
+            """Perform a semantic audit on rendered scenario messages using Gemini.
+
+            Evaluates rendered text against target graph signals and non-target candidate
+            nodes to verify that intended resilience concepts are present and unintended
+            extraneous signals were not inadvertently leaked into the conversation.
+
+            Args:
+                case: Target EvaluationCase containing expected gold signals.
+                messages: Cleaned dialogue messages generated for the scenario.
+
+            Returns:
+                ScenarioRenderAudit: Parsed validation model assessing signal alignment
+                    and flagging unintended graph nodes.
+
+            Raises:
+                ValueError: If the Gemini client returns an empty text response.
+            """
+            target_ids = {
+                signal.node_id
+                for signal in case.gold.extraction.active_signals
+            }
+
+            target_nodes = [
+                {
+                    "node_id": signal.node_id,
+                    "polarity": signal.detected_signal,
+                    "name_fa": self.nodes[signal.node_id].get("name_fa", ""),
+                    "description": self.nodes[signal.node_id].get("description", ""),
+                }
+                for signal in case.gold.extraction.active_signals
+            ]
+
+            candidates = []
+
+            for node_id, node in self.nodes.items():
+                if node_id in target_ids:
+                    continue
+
+                candidates.append(
+                    {
+                        "node_id": node_id,
+                        "name_fa": node.get("name_fa", ""),
+                        "description": node.get("description", ""),
+                    }
+                )
+
+            audit_input = {
+                "target_signals": target_nodes,
+                "candidate_unintended_nodes": candidates,
+                "messages": messages,
+            }
+
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[
+                    self.audit_prompt,
+                    json.dumps(
+                        audit_input,
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                    response_schema=ScenarioRenderAudit,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    ),
+                ),
+            )
+
+            if not response.text:
+                raise ValueError(
+                    f"{case.case_id}: semantic audit returned empty response"
+                )
+
+            return ScenarioRenderAudit.model_validate_json(response.text)
 
     def _load_nodes(self) -> dict[str, dict[str, Any]]:
         """Retrieve node definitions from the loaded knowledge graph.
@@ -221,31 +328,51 @@ class ScenarioRenderer:
             EvaluationCase: Updated case with rendered messages and attached evidence.
         """
         prompt = self._build_user_prompt(case)
+
         for attempt in range(self.max_retries + 1):
-            rendered = self._generate(prompt=prompt)
-
-            evidence = self._extract_evidence(case, rendered)
-            messages = self._clean_messages(rendered.messages)
-
             try:
+                rendered = self._generate(prompt=prompt)
+                evidence = self._extract_evidence(case, rendered)
+                messages = self._clean_messages(rendered.messages)
+
                 self._validate_rendered_output(
                     case=case,
                     messages=messages,
                     evidence=evidence,
                 )
+
+                audit = self._audit_rendered_output(
+                    case=case,
+                    messages=messages,
+                )
+
+                if not audit.valid:
+                    raise ValueError(
+                        f"{case.case_id}: semantic audit failed: "
+                        f"missing={audit.missing_target_signals}, "
+                        f"unintended={audit.unintended_signal_nodes}, "
+                        f"polarity={audit.polarity_errors}"
+                    )
+
                 break
-            except ValueError:
+
+            except ValueError as exc:
                 if attempt >= self.max_retries:
                     raise
+
                 logger.warning(
-                    "%s: invalid generation, retrying (%d/%d)",
+                    "%s: invalid rendering on attempt %d/%d: %s. Retrying...",
                     case.case_id,
                     attempt + 1,
-                    self.max_retries,
+                    self.max_retries + 1,
+                    exc,
                 )
-        
+
         case.input.messages = messages
-        self._attach_evidence(case=case, evidence=evidence)
+        self._attach_evidence(
+            case=case,
+            evidence=evidence,
+        )
 
         return case
 
@@ -396,29 +523,34 @@ class ScenarioRenderer:
 
         for message_index, message_obj in enumerate(output.messages):
             message = message_obj.content
+            cursor = 0
+            clean_length = 0
 
             for match in EVIDENCE_PATTERN.finditer(message):
-                node_id = match.group("node_id")
+                prefix = message[cursor:match.start()]
+                clean_length += len(prefix)
 
+                node_id = match.group("node_id")
                 if node_id not in expected:
                     raise ValueError(
                         f"{case.case_id}: unexpected evidence node {node_id}"
                     )
 
-                evidence_text = match.group("text").strip()
+                evidence_text = match.group("text")
 
-                clean_message = EVIDENCE_PATTERN.sub(
-                    lambda m: m.group("text"), message
-                )
-
-                start = clean_message.find(evidence_text)
-
-                if start == -1:
+                if not evidence_text:
                     raise ValueError(
-                        f"{case.case_id}: evidence text not found after cleaning for {node_id}"
+                        f"{case.case_id}: empty evidence for {node_id}"
                     )
 
-                end = start + len(evidence_text)
+                if evidence_text != evidence_text.strip():
+                    raise ValueError(
+                        f"{case.case_id}: evidence for {node_id} contains leading/trailing whitespace"
+                    )
+
+                start = clean_length
+                clean_length += len(evidence_text)
+                end = clean_length
 
                 extracted.append(
                     {
@@ -429,6 +561,11 @@ class ScenarioRenderer:
                         "evidence": evidence_text,
                     }
                 )
+
+                cursor = match.end()
+
+            if cursor < len(message):
+                clean_length += len(message[cursor:])
 
         return extracted
 
@@ -477,6 +614,17 @@ class ScenarioRenderer:
             if not 0 <= message_index < len(messages):
                 raise ValueError(
                     f"{case.case_id}: invalid message index {message_index} for {item['node_id']}"
+                )
+            
+            if not item["evidence"]:
+                raise ValueError(
+                    f"{case.case_id}: empty evidence for {item['node_id']}"
+                )
+
+            if item["evidence"] != item["evidence"].strip():
+                raise ValueError(
+                    f"{case.case_id}: evidence for {item['node_id']} contains "
+                    "leading/trailing whitespace"
                 )
 
             message = messages[message_index]
@@ -601,6 +749,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), help="Gemini model used for scenario rendering.")
     parser.add_argument("--temperature", type=float, default=0.4, help="Sampling temperature.")
     parser.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT_PATH, help="Path to the rendering system prompt.")
+    parser.add_argument("--audit-prompt", type=Path, default=DEFAULT_AUDIT_PROMPT_PATH, help="Path to the semantic audit prompt.")
     parser.add_argument("--limit", type=int, default=None, help="Render only the first N cases.")
     parser.add_argument("--skip-failures", action="store_true", help="Skip cases that fail rendering.")
     parser.add_argument("--max-retries", type=int, default=3, help="Maximum number of retries after an API failure.")

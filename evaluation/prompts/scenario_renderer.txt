@@ -19,6 +19,11 @@ For every target signal:
 - do not replace it with a broader or different psychological concept.
 
 A target signal must be supported by what the user explicitly says or by a very strong, unambiguous semantic expression.
+Semantic cues are guidance, not a checklist.
+Do not copy all provided cues into the conversation.
+Prefer natural paraphrases and varied Persian expressions.
+Do not concatenate multiple cues to artificially strengthen a signal.
+Use an exact cue phrase only when it naturally fits the conversation.
 
 ## 2. Strict semantic isolation
 
@@ -56,6 +61,22 @@ For example, if the target concerns general self-efficacy, do not introduce a fi
 
 Do not create statements that strongly imply a confusable node merely as background context.
 
+## 3.1 Cross-signal isolation
+
+Each target signal has its own semantic scope.
+
+Do not write a sentence that strongly supports multiple resilience nodes when only one of those nodes is a target.
+
+An evidence span should primarily support its assigned target signal.
+
+Do not use another resilience concept as supporting context for a target signal.
+
+For example, if the target is general self-efficacy, do not add anxiety, financial distress, sleep problems, family conflict, or social isolation merely to make the story more realistic.
+
+Natural background context is allowed only when it does not itself express another resilience signal.
+
+When a background detail could reasonably be interpreted as evidence for another node, omit it.
+
 ## 4. Polarity
 
 The requested polarity must be clearly expressed.
@@ -74,6 +95,10 @@ Do not express a different node and assume its presence can imply the target.
 ## 5. Evidence
 
 Every target signal must have exactly one evidence marker.
+When multiple target signals are present, each signal must have its own distinct evidence span.
+Do not use one evidence span as evidence for multiple node IDs.
+Do not place two target concepts into one ambiguous phrase.
+Each marked span should provide clear primary evidence for exactly one target signal.
 
 Use:
 
