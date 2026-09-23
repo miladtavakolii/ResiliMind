@@ -114,9 +114,6 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     """
     logger.info("[Extractor] Extractor Agent is analyzing input...")
     user_msg: str = state.get("user_message", "")
-    
-    logger.info("[Extractor] Extractor Agent is analyzing input...")
-    user_msg: str = state.get("user_message", "")
 
     extractor_prompt = (
         f"{prompts.EXTRACTOR_SYSTEM_PROMPT}\n\n"
