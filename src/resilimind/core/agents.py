@@ -597,6 +597,21 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
             raise ValueError(f"Safety returned invalid structured output: {raw!r}")
 
         result: SafetyOutput = raw_result["parsed"]
+        if result.is_high_risk and result.risk_category == "SAFE":
+            logger.error("[Safety] Inconsistent classifier output: is_high_risk=True with risk_category=SAFE")
+            return {
+                "safety_status": "UNAVAILABLE",
+                "safety_flag": False,
+                "safety_risk_category": "SAFE",
+            }
+
+        if not result.is_high_risk and result.risk_category != "SAFE":
+            logger.error(f"[Safety] Inconsistent classifier output: is_high_risk=False with risk_category={result.risk_category}")
+            return {
+                "safety_status": "UNAVAILABLE",
+                "safety_flag": False,
+                "safety_risk_category": "SAFE",
+            }
         
         if result.is_high_risk:
             logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
