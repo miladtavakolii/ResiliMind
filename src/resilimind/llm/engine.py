@@ -82,7 +82,8 @@ class LLMEngine:
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
-                temperature=0.0
+                temperature=0.0,
+                reasoning=False,
             )
             self._safety_llm = llm.with_structured_output(SafetyOutput, method="json_schema", include_raw=True)
             
@@ -110,6 +111,7 @@ class LLMEngine:
                 model=self.model_name, 
                 base_url=self.base_url, 
                 temperature=0.0,
+                reasoning=False,
                 num_ctx=8192,
                 num_predict=1024,
             )
@@ -140,6 +142,7 @@ class LLMEngine:
                 model=self.model_name, 
                 base_url=self.base_url, 
                 temperature=0.0,
+                reasoning=False,
                 num_ctx=8192,
                 num_predict=2048,
             )
