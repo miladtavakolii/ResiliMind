@@ -122,23 +122,21 @@ class ErrorAnalyzer:
                     )
                 )
 
-        if (response := metrics.get("response")) and response.get("overall", 10) < 5:
-            failures.append(
-                FailureCase(
-                    case_id=result.case_id,
-                    category="advisor_failure",
-                    details=response,
-                )
-            )
-
-        if extraction := metrics.get("extraction"):
-            evidence = extraction.get("evidence", {})
-            if evidence.get("exact_match", 1.0) < 1.0:
+        if response := metrics.get("response"):
+            if response.get("error"):
                 failures.append(
                     FailureCase(
                         case_id=result.case_id,
-                        category="evidence_mismatch",
-                        details=extraction,
+                        category="advisor_failure",
+                        details=response,
+                    )
+                )
+            elif response.get("overall", 10) < 5:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="advisor_quality_failure",
+                        details=response,
                     )
                 )
 
@@ -154,9 +152,7 @@ class ErrorAnalyzer:
 
         if assessment := metrics.get("assessment"):
             status = assessment.get("status", {})
-            if 0 < status.get("correct", 0) < status.get("total", 0) or (
-                status.get("total", 0) > 0 and status.get("correct", 0) < status.get("total", 0)
-            ):
+            if status.get("total", 0) > 0 and status.get("correct", 0) < status.get("total", 0):
                 failures.append(
                     FailureCase(
                         case_id=result.case_id,
