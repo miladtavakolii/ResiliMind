@@ -38,7 +38,7 @@ def route_safety(state: AgentState) -> Literal["emergency_response", "service_un
         Literal["emergency_response", "service_unavailable", "extractor"]: 
             Target node identifier for execution routing.
     """
-    status: str = state.get("safety_status", "SAFE")
+    status: str = state.get("safety_status", "UNAVAILABLE")
     
     if status == "HIGH_RISK":
         logger.error("[Workflow] High-risk signal detected! Routing to emergency response protocol...")
@@ -47,7 +47,10 @@ def route_safety(state: AgentState) -> Literal["emergency_response", "service_un
     if status == "UNAVAILABLE":
         logger.warning("[Workflow] Safety subsystem unavailable. Routing to service unavailable block...")
         return "service_unavailable"
-        
+    if status != "SAFE":
+        logger.error("f[Workflow] Invalid safety status {status}. Failing closed.")
+        return "service_unavailable"
+    
     logger.info("[Workflow] Safety check passed (SAFE). Routing to extractor...")
     return "extractor"
 
