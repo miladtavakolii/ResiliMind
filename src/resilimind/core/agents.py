@@ -120,20 +120,61 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
         f"{build_extractor_graph_context()}"
     )
 
-    extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)
-    raw_result: ExtractionOutput = extractor_chain.invoke({"user_message": user_msg})
-
-    if raw_result.get("parsed") is None:
-        raw = raw_result.get("raw")
-        logger.error("[Extractor] Structured output parsing failed. Raw model output: %r", raw)
-        raise ValueError(f"Extractor returned invalid structured output: {raw!r}")
-
-    result: ExtractionOutput = raw_result["parsed"]
-
-    result = validate_extraction_result(
-        result=result,
-        user_message=user_msg,
+    extractor_prompt_base = (
+        f"{prompts.EXTRACTOR_SYSTEM_PROMPT}\n\n"
+        f"{build_extractor_graph_context()}"
     )
+
+    last_error: Exception | None = None
+
+    for attempt in range(3):
+        extractor_prompt = extractor_prompt_base
+
+        if last_error is not None:
+            extractor_prompt += (
+                "\n\n=== PREVIOUS OUTPUT FAILED VALIDATION ===\n"
+                f"{last_error}\n"
+                "Regenerate the extraction from scratch.\n"
+                "Each node_id may appear at most once.\n"
+                "Do not duplicate a signal for the same node.\n"
+                "Every signal must contain one exact evidence span from the user message.\n"
+            )
+
+        extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)
+        raw_result = extractor_chain.invoke({"user_message": user_msg})
+
+        if raw_result.get("parsed") is None:
+            raw = raw_result.get("raw")
+            last_error = ValueError(
+                f"Extractor returned invalid structured output: {raw!r}"
+            )
+            logger.warning(
+                "[Extractor] Structured output validation failed "
+                "(attempt %d/3): %s",
+                attempt + 1,
+                last_error,
+            )
+            continue
+
+        try:
+            result: ExtractionOutput = validate_extraction_result(
+                result=raw_result["parsed"],
+                user_message=user_msg,
+            )
+            break
+        except ValueError as exc:
+            last_error = exc
+            logger.warning(
+                "[Extractor] Extraction validation failed "
+                "(attempt %d/3): %s",
+                attempt + 1,
+                exc,
+            )
+    else:
+        raise RuntimeError(
+            f"Extractor failed after 3 attempts"
+        ) from last_error
+    
     signals_list: List[Dict[str, Any]] = [
         signal.model_dump() for signal in result.active_signals
     ]
