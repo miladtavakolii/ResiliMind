@@ -233,17 +233,18 @@ def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]
     """
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        cursor: sqlite3.Cursor = conn.cursor()
+        cursor = conn.cursor()
+
         cursor.execute(
             """
             SELECT node_id, status, score, created_at
             FROM resilience_logs
             WHERE user_id = ?
-            ORDER BY created_at ASC
+            ORDER BY created_at DESC, id DESC
             LIMIT ?
             """,
-            (user_id, limit)
+            (user_id, limit),
         )
-        rows = cursor.fetchall()
+        rows = list(reversed(cursor.fetchall()))
         logger.debug(f"[Database] Retrieved {len(rows)} timeline records for user {user_id}.")
         return [dict(row) for row in rows]
