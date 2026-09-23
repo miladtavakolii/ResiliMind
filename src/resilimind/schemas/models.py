@@ -123,16 +123,6 @@ class NodeAssessment(BaseModel):
         """Proxy property for derived status color."""
         return self.scores.status
 
-    def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Overridden to inject computed 'score' and 'status' into dictionary outputs.
-        Ensures 100% backward compatibility with DB persistence and Streamlit UI.
-        """
-        data: Dict[str, Any] = super().model_dump(*args, **kwargs)
-        data["score"] = self.score
-        data["status"] = self.status
-        return data
-
 class AssessmentOutput(BaseModel):
     """
     Structured output schema for the Assessor Agent.

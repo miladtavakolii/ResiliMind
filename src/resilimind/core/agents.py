@@ -367,6 +367,8 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     # 4. Compute heuristic routing confidence from multiple signals
     for assessment in result.assessments:
         assessment_dict = assessment.model_dump()
+        assessment_dict["score"] = assessment.score
+        assessment_dict["status"] = assessment.status
         node_id = assessment_dict["node_id"]
         
         # Get corresponding signal data from Extractor
