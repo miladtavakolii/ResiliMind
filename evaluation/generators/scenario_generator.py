@@ -230,6 +230,7 @@ class ScenarioGenerator:
             scenario=scenario,
             safety=safety,
             signals=signals,
+            route=routing.expected_route,
         )
 
         gold = EvaluationGold(
