@@ -142,7 +142,7 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
     ]
     
     # Extract unique node IDs from active signals
-    active_node_ids = {signal.node_id for signal in result.active_signals}
+    active_node_ids = [signal.node_id for signal in result.active_signals]
     logger.debug(f"[Extractor] Extracted {len(active_node_ids)} nodes and {len(signals_list)} signals.")
     
     return {"active_nodes": active_node_ids, "active_signals": signals_list}
