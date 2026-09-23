@@ -109,7 +109,9 @@ class LLMEngine:
             llm: ChatOllama = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 
-                temperature=0.0
+                temperature=0.0,
+                num_ctx=8192,
+                num_predict=1024,
             )
             self._extractor_llm = llm.with_structured_output(ExtractionOutput, method="json_schema", include_raw=True)
             
