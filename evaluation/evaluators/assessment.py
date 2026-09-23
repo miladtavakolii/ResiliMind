@@ -59,9 +59,17 @@ class AssessmentEvaluator(BaseEvaluator):
 
             for dimension in self.DIMENSIONS:
                 if dimension not in pred_rubric:
+                    errors[dimension].append(25)
                     continue
+
+                predicted_value = pred_rubric[dimension]
+
+                if not isinstance(predicted_value, (int, float)):
+                    errors[dimension].append(25)
+                    continue
+
                 errors[dimension].append(
-                    abs(getattr(gold_rubric, dimension) - pred_rubric[dimension])
+                    abs(getattr(gold_rubric, dimension) - predicted_value)
                 )
 
         status_correct = 0
@@ -76,6 +84,19 @@ class AssessmentEvaluator(BaseEvaluator):
             predicted_item = prediction_items.get(node_id)
             if predicted_item and predicted_item.get("status") == gold_status:
                 status_correct += 1
+
+        missing_dimensions = {
+            node_id: [
+                dimension
+                for dimension in self.DIMENSIONS
+                if dimension not in predicted_assessments[node_id]
+            ]
+            for node_id in matched_nodes
+            if any(
+                dimension not in predicted_assessments[node_id]
+                for dimension in self.DIMENSIONS
+            )
+        }
 
         metrics = {
             dimension: self._calculate_metrics(values)
@@ -93,6 +114,7 @@ class AssessmentEvaluator(BaseEvaluator):
             "correct": status_correct,
             "total": status_total,
         }
+        metrics["missing_dimensions"] = missing_dimensions
 
         return metrics
 
