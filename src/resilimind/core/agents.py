@@ -616,12 +616,6 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
             "safety_flag": False,
             "safety_risk_category": "SAFE",
         }
-    
-        return {
-            "safety_status": "SAFE",
-            "safety_flag": False,
-            "safety_risk_category": "SAFE",
-        }
         
     except Exception as e:
         logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
