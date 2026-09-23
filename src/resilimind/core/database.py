@@ -174,7 +174,8 @@ def save_resilience_log(
             conn.commit()
         logger.debug(f"[Database] Saved resilience log for user {user_id} on node {node_id}.")
     except sqlite3.Error as e:
-        logger.error(f"[Database] Failed to save resilience log for user {user_id}: {e}")
+        logger.exception("[Database] Failed to save resilience log for user %s", user_id)
+        raise
 
 
 def get_user_resilience_history(user_id: int, limit: int = 20) -> List[Dict[str, Any]]:
