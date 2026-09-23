@@ -36,7 +36,9 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
             
     except Exception as e:
         logger.error(f"[GraphLoader] Error loading graph data: {e}")
-        return G
+        raise RuntimeError(
+            f"Failed to load resilience graph: {json_file_path or 'bundled asset'}"
+        ) from e
 
     # 2. Add Nodes
     nodes: Dict[str, Any] = graph_data.get("nodes", {})
