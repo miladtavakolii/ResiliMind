@@ -203,17 +203,20 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r1.node_id, r1.category, r1.status, r1.score, r1.confidence, r1.reasoning, r1.created_at
-            FROM resilience_logs r1
-            INNER JOIN (
-                SELECT node_id, MAX(created_at) as max_date
+            SELECT node_id, category, status, score, confidence, reasoning, created_at
+            FROM (
+                SELECT node_id, category, status, score, confidence, reasoning, created_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY user_id, node_id
+                        ORDER BY created_at DESC, id DESC
+                    ) AS row_num
                 FROM resilience_logs
                 WHERE user_id = ?
-                GROUP BY node_id
-            ) r2 ON r1.node_id = r2.node_id AND r1.created_at = r2.max_date
-            WHERE r1.user_id = ?
+            )
+            WHERE row_num = 1
+            ORDER BY created_at DESC
             """,
-            (user_id, user_id)
+            (user_id,),
         )
         rows = cursor.fetchall()
         logger.debug(f"[Database] Retrieved {len(rows)} latest node statuses for user {user_id}.")
