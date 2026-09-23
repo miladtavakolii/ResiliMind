@@ -25,7 +25,7 @@ def init_db() -> None:
     logger.info(f"[Database] Initializing database at {DB_PATH}")
     
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             
             # Create users table for authentication
@@ -53,6 +53,20 @@ def init_db() -> None:
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                 )
             ''')
+
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_resilience_logs_user_created
+                ON resilience_logs(user_id, created_at DESC)
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_resilience_logs_user_node_created
+                ON resilience_logs(user_id, node_id, created_at DESC)
+                """
+            )
             
             conn.commit()
             logger.debug("[Database] Tables 'users' and 'resilience_logs' verified/created.")
@@ -60,6 +74,10 @@ def init_db() -> None:
         logger.error(f"[Database] Failed to initialize tables: {e}")
         raise
 
+def get_connection() -> sqlite3.Connection:
+    conn = get_connection()
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 def register_user(username: str, password: str) -> bool:
     """
@@ -74,7 +92,7 @@ def register_user(username: str, password: str) -> bool:
     """
     try:
         hashed_password = ph.hash(password)
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
@@ -102,7 +120,7 @@ def authenticate_user(username: str, password: str) -> Optional[int]:
     Returns:
         Optional[int]: The user's ID if authentication is successful, None otherwise.
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
             "SELECT id, password_hash FROM users WHERE username = ?",
@@ -144,7 +162,7 @@ def save_resilience_log(
         reasoning (Optional[str]): The underlying reasoning text provided by the LLM.
     """
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_connection() as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             cursor.execute(
                 """
@@ -170,7 +188,7 @@ def get_user_resilience_history(user_id: int, limit: int = 20) -> List[Dict[str,
     Returns:
         List[Dict[str, Any]]: A list of dictionaries containing log entry details.
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
@@ -198,7 +216,7 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
     Returns:
         List[Dict[str, Any]]: List of dictionary items representing the latest log per node.
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cursor: sqlite3.Cursor = conn.cursor()
         cursor.execute(
@@ -234,7 +252,7 @@ def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]
     Returns:
         List[Dict[str, Any]]: A list of dictionaries containing chronological log entries.
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
