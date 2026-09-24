@@ -195,8 +195,18 @@ def run_case(
     try:
         for turn_index, user_message in enumerate(case.input.messages):
             logger.info("Running %s turn %d/%d", case.case_id, turn_index + 1, len(case.input.messages))
-            
-            state = build_initial_state(user_id=user_id, user_message=user_message)
+
+            if turn_index == 0:
+                state = build_initial_state(
+                    user_id=user_id,
+                    user_message=user_message,
+                )
+            else:
+                state = {
+                    "user_message": user_message,
+                    "messages": [HumanMessage(content=user_message)],
+                }
+
             final_state = app.invoke(state, config=config)
 
             turns.append(
