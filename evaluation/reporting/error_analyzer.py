@@ -86,7 +86,11 @@ class ErrorAnalyzer:
 
         if extraction := metrics.get("extraction"):
             node_metrics = extraction.get("node_detection", {})
-            if node_metrics.get("recall", 1.0) < 1.0:
+            gold_count = node_metrics.get("gold_count", 0)
+            prediction_count = node_metrics.get("prediction_count", 0)
+            matched = node_metrics.get("matched", 0)
+
+            if gold_count > matched:
                 failures.append(
                     FailureCase(
                         case_id=result.case_id,
@@ -94,7 +98,8 @@ class ErrorAnalyzer:
                         details=extraction,
                     )
                 )
-            if node_metrics.get("precision", 1.0) < 1.0:
+
+            if prediction_count > matched:
                 failures.append(
                     FailureCase(
                         case_id=result.case_id,

@@ -51,7 +51,7 @@ class EvaluationAggregator:
         polarity_total = sum(m["matched_nodes"] for m in polarity_metrics)
         polarity_accuracy = (polarity_correct / polarity_total if polarity_total else 0.0)
 
-        evidence = [m["evidence"] for m in metrics if "evidence" in m]
+        evidence = [m["evidence"] for m in metrics if m.get("evidence", {}).get("matched_nodes", 0) > 0]
 
         nodes = [m["node_detection"] for m in metrics]
         return {
