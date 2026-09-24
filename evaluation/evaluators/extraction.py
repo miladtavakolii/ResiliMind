@@ -42,10 +42,16 @@ class ExtractionEvaluator(BaseEvaluator):
 
         intersection = gold_nodes & predicted_nodes
 
-        precision = self._safe_div(len(intersection), len(predicted_nodes))
-        recall = self._safe_div(len(intersection), len(gold_nodes))
-        f1 = self._safe_div(2 * precision * recall, precision + recall)
-        jaccard = self._safe_div(len(intersection), len(gold_nodes | predicted_nodes))
+        if not gold_nodes and not predicted_nodes:
+            precision = 1.0
+            recall = 1.0
+            f1 = 1.0
+            jaccard = 1.0
+        else:
+            precision = self._safe_div(len(intersection), len(predicted_nodes))
+            recall = self._safe_div(len(intersection), len(gold_nodes))
+            f1 = self._safe_div(2 * precision * recall, precision + recall)
+            jaccard = self._safe_div(len(intersection), len(gold_nodes | predicted_nodes))
 
         polarity = self._evaluate_polarity(gold_signals, predicted_signals)
         evidence = self._evaluate_evidence(gold_signals, predicted_signals)
@@ -83,16 +89,19 @@ class ExtractionEvaluator(BaseEvaluator):
         pred_map = {
             signal.get("node_id"): signal.get("detected_signal")
             for signal in predicted_signals
+            if signal.get("node_id")
         }
 
         matched_nodes = gold_map.keys() & pred_map.keys()
+
         if not matched_nodes:
-            return {"accuracy": 0.0, "matched_nodes": 0}
+            return {"accuracy": 0.0, "correct": 0, "matched_nodes": 0}
 
         correct = sum(1 for node_id in matched_nodes if gold_map[node_id] == pred_map[node_id])
 
         return {
             "accuracy": correct / len(matched_nodes),
+            "correct": correct,
             "matched_nodes": len(matched_nodes),
         }
     
