@@ -46,6 +46,11 @@ class EvaluationAggregator:
         if not metrics:
             return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "jaccard": 0.0}
 
+        polarity_metrics = [m["polarity"] for m in metrics if m.get("polarity", {}).get("matched_nodes", 0) > 0]
+        polarity_correct = sum(m["correct"] for m in polarity_metrics)
+        polarity_total = sum(m["matched_nodes"] for m in polarity_metrics)
+        polarity_accuracy = (polarity_correct / polarity_total if polarity_total else 0.0)
+
         evidence = [m["evidence"] for m in metrics if "evidence" in m]
 
         nodes = [m["node_detection"] for m in metrics]
@@ -56,9 +61,7 @@ class EvaluationAggregator:
                 "f1": mean(n["f1"] for n in nodes),
                 "jaccard": mean(n["jaccard"] for n in nodes),
             },
-            "polarity_accuracy": mean(
-                m["polarity"]["accuracy"] for m in metrics if m.get("polarity")
-            ),
+            "polarity_accuracy": polarity_accuracy,
             "evidence": {
                 "exact_match": mean(e["exact_match"] for e in evidence),
                 "substring_match": mean(e["substring_match"] for e in evidence),
