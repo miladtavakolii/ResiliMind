@@ -76,6 +76,12 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
     
     # If no nodes were extracted or active, route to Questioner for clarification
     if not assessments:
+        previous_route = state.get("route")
+
+        if previous_route == "advisor":
+            logger.info("[Workflow] No new assessments. Preserving previous advisor route...")
+            return "advisor"
+
         logger.info("[Workflow] No assessments generated. Routing to Questioner for context...")
         return "questioner"
 
