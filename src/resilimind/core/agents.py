@@ -74,6 +74,7 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
     """
     valid_node_ids = set(resilience_graph.nodes)
     seen_nodes: set[str] = set()
+    normalized_message = normalize_persian_text(user_message)
 
     for signal in result.active_signals:
         if signal.node_id not in valid_node_ids:
@@ -93,9 +94,10 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
                 f"Extractor returned empty evidence for {signal.node_id}"
             )
 
-        if evidence not in user_message:
+        normalized_evidence = normalize_persian_text(evidence)
+        if normalized_evidence not in normalized_message:
             raise ValueError(
-                f"Extractor evidence is not an exact substring for "
+                f"Extractor evidence is not a matching substring for "
                 f"{signal.node_id}: {evidence!r}"
             )
 
