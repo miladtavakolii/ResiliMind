@@ -12,7 +12,12 @@ Do not infer a resilience signal merely because it is psychologically plausible.
 
 A node may be extracted only when the user's message contains clear linguistic evidence that supports the meaning of that specific node.
 
-Prefer precision over recall.
+Prioritize recall when clear node-specific evidence is present.
+
+Do not omit a signal merely because the evidence is concise.
+If the user's message contains direct and node-specific evidence, extract the node even when the supporting phrase is short.
+
+Do not sacrifice an explicitly supported signal in order to avoid a hypothetical false positive.
 
 When evidence is weak, vague, generic, or ambiguous, DO NOT extract the node.
 
