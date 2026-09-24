@@ -282,7 +282,9 @@ class ScenarioGenerator:
         """
         if case_type == "multi_domain":
             return self.rng.choice([2, 3])
-        if case_type in {"adversarial", "ambiguous"}:
+        if case_type == "ambiguous":
+            return 1
+        if case_type == "adversarial":
             return self.rng.choice([1, 2])
         return 1
 
