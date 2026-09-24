@@ -73,16 +73,34 @@ class AssessmentEvaluator(BaseEvaluator):
                 )
 
         status_correct = 0
-        status_total = len(gold_nodes)
+        status_total = len(matched_nodes)
         prediction_items = {
             item.get("node_id"): item
             for item in prediction.get("assessment", {}).get("assessments", [])
         }
 
-        for node_id in gold_nodes:
+        for node_id in matched_nodes:
             gold_status = gold_assessments[node_id].status
             predicted_item = prediction_items.get(node_id)
-            if predicted_item and predicted_item.get("status") == gold_status:
+
+            if predicted_item is None:
+                continue
+
+            predicted_rubric = predicted_item.get("rubric", {})
+            predicted_score = sum(
+                predicted_rubric.get(dimension, 0)
+                for dimension in self.DIMENSIONS
+            )
+
+            predicted_status = (
+                "GREEN"
+                if predicted_score >= 70
+                else "YELLOW"
+                if predicted_score >= 40
+                else "RED"
+            )
+
+            if predicted_status == gold_status:
                 status_correct += 1
 
         missing_dimensions = {
