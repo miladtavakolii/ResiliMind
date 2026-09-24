@@ -138,8 +138,12 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
                 f"{last_error}\n"
                 "Regenerate the extraction from scratch.\n"
                 "Each node_id may appear at most once.\n"
-                "Do not duplicate a signal for the same node.\n"
-                "Every signal must contain one exact evidence span from the user message.\n"
+                "A node represents one semantic concept, not multiple phrases.\n"
+                "If multiple phrases support the same node, keep exactly one signal "
+                "with the strongest and most specific evidence span.\n"
+                "Do not create multiple signals for the same node.\n"
+                "Before returning the output, check that all node_ids are unique.\n"
+                "Every signal must contain one evidence span from the user message.\n"
             )
 
         extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)

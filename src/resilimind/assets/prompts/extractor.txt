@@ -129,11 +129,29 @@ The second span includes an unrelated physical/emotional statement.
 
 ## One signal, one evidence
 
-Each active node must have exactly one evidence span.
+Each node may appear AT MOST ONCE in the output.
 
-Do not use one evidence span to justify multiple nodes.
+A node represents one semantic concept, not one phrase.
 
-When several nodes are genuinely expressed, create separate signals with separate evidence spans.
+If multiple phrases in the user's message support the same node:
+- return exactly ONE signal for that node;
+- choose the single strongest and most specific evidence span;
+- do not create multiple signals for the same node;
+- do not split one semantic concept into multiple entries.
+
+For example:
+
+User:
+"از پس هیچ کاری برنمیام و دیگه اعتماد به نفسم هم خیلی کم شده."
+
+Correct:
+IND_PER_01 → "از پس هیچ کاری برنمیام"
+
+Incorrect:
+IND_PER_01 → "از پس هیچ کاری برنمیام"
+IND_PER_01 → "اعتماد به نفسم هم خیلی کم شده"
+
+Before returning the final output, verify that every node_id appears exactly zero or one time.
 
 ## Polarity
 
@@ -195,3 +213,5 @@ Before returning the structured output:
 7. Polarity is determined from the local context.
 8. No duplicate node signals are produced.
 9. Return an empty list when evidence is insufficient.
+10. Every node_id appears at most once in the final output.
+11. If multiple evidence spans support the same node, keep only the strongest one.
