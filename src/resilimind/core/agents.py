@@ -240,14 +240,7 @@ def calculate_composite_confidence(
     llm_score = raw_confidence * 0.30
 
     # 2. Evidence Density Score (30%)
-    # A solid evidence phrase typically has 3+ words.
-    words = evidence_text.strip().split()
-    if len(words) >= 4:
-        evidence_score = 1.0
-    elif len(words) > 0:
-        evidence_score = len(words) / 4.0
-    else:
-        evidence_score = 0.0
+    evidence_score = 1.0 if evidence_text.strip() else 0.0
     evidence_weight = evidence_score * 0.30
 
     # 3. Logical Consistency Score (40%)
