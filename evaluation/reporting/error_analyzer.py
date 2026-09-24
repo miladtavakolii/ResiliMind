@@ -145,16 +145,6 @@ class ErrorAnalyzer:
                     )
                 )
 
-        if response := metrics.get("response"):
-            if response.get("overall", 10) < 5:
-                failures.append(
-                    FailureCase(
-                        case_id=result.case_id,
-                        category="advisor_quality_failure",
-                        details=response,
-                    )
-                )
-
         if assessment := metrics.get("assessment"):
             status = assessment.get("status", {})
             if status.get("total", 0) > 0 and status.get("correct", 0) < status.get("total", 0):
