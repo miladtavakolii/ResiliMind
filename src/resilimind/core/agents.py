@@ -21,6 +21,58 @@ logger = logging.getLogger(__name__)
 llm_engine: LLMEngine = LLMEngine()
 resilience_graph: nx.DiGraph = load_resilience_graph()
 
+def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput:
+    """Collapse duplicate signals for the same node when their polarity agrees.
+
+    Deduplicates multiple extraction detections referencing the identical graph node.
+    If polarities conflict, raises an error. If evidence spans subsume one another,
+    retains the longer span; otherwise, retains the earlier detection while logging
+    the deduplication event.
+
+    Args:
+        result: Raw ExtractionOutput instance potentially containing duplicate node detections.
+
+    Returns:
+        ExtractionOutput: A updated copy of the extraction output containing only
+            unique canonical signals per node.
+
+    Raises:
+        ValueError: If duplicate signals for the same node contain contradictory
+            polarity classifications (e.g., 'positive' vs 'negative').
+    """
+    unique_signals: dict[str, Any] = {}
+
+    for signal in result.active_signals:
+        existing = unique_signals.get(signal.node_id)
+        if existing is None:
+            unique_signals[signal.node_id] = signal
+            continue
+
+        if existing.detected_signal != signal.detected_signal:
+            raise ValueError(
+                f"Extractor returned conflicting duplicate signals for {signal.node_id}: "
+                f"{existing.detected_signal!r} vs {signal.detected_signal!r}"
+            )
+
+        existing_evidence = normalize_persian_text(existing.evidence)
+        new_evidence = normalize_persian_text(signal.evidence)
+
+        if new_evidence and new_evidence in existing_evidence:
+            continue
+        if existing_evidence and existing_evidence in new_evidence:
+            unique_signals[signal.node_id] = signal
+            continue
+
+        # Keep the first evidence when both spans independently support the same node.
+        logger.warning(
+            "[Extractor] Collapsing duplicate node %s with same polarity.",
+            signal.node_id,
+        )
+
+    return result.model_copy(
+        update={"active_signals": list(unique_signals.values())}
+    )
+
 def build_extractor_graph_context() -> str:
     """Build compact semantic definitions for all resilience graph nodes.
 
@@ -163,8 +215,11 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
             continue
 
         try:
-            result: ExtractionOutput = validate_extraction_result(
-                result=raw_result["parsed"],
+            result: ExtractionOutput = canonicalize_extraction_result(
+                raw_result["parsed"]
+            )
+            result = validate_extraction_result(
+                result=result,
                 user_message=user_msg,
             )
             break
