@@ -307,28 +307,57 @@ class ScenarioGenerator:
                 "coping": "weak",
             }
 
-        if difficulty == "easy":
-            return {
-                "severity": self.rng.choice(["low", "moderate"]),
-                "frequency": self.rng.choice(["rare", "episodic"]),
-                "functional": self.rng.choice(["none", "mild"]),
-                "coping": self.rng.choice(["strong", "moderate"]),
-            }
-
-        if difficulty == "moderate":
-            return {
-                "severity": self.rng.choice(["moderate", "high"]),
-                "frequency": self.rng.choice(["episodic", "chronic"]),
-                "functional": self.rng.choice(["mild", "moderate"]),
-                "coping": self.rng.choice(["moderate", "weak"]),
-            }
-
-        return {
-            "severity": self.rng.choice(["moderate", "high"]),
-            "frequency": self.rng.choice(["episodic", "chronic"]),
-            "functional": self.rng.choice(["moderate", "severe"]),
-            "coping": self.rng.choice(["weak", "moderate"]),
+        severity_options = {
+            "easy": ["low", "moderate"],
+            "moderate": ["moderate", "high"],
+            "hard": ["moderate", "high"],
+            "adversarial": ["moderate", "high"],
         }
+        frequency_options = {
+            "easy": ["rare", "episodic"],
+            "moderate": ["episodic", "chronic"],
+            "hard": ["episodic", "chronic"],
+            "adversarial": ["episodic", "chronic"],
+        }
+        functional_options = {
+            "easy": ["none", "mild"],
+            "moderate": ["mild", "moderate"],
+            "hard": ["moderate", "severe"],
+            "adversarial": ["moderate", "severe"],
+        }
+        coping_options = {
+            "easy": ["strong", "moderate"],
+            "moderate": ["moderate", "weak"],
+            "hard": ["weak", "moderate"],
+            "adversarial": ["weak", "moderate"],
+        }
+
+        severity_map = {"low": 22, "moderate": 16, "high": 8}
+        frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
+        functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
+        coping_map = {"strong": 24, "moderate": 16, "weak": 8}
+
+        for _ in range(100):
+            profile = {
+                "severity": self.rng.choice(severity_options[difficulty]),
+                "frequency": self.rng.choice(frequency_options[difficulty]),
+                "functional": self.rng.choice(functional_options[difficulty]),
+                "coping": self.rng.choice(coping_options[difficulty]),
+            }
+
+            total = (
+                severity_map[profile["severity"]]
+                + frequency_map[profile["frequency"]]
+                + functional_map[profile["functional"]]
+                + coping_map[profile["coping"]]
+            )
+
+            if min(abs(total - 40), abs(total - 70)) >= 5:
+                return profile
+
+        raise RuntimeError(
+            f"Could not sample a stable assessment profile for difficulty={difficulty}"
+        )
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
         """Generate ground-truth safety annotations.
