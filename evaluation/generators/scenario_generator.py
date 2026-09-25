@@ -397,6 +397,9 @@ class ScenarioGenerator:
                 self.rng.choice(second_candidates),
             ]
 
+        elif case_type == "ambiguous":
+            return []
+
         else:
             number_of_signals = 2 if case_type == "mixed_signal" else 1
             number_of_signals = min(number_of_signals, len(domain_candidates))

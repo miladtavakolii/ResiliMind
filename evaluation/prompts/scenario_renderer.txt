@@ -77,6 +77,17 @@ Natural background context is allowed only when it does not itself express anoth
 
 When a background detail could reasonably be interpreted as evidence for another node, omit it.
 
+## Ambiguous cases with no target signals
+
+When target_signals is empty and case_type is "ambiguous":
+
+- The conversation must remain genuinely ambiguous or information-insufficient.
+- Do not clearly express any resilience graph concept.
+- Do not provide enough node-specific evidence for extraction.
+- Avoid explicit statements of self-efficacy, financial difficulty, anxiety, physical stress, family support, social support, spirituality, political efficacy, career insecurity, or other specific graph nodes.
+- The intended behavior is for the system to recognize insufficient context and ask a clarification question.
+- Generic statements such as "نمی‌دونم چیکار کنم", "شرایطم خیلی پیچیده شده", or similarly underspecified descriptions are acceptable when they do not strongly identify a specific node.
+
 ## 4. Polarity
 
 The requested polarity must be clearly expressed.
