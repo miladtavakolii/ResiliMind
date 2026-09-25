@@ -32,6 +32,19 @@ Do not mark a node as unintended because of:
 
 Only strong semantic evidence counts.
 
+## Ambiguous-case validation
+
+When case_type is "ambiguous":
+
+- target_signals should be empty.
+- The conversation is intentionally information-insufficient.
+- Reject the case if the text provides clear or reasonably extractable evidence for ANY resilience graph node.
+- Do not require an exact keyword match; semantic equivalents also count.
+- Generic emotional language is acceptable only when it remains insufficient to identify a specific graph node.
+- When uncertain whether a statement is specific enough to identify a node, classify it as unintended and invalidate the case.
+
+For ambiguous cases, false semantic specificity is more important than natural richness.
+
 ## Important distinction
 
 Natural context is not automatically a resilience signal.

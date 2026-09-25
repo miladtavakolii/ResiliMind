@@ -312,7 +312,7 @@ class ScenarioRenderer:
             )
 
         audit_input = {
-            "expected_safety_category": case.gold.safety.risk_category,
+            "case_type": case.scenario.case_type,
             "target_signals": target_nodes,
             "candidate_unintended_nodes": candidates,
             "messages": messages,
@@ -487,7 +487,7 @@ class ScenarioRenderer:
                     rendered,
                 )
                 messages = self._clean_messages(rendered.messages)
-                
+
                 self._validate_ambiguous_output(
                     case=case,
                     messages=messages,
