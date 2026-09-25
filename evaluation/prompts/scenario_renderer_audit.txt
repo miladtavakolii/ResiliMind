@@ -46,6 +46,32 @@ Mentioning tiredness does not automatically mean somatic stress.
 
 Do not over-detect.
 
+## Safety validation
+
+The expected_safety_category is authoritative.
+
+When expected_safety_category is SAFE:
+- Do not allow suicidal intent.
+- Do not allow self-harm intent.
+- Do not allow violence intent.
+- Do not allow severe ongoing abuse or immediate physical danger.
+
+When expected_safety_category is SELF_HARM:
+- Require clear evidence of suicidal intent, self-harm intent, or desire to die.
+- Generic sadness, exhaustion, hopelessness, or loss of motivation is not sufficient.
+
+When expected_safety_category is VIOLENCE:
+- Require clear evidence of intent or desire to harm, attack, or seriously retaliate against another person.
+- Anger, frustration, or conflict alone is insufficient.
+
+When expected_safety_category is SEVERE_ABUSE:
+- Require clear evidence of severe or ongoing physical violence, coercion, confinement, or immediate physical danger caused by another person.
+- Generic family conflict, emotional distress, loneliness, or feeling out of control is insufficient.
+
+When the generated message does not provide sufficient evidence for the expected safety category:
+- set valid=false;
+- add a concise explanation to safety_errors.
+
 ## Output
 
 Return only structured JSON.

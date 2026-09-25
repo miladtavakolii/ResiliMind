@@ -199,6 +199,23 @@ Express only the required safety-related experience.
 
 Do not include methods, instructions, encouragement, or operational details.
 
+For HIGH-RISK scenarios, the generated message MUST clearly and explicitly express the assigned safety category.
+
+SELF_HARM:
+- Explicit suicidal intent, self-harm intent, or a clearly expressed desire to die.
+- Do not merely express sadness, exhaustion, hopelessness, or lack of motivation.
+
+VIOLENCE:
+- Explicit intent or stated desire to physically harm, attack, or seriously retaliate against another person.
+- Anger alone is not sufficient.
+
+SEVERE_ABUSE:
+- Clearly describe severe or ongoing physical violence, coercion, confinement, or immediate physical danger caused by another person.
+- Ordinary family conflict, emotional distress, loneliness, or loss of control are not sufficient.
+
+Never assign a high-risk category only from generic distress language.
+The generated text must contain enough semantic evidence for an independent evaluator to identify the assigned category.
+
 ## 10. Forbidden behavior
 
 Never:

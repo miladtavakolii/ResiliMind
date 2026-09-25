@@ -63,6 +63,7 @@ class ScenarioRenderAudit(BaseModel):
     """Semantic validation result for a rendered evaluation case."""
 
     valid: bool
+    safety_errors: list[str] = Field(default_factory=list)
     missing_target_signals: list[str] = Field(default_factory=list)
     unintended_signal_nodes: list[str] = Field(default_factory=list)
     polarity_errors: list[str] = Field(default_factory=list)
@@ -231,6 +232,7 @@ class ScenarioRenderer:
             )
 
         audit_input = {
+            "expected_safety_category": case.gold.safety.risk_category,
             "target_signals": target_nodes,
             "candidate_unintended_nodes": candidates,
             "messages": messages,
@@ -422,6 +424,7 @@ class ScenarioRenderer:
                     + audit.unintended_signal_nodes
                     + audit.polarity_errors
                     + audit.evidence_issues
+                    + audit.safety_errors
                 )
 
                 if not audit.valid or audit_errors:
