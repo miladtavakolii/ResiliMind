@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import time
 from typing import Any
+import unicodedata
 
 from dotenv import load_dotenv
 from google import genai
@@ -70,6 +71,40 @@ class ScenarioRenderAudit(BaseModel):
     evidence_issues: list[str] = Field(default_factory=list)
     explanation: str = ""
 
+def normalize_match_text(text: str) -> str:
+    """Normalize text for deterministic lexical matching and cue auditing.
+
+    Applies Unicode NFKC normalization, unifies Arabic/Persian character variants
+    (Yeh, Kaf, Teh Marbuta, Heh Goal), strips diacritical marks (Tashkeel/Harakat),
+    removes non-printing format characters (e.g., ZWNJ/ZWJ), and collapses whitespace
+    into a single lowercase string.
+
+    Args:
+        text: Raw input string to normalize.
+
+    Returns:
+        str: Canonical, lowercased, and whitespace-collapsed text suitable
+            for deterministic substring and keyword matching.
+    """
+    text = unicodedata.normalize("NFKC", text or "")
+    text = text.translate(
+        str.maketrans(
+            {
+                "ي": "ی",
+                "ى": "ی",
+                "ئ": "ی",
+                "ك": "ک",
+                "ۀ": "ه",
+                "ة": "ه",
+            }
+        )
+    )
+    text = re.sub(r"[\u064B-\u065F\u0670]", "", text)
+    text = "".join(
+        char for char in text if unicodedata.category(char) != "Cf"
+    )
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text
 
 class ScenarioRenderer:
     """Render latent evaluation scenarios into natural Persian conversations.
@@ -171,6 +206,51 @@ class ScenarioRenderer:
                 f"Audit prompt not found: {self.audit_prompt_path}"
             )
         return self.audit_prompt_path.read_text(encoding="utf-8")
+
+    def _validate_ambiguous_output(
+        self,
+        *,
+        case: EvaluationCase,
+        messages: list[str],
+    ) -> None:
+        """Reject ambiguous scenario renders containing explicit graph cue phrases.
+
+        For cases categorized under the 'ambiguous' case type, scans the rendered
+        messages against semantic polarity keywords across all knowledge graph nodes.
+        If explicit cues appear, rejects the output to prevent unambiguous signal leakage.
+
+        Args:
+            case: Target EvaluationCase instance containing scenario metadata.
+            messages: List of rendered dialogue messages to scan.
+
+        Raises:
+            ValueError: If an ambiguous scenario contains explicit node-specific
+                semantic cue keywords.
+        """
+        if case.scenario.case_type != "ambiguous":
+            return
+
+        normalized_message = normalize_match_text(" ".join(messages))
+        hits: list[str] = []
+
+        for node_id, node in self.nodes.items():
+            cues = node.get("cues", {})
+
+            for polarity in ("positive_keywords", "negative_keywords"):
+                for cue in cues.get(polarity, []):
+                    normalized_cue = normalize_match_text(cue)
+
+                    if len(normalized_cue) < 4:
+                        continue
+
+                    if normalized_cue in normalized_message:
+                        hits.append(f"{node_id}:{cue}")
+
+        if hits:
+            raise ValueError(
+                f"{case.case_id}: ambiguous render contains "
+                f"node-specific cue(s): {hits[:10]}"
+            )
 
     def _audit_rendered_output(
         self,
@@ -407,6 +487,11 @@ class ScenarioRenderer:
                     rendered,
                 )
                 messages = self._clean_messages(rendered.messages)
+                
+                self._validate_ambiguous_output(
+                    case=case,
+                    messages=messages,
+                )
 
                 self._validate_rendered_output(
                     case=case,
