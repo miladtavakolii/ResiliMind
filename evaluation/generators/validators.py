@@ -109,6 +109,37 @@ def validate_case_structure(case: EvaluationCase, valid_node_ids: set[str]) -> l
     if route == "advisor" and case.gold.routing.confidence_class != "high":
         errors.append(f"{case.case_id}: advisor route requires high confidence class")
 
+    if case.scenario.case_type == "ambiguous":
+        if case.gold.extraction.active_signals:
+            errors.append(
+                f"{case.case_id}: ambiguous case must not contain gold signals"
+            )
+
+        if case.gold.assessment.assessments:
+            errors.append(
+                f"{case.case_id}: ambiguous case must not contain gold assessments"
+            )
+
+        if case.gold.routing.expected_route != "questioner":
+            errors.append(
+                f"{case.case_id}: ambiguous case must route to questioner"
+            )
+
+        if case.scenario.turn_count != 1:
+            errors.append(
+                f"{case.case_id}: ambiguous case must contain exactly one turn"
+            )
+    if safety.is_high_risk:
+        if case.gold.extraction.active_signals:
+            errors.append(
+                f"{case.case_id}: high-risk case must not contain resilience signals"
+            )
+
+        if case.gold.assessment.assessments:
+            errors.append(
+                f"{case.case_id}: high-risk case must not contain assessments"
+            )
+
     return errors
 
 
