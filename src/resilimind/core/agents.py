@@ -5,6 +5,7 @@ import networkx as nx
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 import re
+import unicodedata
 
 from .state import AgentState
 from .database import get_user_node_timeline
@@ -106,6 +107,10 @@ def build_extractor_graph_context() -> str:
         + "\n\n".join(blocks)
     )
 
+def compact_persian_text(text: str) -> str:
+    """Create a whitespace-insensitive form for Persian evidence matching."""
+    return re.sub(r"\s+", "", normalize_persian_text(text))
+
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
 
@@ -127,6 +132,7 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
     valid_node_ids = set(resilience_graph.nodes)
     seen_nodes: set[str] = set()
     normalized_message = normalize_persian_text(user_message)
+    compact_message = compact_persian_text(user_message)
 
     for signal in result.active_signals:
         if signal.node_id not in valid_node_ids:
@@ -147,7 +153,11 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
             )
 
         normalized_evidence = normalize_persian_text(evidence)
-        if normalized_evidence not in normalized_message:
+
+        if (
+            normalized_evidence not in normalized_message
+            and compact_persian_text(evidence) not in compact_message
+        ):
             raise ValueError(
                 f"Extractor evidence is not a matching substring for "
                 f"{signal.node_id}: {evidence!r}"
@@ -616,25 +626,34 @@ def normalize_persian_text(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Unified Arabic to Persian characters
+    text = unicodedata.normalize("NFKC", text)
+
     translation_table = str.maketrans({
-        'ي': 'ی', 'ى': 'ی', 'ئ': 'ی',
-        'ك': 'ک',
-        'آ': 'ا', 'أ': 'ا', 'إ': 'ا',
-        'ۀ': 'ه', 'ة': 'ه',
-        '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-        '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
+        "ي": "ی",
+        "ى": "ی",
+        "ئ": "ی",
+        "ك": "ک",
+        "آ": "ا",
+        "أ": "ا",
+        "إ": "ا",
+        "ۀ": "ه",
+        "ة": "ه",
+        "۰": "0",
+        "۱": "1",
+        "۲": "2",
+        "۳": "3",
+        "۴": "4",
+        "۵": "5",
+        "۶": "6",
+        "۷": "7",
+        "۸": "8",
+        "۹": "9",
     })
     text = text.translate(translation_table)
-
-    # 2. Remove Persian/Arabic diacritics (اعراب)
-    text = re.sub(r'[\u064B-\u065F\u0670]', '', text)
-
-    # 3. Replace ZWNJ (\u200c) and punctuation with space
-    text = re.sub(r'[\u200c\u200d\r\n\t\f\v!?,.:;؛؟"\'()\-[\]{}<>/\\]', ' ', text)
-
-    # 4. Collapse multiple spaces into a single space
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"[\u064B-\u065F\u0670]", "", text)
+    text = "".join(char for char in text if unicodedata.category(char) != "Cf")
+    text = re.sub(r'[!?,.:;؛؟"\'()\-\[\]{}<>/\\]', " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
 
     return text.lower()
 
