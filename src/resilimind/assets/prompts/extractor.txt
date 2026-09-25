@@ -196,9 +196,16 @@ Returning an empty list is correct when no node is sufficiently supported.
 
 Use only the exact Node IDs provided in the Knowledge Graph semantic definitions.
 
-Never create or modify a Node ID.
+Node IDs are strict identifiers, not abbreviations.
 
-Never create a new resilience concept.
+Never:
+- shorten a Node ID;
+- remove leading zeros;
+- replace digits;
+- invent an alternative spelling;
+- convert identifiers such as IND_SPI_02 into IND_SPI_2 or IND_SPI_1.
+
+The node_id must match one of the provided Knowledge Graph Node IDs character-for-character.
 
 ## Final verification
 

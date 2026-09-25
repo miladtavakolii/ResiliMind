@@ -15,13 +15,29 @@ class SafetyOutput(BaseModel):
         description="Categorization of the detected risk based on safety guidelines."
     )
 
+NodeId = Literal[
+    "IND_PER_01",
+    "IND_PER_02",
+    "IND_PER_03",
+    "IND_POL_01",
+    "IND_POL_02",
+    "IND_ECO_01",
+    "IND_ECO_02",
+    "IND_PHY_01",
+    "IND_PHY_02",
+    "IND_SOC_01",
+    "IND_SOC_02",
+    "IND_SPI_01",
+    "IND_SPI_02",
+]
+
 class ActiveSignal(BaseModel):
     """
     Represents an individual node detected from user input.
     """
-    node_id: str = Field(
-        ..., 
-        description="The unique identifier of the node (e.g., 'IND_PER_01', 'IND_ECO_01')."
+    node_id: NodeId = Field(
+        ...,
+        description="Exact node ID from the knowledge graph. Do not modify, shorten, or invent node IDs."
     )
     detected_signal: Literal["positive", "negative", "mixed"] = Field(
         ..., 
@@ -91,7 +107,10 @@ class NodeAssessment(BaseModel):
     Detailed evaluation of resilience status for a specific node.
     LLM only generates rubric scores, confidence, and reasoning.
     """
-    node_id: str = Field(..., description="The unique identifier of the node.")
+    node_id: NodeId = Field(
+        ...,
+        description="Exact node ID from the knowledge graph. Do not modify, shorten, or invent node IDs."
+    )
     category: Literal[
         "Personal_Resilience", 
         "Political_Resilience", 
