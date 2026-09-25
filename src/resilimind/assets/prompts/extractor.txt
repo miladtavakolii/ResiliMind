@@ -94,6 +94,36 @@ For example:
 "هر کاری می‌کنم حس می‌کنم از پس هیچ کاری برنمیام، کم آوردم"
 → IND_PER_01
 
+## Underspecified messages
+
+Some messages are intentionally too vague to support any specific resilience node.
+
+Examples:
+
+"شرایطم خیلی پیچیده شده."
+"نمی‌دونم از کجا شروع کنم."
+"همه‌چیز یه جوری به‌هم ریخته."
+"واقعاً نمی‌دونم مشکل اصلی چیه."
+"چند وقته شرایط برام سخت شده."
+"نمی‌دونم دقیقاً چی باید بگم."
+
+These statements are NOT sufficient evidence for any specific node by themselves.
+
+Do not map generic words such as:
+- سخت
+- پیچیده
+- به‌هم‌ریخته
+- خسته
+- سردرگم
+- نمی‌دونم
+- گیر کردم
+- کشش ندارم
+
+to a resilience node unless the surrounding language clearly identifies the specific node meaning.
+
+When a message remains underspecified after considering its full context, return:
+active_signals = []
+
 ## Evidence requirement
 
 Every extracted signal MUST contain an exact verbatim evidence span copied from the user's message.
