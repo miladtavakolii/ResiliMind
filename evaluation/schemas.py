@@ -150,10 +150,10 @@ class AssessmentRubric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    severity: int = Field(ge=0, le=25)
-    frequency: int = Field(ge=0, le=25)
-    functional: int = Field(ge=0, le=25)
-    coping: int = Field(ge=0, le=25)
+    severity: Literal[8, 16, 22]
+    frequency: Literal[8, 16, 22]
+    functional: Literal[6, 12, 18, 24]
+    coping: Literal[8, 16, 24]
 
     @property
     def total_score(self) -> int:
