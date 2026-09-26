@@ -216,43 +216,48 @@ def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
         ExtractionOutput: A updated copy of the extraction output containing
             reconciled polarities for all active signals.
     """
-    reconciled = []
+    reconciled_signals = []
 
     for signal in result.active_signals:
-        node = resilience_graph.nodes[signal.node_id]
-        cues = node.get("cues", {})
-        evidence = normalize_persian_text(signal.evidence)
+        node_data = resilience_graph.nodes.get(signal.node_id, {})
+        cues = node_data.get("cues", {})
 
-        has_positive = any(
-            normalize_persian_text(cue) in evidence
-            for cue in cues.get("positive_keywords", [])
+        positive_hits = _find_polarity_cues(
+            signal.evidence,
+            cues.get("positive_keywords", []),
         )
-        has_negative = any(
-            normalize_persian_text(cue) in evidence
-            for cue in cues.get("negative_keywords", [])
+        negative_hits = _find_polarity_cues(
+            signal.evidence,
+            cues.get("negative_keywords", []),
         )
 
         inferred_polarity = signal.detected_signal
-        if has_positive and has_negative:
-            inferred_polarity = "mixed"
-        elif has_positive:
+
+        if positive_hits and not negative_hits:
             inferred_polarity = "positive"
-        elif has_negative:
+        elif negative_hits and not positive_hits:
             inferred_polarity = "negative"
 
         if inferred_polarity != signal.detected_signal:
             logger.warning(
-                "[Extractor] Reconciling polarity for %s: %s -> %s",
+                "[Extractor] Reconciling polarity for %s: %s -> %s "
+                "(positive_cues=%s, negative_cues=%s)",
                 signal.node_id,
                 signal.detected_signal,
                 inferred_polarity,
+                positive_hits,
+                negative_hits,
             )
 
-        reconciled.append(
-            signal.model_copy(update={"detected_signal": inferred_polarity})
+        reconciled_signals.append(
+            signal.model_copy(
+                update={"detected_signal": inferred_polarity}
+            )
         )
 
-    return result.model_copy(update={"active_signals": reconciled})
+    return result.model_copy(
+        update={"active_signals": reconciled_signals}
+    )
 
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
