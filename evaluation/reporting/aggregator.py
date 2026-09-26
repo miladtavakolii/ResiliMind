@@ -54,6 +54,27 @@ class EvaluationAggregator:
         evidence = [m["evidence"] for m in metrics if m.get("evidence", {}).get("matched_nodes", 0) > 0]
 
         nodes = [m["node_detection"] for m in metrics]
+
+        gold_count = sum(n["gold_count"] for n in nodes)
+        prediction_count = sum(n["prediction_count"] for n in nodes)
+        matched = sum(n["matched"] for n in nodes)
+
+        micro_precision = (
+            matched / prediction_count
+            if prediction_count
+            else 0.0
+        )
+        micro_recall = (
+            matched / gold_count
+            if gold_count
+            else 0.0
+        )
+        micro_f1 = (
+            2 * micro_precision * micro_recall / (micro_precision + micro_recall)
+            if micro_precision + micro_recall
+            else 0.0
+        )
+
         return {
             "node_detection": {
                 "precision": mean(n["precision"] for n in nodes),
@@ -67,6 +88,11 @@ class EvaluationAggregator:
                 "substring_match": mean(e["substring_match"] for e in evidence),
                 "token_f1": mean(e["token_f1"] for e in evidence),
             },
+            "micro": {
+                "precision": micro_precision,
+                "recall": micro_recall,
+                "f1": micro_f1,
+            }
         }
 
     def _aggregate_safety(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
