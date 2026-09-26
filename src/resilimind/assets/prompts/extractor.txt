@@ -140,6 +140,27 @@ The evidence must:
 
 Do not extract a signal without direct evidence.
 
+## Source-of-truth rule for evidence
+
+The user message is the ONLY source of evidence text.
+
+Knowledge Graph definitions, cue lists, examples, and previous outputs may help determine the node and polarity, but MUST NEVER be copied into the evidence field unless the exact same character sequence appears in the user message.
+
+Do not normalize evidence before returning it.
+
+Do not replace:
+- spaces with no spaces;
+- no spaces with spaces;
+- Persian half-space with a normal space;
+- one spelling variant with another;
+- punctuation with another punctuation mark.
+
+The evidence field must reproduce the original user substring exactly.
+
+Before returning each signal, mentally verify:
+"Can I search this exact evidence string in the user message and find it unchanged?"
+If not, do not return that evidence.
+
 ## Evidence minimality
 
 Prefer the smallest phrase that fully establishes the signal.
