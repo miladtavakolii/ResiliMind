@@ -49,25 +49,36 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
             unique_signals[signal.node_id] = signal
             continue
 
-        if existing.detected_signal != signal.detected_signal:
-            raise ValueError(
-                f"Extractor returned conflicting duplicate signals for {signal.node_id}: "
-                f"{existing.detected_signal!r} vs {signal.detected_signal!r}"
-            )
+        existing_polarity = existing.detected_signal
+        new_polarity = signal.detected_signal
+
+        if existing_polarity == new_polarity:
+            merged_polarity = existing_polarity
+        else:
+            merged_polarity = "mixed"
 
         existing_evidence = normalize_persian_text(existing.evidence)
         new_evidence = normalize_persian_text(signal.evidence)
 
         if new_evidence and new_evidence in existing_evidence:
-            continue
-        if existing_evidence and existing_evidence in new_evidence:
-            unique_signals[signal.node_id] = signal
-            continue
+            selected_evidence = existing.evidence
+        elif existing_evidence and existing_evidence in new_evidence:
+            selected_evidence = signal.evidence
+        else:
+            selected_evidence = (
+                signal.evidence
+                if len(signal.evidence) > len(existing.evidence)
+                else existing.evidence
+            )
 
-        # Keep the first evidence when both spans independently support the same node.
-        logger.warning(
-            "[Extractor] Collapsing duplicate node %s with same polarity.",
-            signal.node_id,
+        if merged_polarity != existing_polarity:
+            logger.warning(f"[Extractor] Merging duplicate node {signal.node_id} polarities: {existing_polarity} + {new_polarity} -> mixed.")
+
+        unique_signals[signal.node_id] = existing.model_copy(
+            update={
+                "detected_signal": merged_polarity,
+                "evidence": selected_evidence,
+            }
         )
 
     return result.model_copy(
@@ -206,6 +217,8 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
                 "Do not create multiple signals for the same node.\n"
                 "Before returning the output, check that all node_ids are unique.\n"
                 "Every signal must contain one evidence span from the user message.\n"
+                "If duplicate signals for the same node have different polarities, "
+                "merge them into one signal with detected_signal='mixed'.\n"
             )
 
         extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)

@@ -183,6 +183,15 @@ IND_PER_01 → "اعتماد به نفسم هم خیلی کم شده"
 
 Before returning the final output, verify that every node_id appears exactly zero or one time.
 
+If multiple signals are generated for the same node:
+
+- never return the same node more than once;
+- merge duplicate signals into one signal;
+- if the duplicate polarities are the same, keep that polarity;
+- if one polarity is "mixed", the merged polarity must be "mixed";
+- if one signal is "positive" and another is "negative", the merged polarity must be "mixed";
+- keep exactly one evidence span for the canonical signal.
+
 ## Polarity
 
 Determine polarity only for the selected node.
