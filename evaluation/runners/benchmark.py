@@ -110,7 +110,6 @@ def build_initial_state(*, user_id: int, user_message: str) -> dict[str, Any]:
         "safety_flag": False,
         "safety_risk_category": "SAFE",
         "route": "service_unavailable",
-        "safety_risk_category": "SAFE",
         "active_nodes": [],
         "active_signals": [],
         "subgraph_context": "",

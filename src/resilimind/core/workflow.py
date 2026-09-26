@@ -48,7 +48,7 @@ def route_safety(state: AgentState) -> Literal["emergency_response", "service_un
         logger.warning("[Workflow] Safety subsystem unavailable. Routing to service unavailable block...")
         return "service_unavailable"
     if status != "SAFE":
-        logger.error("f[Workflow] Invalid safety status {status}. Failing closed.")
+        logger.error(f"[Workflow] Invalid safety status {status}. Failing closed.")
         return "service_unavailable"
     
     logger.info("[Workflow] Safety check passed (SAFE). Routing to extractor...")
