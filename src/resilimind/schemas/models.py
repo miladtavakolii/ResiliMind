@@ -62,29 +62,21 @@ class EvidenceScores(BaseModel):
     4-dimensional evidence-based resilience rubric (0-25 each).
     Strictly contains only raw dimension scores for LLM generation.
     """
-    severity: int = Field(
-        ..., 
-        ge=0, 
-        le=25, 
-        description="Absence of severity: 0 (Severe distress) to 25 (None/Mild distress)."
+    severity: Literal[8, 16, 22] = Field(
+        ...,
+        description="Allowed severity score: 8 (severe), 16 (moderate), 22 (mild/no distress)."
     )
-    frequency: int = Field(
-        ..., 
-        ge=0, 
-        le=25, 
-        description="Absence of frequency: 0 (Constant/Chronic distress) to 25 (Rare/Isolated)."
+    frequency: Literal[8, 16, 22] = Field(
+        ...,
+        description="Allowed frequency score: 8 (chronic), 16 (episodic), 22 (rare/isolated)."
     )
-    functional: int = Field(
-        ..., 
-        ge=0, 
-        le=25, 
-        description="Functional preservation: 0 (Severe impairment) to 25 (Fully functional/Adapted)."
+    functional: Literal[6, 12, 18, 24] = Field(
+        ...,
+        description="Allowed functional score: 6 (severe impairment), 12 (moderate), 18 (mild), 24 (fully functional)."
     )
-    coping: int = Field(
-        ..., 
-        ge=0, 
-        le=25, 
-        description="Coping capacity: 0 (No Coping/Surrender) to 25 (Strong Coping Mechanisms)."
+    coping: Literal[8, 16, 24] = Field(
+        ...,
+        description="Allowed coping score: 8 (weak), 16 (moderate), 24 (strong/effective coping)."
     )
 
     @property
@@ -98,7 +90,7 @@ class EvidenceScores(BaseModel):
         total = self.total_score
         if total >= 70:
             return "GREEN"
-        elif total >= 40:
+        if total >= 40:
             return "YELLOW"
         return "RED"
 
