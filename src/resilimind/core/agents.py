@@ -122,6 +122,59 @@ def compact_persian_text(text: str) -> str:
     """Create a whitespace-insensitive form for Persian evidence matching."""
     return re.sub(r"\s+", "", normalize_persian_text(text))
 
+def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
+    """Reconcile LLM-detected polarity with explicit knowledge graph cue evidence.
+
+    Cross-references extracted signal evidence against the node's authoritative
+    positive and negative lexical cues in the knowledge graph. When explicit cues
+    unambiguously indicate a polarity, updates the signal's polarity accordingly
+    and logs any discrepancies with the original LLM prediction.
+
+    Args:
+        result: ExtractionOutput containing raw model-detected signals.
+
+    Returns:
+        ExtractionOutput: A updated copy of the extraction output containing
+            reconciled polarities for all active signals.
+    """
+    reconciled = []
+
+    for signal in result.active_signals:
+        node = resilience_graph.nodes[signal.node_id]
+        cues = node.get("cues", {})
+        evidence = normalize_persian_text(signal.evidence)
+
+        has_positive = any(
+            normalize_persian_text(cue) in evidence
+            for cue in cues.get("positive_keywords", [])
+        )
+        has_negative = any(
+            normalize_persian_text(cue) in evidence
+            for cue in cues.get("negative_keywords", [])
+        )
+
+        inferred_polarity = signal.detected_signal
+        if has_positive and has_negative:
+            inferred_polarity = "mixed"
+        elif has_positive:
+            inferred_polarity = "positive"
+        elif has_negative:
+            inferred_polarity = "negative"
+
+        if inferred_polarity != signal.detected_signal:
+            logger.warning(
+                "[Extractor] Reconciling polarity for %s: %s -> %s",
+                signal.node_id,
+                signal.detected_signal,
+                inferred_polarity,
+            )
+
+        reconciled.append(
+            signal.model_copy(update={"detected_signal": inferred_polarity})
+        )
+
+    return result.model_copy(update={"active_signals": reconciled})
+
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
 
@@ -240,9 +293,10 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
             continue
 
         try:
-            result: ExtractionOutput = canonicalize_extraction_result(
+            result = canonicalize_extraction_result(
                 raw_result["parsed"]
             )
+            result = reconcile_signal_polarity(result)
             result = validate_extraction_result(
                 result=result,
                 user_message=user_msg,
