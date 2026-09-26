@@ -37,6 +37,41 @@ You will be provided with:
       - 9-17: Emerging but fragile coping strategies.
       - 18-25: Strong, active, and effective coping mechanisms.
 
+=== DISCRETE RUBRIC ANCHORS ===
+
+The rubric uses predefined discrete score anchors.
+
+You MUST output only the allowed score for each dimension.
+Do NOT invent intermediate values.
+
+severity:
+- 8 = severe or overwhelming distress
+- 16 = moderate or manageable distress
+- 22 = mild or no distress
+
+frequency:
+- 8 = chronic, constant, or daily distress
+- 16 = episodic or occasional distress
+- 22 = rare, isolated, or one-time distress
+
+functional:
+- 6 = severe functional impairment
+- 12 = moderate or partial impairment
+- 18 = mild impairment with mostly preserved functioning
+- 24 = fully functional and adapted
+
+coping:
+- 8 = weak, fragile, or absent coping
+- 16 = moderate or emerging coping
+- 24 = strong, active, and effective coping
+
+For every dimension, select exactly one predefined anchor.
+Never output arbitrary intermediate values such as 10, 13, 17, 19, 20, 21, 23, or 25.
+
+Evaluate the four dimensions independently.
+Do not infer all dimensions directly from the signal polarity.
+Use the user's evidence and surrounding context to determine each dimension.
+
 3. CONFIDENCE SCORE CALCULATION:
    Assign a confidence score between 0.0 and 1.0 based on the clarity and directness of the extracted evidence:
    - 0.85 - 1.00: Direct, explicit, unambiguous evidence substring with clear severity.
