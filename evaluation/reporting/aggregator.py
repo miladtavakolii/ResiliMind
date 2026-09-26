@@ -122,13 +122,33 @@ class EvaluationAggregator:
         ]
 
         if not metrics:
-            return {"mean_mae": 0.0, "mean_rmse": 0.0, "matched_nodes": 0}
+            return {
+                "mean_mae": 0.0,
+                "mean_rmse": 0.0,
+                "matched_nodes": 0,
+                "gold_nodes": 0,
+                "coverage": 0.0,
+            }
 
-        overalls = [m.get("overall", {}) for m in metrics]
+        absolute_error_sum = sum(m.get("absolute_error_sum", 0.0) for m in metrics)
+        squared_error_sum = sum(m.get("squared_error_sum", 0.0) for m in metrics)
+        observation_count = sum(m.get("observation_count", 0) for m in metrics)
+        matched_nodes = sum(m.get("matched_nodes", 0) for m in metrics)
+        gold_nodes = sum(m.get("gold_nodes", 0) for m in metrics)
+
+        mae = absolute_error_sum / observation_count if observation_count else 0.0
+        rmse = (
+            (squared_error_sum / observation_count) ** 0.5
+            if observation_count
+            else 0.0
+        )
+
         return {
-            "mean_mae": mean(o.get("mae", 0.0) for o in overalls),
-            "mean_rmse": mean(o.get("rmse", 0.0) for o in overalls),
-            "matched_nodes": sum(m.get("matched_nodes", 0) for m in metrics),
+            "mean_mae": mae,
+            "mean_rmse": rmse,
+            "matched_nodes": matched_nodes,
+            "gold_nodes": gold_nodes,
+            "coverage": matched_nodes / gold_nodes if gold_nodes else 1.0,
         }
 
     def _aggregate_routing(self, results: list[CaseEvaluationResult]) -> dict[str, float]:

@@ -121,6 +121,9 @@ class AssessmentEvaluator(BaseEvaluator):
             for dimension, values in errors.items()
         }
         all_errors = [value for values in errors.values() for value in values]
+        absolute_error_sum = sum(all_errors)
+        squared_error_sum = sum(error**2 for error in all_errors)
+        observation_count = len(all_errors)
 
         metrics["overall"] = self._calculate_metrics(all_errors)
         metrics["matched_nodes"] = len(matched_nodes)
@@ -133,6 +136,10 @@ class AssessmentEvaluator(BaseEvaluator):
             "total": status_total,
         }
         metrics["missing_dimensions"] = missing_dimensions
+        metrics["gold_nodes"] = len(gold_nodes)
+        metrics["observation_count"] = observation_count
+        metrics["absolute_error_sum"] = absolute_error_sum
+        metrics["squared_error_sum"] = squared_error_sum
 
         return metrics
 
