@@ -157,6 +157,32 @@ Bad:
 
 The second span includes an unrelated physical/emotional statement.
 
+The evidence span MUST be a single contiguous span from the user's message.
+
+Do not skip, omit, reorder, merge, or jump over words inside the evidence.
+
+The evidence must correspond to one continuous sequence of characters in the user message.
+
+For example, if the user says:
+
+"هر وقت به این فکر می‌کنم که چقدر شرایط داره بدتر میشه و چقدر ما بی‌تاثیر هستیم"
+
+You MUST NOT return:
+
+"هر وقت به این فکر می‌کنم که چقدر ما بی‌تاثیر هستیم"
+
+because words were omitted from the middle.
+
+Instead, either return a contiguous span such as:
+
+"ما بی‌تاثیر هستیم"
+
+or return:
+
+"هر وقت به این فکر می‌کنم که چقدر شرایط داره بدتر میشه و چقدر ما بی‌تاثیر هستیم"
+
+Never construct evidence by selecting non-adjacent words from the message.
+
 ## One signal, one evidence
 
 Each node may appear AT MOST ONCE in the output.
@@ -261,3 +287,6 @@ Before returning the structured output:
 9. Return an empty list when evidence is insufficient.
 10. Every node_id appears at most once in the final output.
 11. If multiple evidence spans support the same node, keep only the strongest one.
+12. The evidence is one contiguous span copied directly from the user message.
+13. No words are omitted from the middle of an evidence span.
+14. Never paraphrase or reconstruct evidence from multiple non-contiguous parts of the message.

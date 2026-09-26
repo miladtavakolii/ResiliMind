@@ -216,7 +216,9 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
                 "with the strongest and most specific evidence span.\n"
                 "Do not create multiple signals for the same node.\n"
                 "Before returning the output, check that all node_ids are unique.\n"
-                "Every signal must contain one evidence span from the user message.\n"
+                "Every signal must contain one contiguous evidence span copied directly "
+                "from the user message.\n"
+                "Do not omit, skip, reorder, or combine non-contiguous words.\n"
                 "If duplicate signals for the same node have different polarities, "
                 "merge them into one signal with detected_signal='mixed'.\n"
             )
