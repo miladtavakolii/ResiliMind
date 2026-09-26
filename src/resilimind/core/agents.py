@@ -616,7 +616,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     # Create a quick lookup for active signals to match with assessments
     signal_lookup = {sig['node_id']: sig for sig in active_signals}
     
-    requires_disambiguation_override = result.requires_disambiguation
+    requires_disambiguation = result.requires_disambiguation or routing_confidence < 0.70
     assessments_list: List[Dict[str, Any]] = []
 
     # 4. Compute heuristic routing confidence from multiple signals
