@@ -424,11 +424,11 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
             result = canonicalize_extraction_result(
                 raw_result["parsed"]
             )
-            result = reconcile_signal_polarity(result)
             result = validate_extraction_result(
                 result=result,
                 user_message=user_msg,
             )
+            result = reconcile_signal_polarity(result)
             break
         except ValueError as exc:
             last_error = exc
