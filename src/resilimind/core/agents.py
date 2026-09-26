@@ -313,6 +313,48 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
 
     return result
 
+def build_extractor_candidate_hints(user_message: str) -> str:
+    """Build candidate node hints based on lexical cue matches in the user message.
+
+    Scans the incoming user utterance against known positive and negative cue
+    keywords defined across all resilience graph nodes, assembling matched cues
+    into a structured text block for extractor prompt injection.
+
+    Args:
+        user_message: Raw user message text to scan for keyword cues.
+
+    Returns:
+        str: Formatted string of candidate graph nodes with their matching
+            positive and negative cues, or a fallback message if no matches occur.
+    """
+    blocks = []
+
+    for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
+        cues = node_data.get("cues", {})
+
+        positive_hits = _find_polarity_cues(
+            user_message,
+            cues.get("positive_keywords", []),
+        )
+        negative_hits = _find_polarity_cues(
+            user_message,
+            cues.get("negative_keywords", []),
+        )
+
+        if not positive_hits and not negative_hits:
+            continue
+
+        blocks.append(
+            f"Candidate Node: {node_id}\n"
+            f"Positive cue matches: {positive_hits}\n"
+            f"Negative cue matches: {negative_hits}"
+        )
+
+    if not blocks:
+        return "No explicit graph cue candidates were found."
+
+    return "\n\n".join(blocks)
+
 def extractor_node(state: AgentState) -> Dict[str, Any]:
     """
     Analyzes the user's input message to extract active resilience nodes 
@@ -334,7 +376,9 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
 
     extractor_prompt_base = (
         f"{prompts.EXTRACTOR_SYSTEM_PROMPT}\n\n"
-        f"{build_extractor_graph_context()}"
+        f"{build_extractor_graph_context()}\n\n"
+        f"=== EXPLICIT CANDIDATE HINTS ===\n"
+        f"{build_extractor_candidate_hints(user_msg)}"
     )
 
     last_error: Exception | None = None

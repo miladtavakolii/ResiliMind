@@ -272,6 +272,22 @@ Never:
 
 The node_id must match one of the provided Knowledge Graph Node IDs character-for-character.
 
+## Candidate hints
+
+The system may provide explicit graph cue candidates detected from the user message.
+
+Candidate hints are NOT automatic extraction decisions.
+
+For every candidate:
+1. inspect the full message;
+2. verify that the candidate meaning is actually expressed;
+3. verify the node-specific semantic boundary;
+4. verify polarity from local context;
+5. extract it only when the evidence is sufficient.
+
+Do not stop after finding the first valid candidate.
+Review all candidate hints before producing the final list.
+
 ## Final verification
 
 Before returning the structured output:
