@@ -26,7 +26,7 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
     """Collapse duplicate signals for the same node when their polarity agrees.
 
     Deduplicates multiple extraction detections referencing the identical graph node.
-    If polarities conflict, raises an error. If evidence spans subsume one another,
+    If polarities conflict, they are merged as "mixed". If evidence spans subsume one another,
     retains the longer span; otherwise, retains the earlier detection while logging
     the deduplication event.
 
@@ -84,6 +84,85 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
     return result.model_copy(
         update={"active_signals": list(unique_signals.values())}
     )
+
+def _find_polarity_cues(text: str, cues: list[str]) -> list[str]:
+    """Find whole-word cue matches within normalized text.
+
+    Args:
+        text: Target text segment (e.g., extracted signal evidence).
+        cues: List of lexical cue phrases defined for a resilience node.
+
+    Returns:
+        list[str]: Cues from the input list that appear as isolated words or phrases
+            in the normalized text.
+    """
+    normalized_text = normalize_persian_text(text)
+    hits: list[str] = []
+
+    for cue in cues:
+        normalized_cue = normalize_persian_text(cue)
+        if not normalized_cue:
+            continue
+
+        pattern = rf"(?<!\w){re.escape(normalized_cue)}(?!\w)"
+        if re.search(pattern, normalized_text):
+            hits.append(cue)
+
+    return hits
+
+
+def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
+    """Reconcile LLM polarity against explicit graph-defined cues in evidence.
+
+    Uses word-boundary matching on normalized text against knowledge graph cues.
+    If unambiguous positive or negative lexical cues are detected, overrides the
+    model's predicted polarity and logs the adjustment with matched cue details.
+
+    Args:
+        result: ExtractionOutput instance containing raw model predictions.
+
+    Returns:
+        ExtractionOutput: Updated extraction model with reconciled signal polarities.
+    """
+    reconciled_signals = []
+
+    for signal in result.active_signals:
+        node_data = resilience_graph.nodes.get(signal.node_id, {})
+        cues = node_data.get("cues", {})
+
+        positive_hits = _find_polarity_cues(
+            signal.evidence,
+            cues.get("positive_keywords", []),
+        )
+        negative_hits = _find_polarity_cues(
+            signal.evidence,
+            cues.get("negative_keywords", []),
+        )
+
+        inferred_polarity = signal.detected_signal
+        if positive_hits and negative_hits:
+            inferred_polarity = "mixed"
+        elif positive_hits:
+            inferred_polarity = "positive"
+        elif negative_hits:
+            inferred_polarity = "negative"
+
+        if inferred_polarity != signal.detected_signal:
+            logger.warning(
+                "[Extractor] Reconciling polarity for %s: %s -> %s "
+                "(positive_cues=%s, negative_cues=%s)",
+                signal.node_id,
+                signal.detected_signal,
+                inferred_polarity,
+                positive_hits,
+                negative_hits,
+            )
+
+        reconciled_signals.append(
+            signal.model_copy(update={"detected_signal": inferred_polarity})
+        )
+
+    return result.model_copy(update={"active_signals": reconciled_signals})
 
 def build_extractor_graph_context() -> str:
     """Build compact semantic definitions for all resilience graph nodes.
