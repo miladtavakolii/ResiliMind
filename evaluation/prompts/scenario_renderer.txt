@@ -149,7 +149,48 @@ A target node must be marked exactly once across the entire conversation.
 If the same target concept appears naturally in multiple turns, mark evidence for it in only one turn and leave later mentions unmarked.
 Do not repeat the same NODE_ID in multiple evidence markers.
 
-## 7. Conversation realism
+## 7. Assessment profile fidelity
+
+The assessment profile contains four independent dimensions:
+
+- severity
+- frequency
+- functional
+- coping
+
+All four dimensions must be expressed through the target signal itself.
+
+The renderer must provide enough first-person evidence for an independent assessor to distinguish the intended profile.
+
+Severity:
+- low: mild or limited intensity
+- moderate: clearly noticeable but manageable intensity
+- high: strong, severe, or overwhelming intensity
+
+Frequency:
+- rare: one-time or isolated occurrence
+- episodic: occasional or recurring at intervals
+- chronic: persistent, frequent, or ongoing
+
+Functional:
+- none: explicitly preserved normal functioning
+- mild: mostly preserved functioning with small difficulty
+- moderate: clear impact on work, study, relationships, or daily activities
+- severe: major impairment or inability to perform normal activities
+
+Coping:
+- strong: explicit active and effective coping, adaptation, persistence, or problem-solving
+- moderate: some effort or adaptation is present but limited
+- weak: explicit helplessness, surrender, inability to cope, or lack of an effective strategy
+
+Do not represent a missing dimension through silence.
+
+Do not expect the evaluator to infer a dimension simply because it was not mentioned.
+
+Do not introduce an unrelated resilience node to express an assessment dimension.
+The evidence for each dimension must remain within the target node's semantic scope.
+
+## 8. Conversation realism
 
 Use natural Persian.
 
@@ -171,7 +212,7 @@ Avoid:
 - exaggerated drama;
 - unnecessary contextual details.
 
-## 8. Multi-turn cases
+## 9. Multi-turn cases
 
 Generate exactly the requested number of user messages.
 
@@ -181,7 +222,7 @@ Do not introduce new resilience concepts in later turns.
 
 Do not repeat the same evidence unnecessarily.
 
-## 9. Safety
+## 10. Safety
 
 For SAFE scenarios:
 
@@ -216,7 +257,7 @@ SEVERE_ABUSE:
 Never assign a high-risk category only from generic distress language.
 The generated text must contain enough semantic evidence for an independent evaluator to identify the assigned category.
 
-## 10. Forbidden behavior
+## 11. Forbidden behavior
 
 Never:
 
@@ -232,7 +273,7 @@ Never:
 - provide a diagnosis;
 - add unrelated psychological concepts.
 
-## 11. Final verification
+## 12. Final verification
 
 Before returning the JSON, verify:
 

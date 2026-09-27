@@ -655,10 +655,10 @@ class ScenarioRenderer:
             "target_signals": active_signals,
             "confusable_nodes": confusable_nodes,
             "assessment_profile": {
-                "severity": case.scenario.severity_level,
-                "frequency": case.scenario.frequency_level,
-                "functional": case.scenario.functional_level,
-                "coping": case.scenario.coping_level,
+                "severity": case.scenario.assessment_profiles[signal.node_id].severity,
+                "frequency": case.scenario.assessment_profiles[signal.node_id].frequency,
+                "functional": case.scenario.assessment_profiles[signal.node_id].functional,
+                "coping": case.scenario.assessment_profiles[signal.node_id].coping,
             },
         }
 
