@@ -221,14 +221,19 @@ def validate_scenario_gold_alignment(case: EvaluationCase) -> list[str]:
     scenario = case.scenario
     assessment_profiles = getattr(scenario, "assessment_profiles", {})
 
-    if not assessment_profiles:
-        errors.append(f"{case.case_id}: assessment_profiles is empty")
-        return errors
-
     expected_node_ids = {
         assessment.node_id for assessment in case.gold.assessment.assessments
     }
     profile_node_ids = set(assessment_profiles)
+
+    if not expected_node_ids:
+        if assessment_profiles:
+            errors.append(f"{case.case_id}: unexpected assessment profiles for case without assessments")
+        return errors
+
+    if not assessment_profiles:
+        errors.append(f"{case.case_id}: assessment_profiles is empty")
+        return errors
 
     for node_id in sorted(expected_node_ids - profile_node_ids):
         errors.append(f"{case.case_id}: missing assessment profile for {node_id}")
