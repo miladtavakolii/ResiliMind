@@ -76,6 +76,7 @@ class ScenarioSpec(BaseModel):
     frequency_level: Literal["rare", "episodic", "chronic"]
     functional_level: Literal["none", "mild", "moderate", "severe"]
     coping_level: Literal["strong", "moderate", "weak"]
+    assessment_profiles: dict[str, AssessmentProfile] = Field(default_factory=dict)
 
 
 # Safety
@@ -391,3 +392,11 @@ class ResponseJudgeResult(BaseModel):
     hallucination: float = Field(ge=1.0, le=10.0)
     overall: float = Field(ge=1.0, le=10.0)
     reason: str = Field(min_length=10)
+
+class AssessmentProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    severity: Literal["low", "moderate", "high"]
+    frequency: Literal["rare", "episodic", "chronic"]
+    functional: Literal["none", "mild", "moderate", "severe"]
+    coping: Literal["strong", "moderate", "weak"]

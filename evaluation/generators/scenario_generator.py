@@ -9,6 +9,7 @@ from typing import Any
 
 from evaluation.generators.validators import validate_dataset
 from evaluation.schemas import (
+    AssessmentProfile,
     AssessmentRubric,
     EvaluationCase,
     EvaluationGold,
@@ -202,17 +203,25 @@ class ScenarioGenerator:
 
         domain = self._choose_domain(case_type=case_type)
         turn_count = self._choose_turn_count(case_type=case_type)
-        profile = self._sample_assessment_profile(difficulty=difficulty, case_type=case_type)
+
+        assessment_profiles = {
+            signal.node_id: self._sample_assessment_profile(
+                difficulty=difficulty,
+                case_type=case_type,
+            )
+            for signal in signals
+        }
 
         scenario = ScenarioSpec(
             domain=domain,
             difficulty=difficulty,
             case_type=case_type,
             turn_count=turn_count,
-            severity_level=profile["severity"],
-            frequency_level=profile["frequency"],
-            functional_level=profile["functional"],
-            coping_level=profile["coping"],
+            severity_level="moderate",
+            frequency_level="episodic",
+            functional_level="mild",
+            coping_level="moderate",
+            assessment_profiles=assessment_profiles,
         )
 
         safety = self._generate_safety(case_type=case_type)
@@ -459,6 +468,35 @@ class ScenarioGenerator:
 
         return signals
 
+    def _generate_rubric_from_profile(
+        self,
+        profile: AssessmentProfile,
+    ) -> AssessmentRubric:
+        """Map qualitative latent assessment dimensions to quantitative rubric scores.
+
+        Converts the discrete levels across severity, frequency, functional impact,
+        and coping capacity into calibrated rubric point values.
+
+        Args:
+            profile: AssessmentProfile instance containing qualitative ratings
+                ('low'/'moderate'/'high', 'rare'/'episodic'/'chronic',
+                'none'/'mild'/'moderate'/'severe', and 'strong'/'moderate'/'weak').
+
+        Returns:
+            AssessmentRubric: Initialized rubric model with mapped integer scores.
+        """
+        severity_map = {"low": 22, "moderate": 16, "high": 8}
+        frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
+        functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
+        coping_map = {"strong": 24, "moderate": 16, "weak": 8}
+
+        return AssessmentRubric(
+            severity=severity_map[profile.severity],
+            frequency=frequency_map[profile.frequency],
+            functional=functional_map[profile.functional],
+            coping=coping_map[profile.coping],
+        )
+
     def _generate_assessments(
         self, *, signals: Sequence[GoldSignal], scenario: ScenarioSpec
     ) -> list[GoldAssessment]:
@@ -474,9 +512,14 @@ class ScenarioGenerator:
         """
         assessments = []
         for signal in signals:
-            scores = self._generate_rubric(scenario=scenario)
-            assessments.append(GoldAssessment(
-                node_id=signal.node_id, rubric=scores))
+            profile = scenario.assessment_profiles[signal.node_id]
+            scores = self._generate_rubric_from_profile(profile)
+            assessments.append(
+                GoldAssessment(
+                    node_id=signal.node_id,
+                    rubric=scores,
+                )
+            )
         return assessments
 
     def _generate_rubric(self, *, scenario: ScenarioSpec) -> AssessmentRubric:
