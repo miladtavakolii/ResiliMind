@@ -600,6 +600,12 @@ class ScenarioRenderer:
                     f"{case.case_id}: unknown graph node {signal.node_id}"
                 )
 
+            profile = case.scenario.assessment_profiles.get(signal.node_id)
+            if profile is None:
+                raise ValueError(
+                    f"{case.case_id}: missing assessment profile for {signal.node_id}"
+                )
+
             cues = node.get("cues", {})
 
             if signal.detected_signal == "positive":
@@ -621,6 +627,12 @@ class ScenarioRenderer:
                     "description": node.get("description", ""),
                     "polarity": signal.detected_signal,
                     "semantic_cues": polarity_cues,
+                    "assessment_profile": {
+                        "severity": profile.severity,
+                        "frequency": profile.frequency,
+                        "functional": profile.functional,
+                        "coping": profile.coping,
+                    },
                 }
             )
 
@@ -655,12 +667,6 @@ class ScenarioRenderer:
             "safety_category": case.gold.safety.risk_category,
             "target_signals": active_signals,
             "confusable_nodes": confusable_nodes,
-            "assessment_profile": {
-                "severity": case.scenario.assessment_profiles[signal.node_id].severity,
-                "frequency": case.scenario.assessment_profiles[signal.node_id].frequency,
-                "functional": case.scenario.assessment_profiles[signal.node_id].functional,
-                "coping": case.scenario.assessment_profiles[signal.node_id].coping,
-            },
         }
 
         return json.dumps(
