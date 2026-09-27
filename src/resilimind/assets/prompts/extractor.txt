@@ -270,8 +270,6 @@ Candidate hints help identify possible nodes but MUST NOT be used as evidence.
 Finding one valid candidate does not mean that other nodes are absent.
 Check all relevant candidates before returning the final output.
 
-Review all relevant candidates before producing the final output.
-
 Before producing the final answer, perform a candidate coverage check:
 
 1. Review every candidate node independently.
