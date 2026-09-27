@@ -336,28 +336,13 @@ def extractor_node(state: AgentState) -> Dict[str, Any]:
 
         if last_error is not None:
             extractor_prompt += (
-                "\n\n=== PREVIOUS OUTPUT FAILED VALIDATION ===\n"
-                f"{last_error}\n"
-                "Regenerate the extraction from scratch.\n"
-                "Each node_id may appear at most once.\n"
-                "A node represents one semantic concept, not multiple phrases.\n"
-                "If multiple phrases support the same node, keep exactly one signal "
-                "with the strongest and most specific evidence span.\n"
-                "Do not create multiple signals for the same node.\n"
-                "Before returning the output, check that all node_ids are unique.\n"
-                "Every evidence value MUST be copied character-for-character "
-                "from the USER INPUT below.\n"
-                "Do NOT copy, normalize, paraphrase, rewrite, or reconstruct evidence "
-                "from the knowledge graph, cue lists, node definitions, or previous output.\n"
-                "Preserve spaces, punctuation, ZWNJ/half-space, and word boundaries exactly "
-                "as they appear in the user input.\n"
-                "The evidence must be a literal contiguous substring of the user input.\n"
-                "Before returning the result, locate the exact evidence text in the user input "
-                "and verify that every character and space matches.\n"
-                "If you cannot copy a valid exact substring, choose a shorter valid substring "
-                "from the user input or omit the signal.\n"
-                "If duplicate signals for the same node have different polarities, "
-                "merge them into one signal with detected_signal='mixed'.\n"
+                "\n\n=== VALIDATION RETRY ===\n"
+                "The previous extraction failed validation.\n"
+                "Do not reuse the previous evidence.\n"
+                "For every signal, evidence must be copied exactly from the USER INPUT.\n"
+                "Choose the shortest contiguous span that directly supports the node.\n"
+                "Do not combine multiple phrases into one evidence span.\n"
+                "If you cannot identify a valid exact span, omit the signal.\n"
             )
 
         extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)
