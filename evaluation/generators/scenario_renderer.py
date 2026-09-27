@@ -69,6 +69,7 @@ class ScenarioRenderAudit(BaseModel):
     unintended_signal_nodes: list[str] = Field(default_factory=list)
     polarity_errors: list[str] = Field(default_factory=list)
     evidence_issues: list[str] = Field(default_factory=list)
+    assessment_errors: list[str] = Field(default_factory=list)
     explanation: str = ""
 
 def normalize_match_text(text: str) -> str:

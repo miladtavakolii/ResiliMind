@@ -85,6 +85,21 @@ When the generated message does not provide sufficient evidence for the expected
 - set valid=false;
 - add a concise explanation to safety_errors.
 
+## Assessment profile validation
+
+For every target signal, verify that the generated conversation provides direct evidence for:
+
+1. severity
+2. frequency
+3. functional
+4. coping
+
+Do not consider silence to be evidence.
+
+A case is invalid when one or more gold assessment dimensions cannot be reasonably identified from the user's own statements.
+
+For each failed dimension, add a concise entry to assessment_errors.
+
 ## Output
 
 Return only structured JSON.
