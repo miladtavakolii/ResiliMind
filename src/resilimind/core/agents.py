@@ -144,10 +144,6 @@ def build_extractor_graph_context() -> str:
         + "\n\n".join(blocks)
     )
 
-def compact_persian_text(text: str) -> str:
-    """Create a whitespace-insensitive form for Persian evidence matching."""
-    return re.sub(r"\s+", "", normalize_persian_text(text))
-
 def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
     """Reconcile LLM-detected polarity with explicit knowledge graph cue evidence.
 
@@ -207,6 +203,56 @@ def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
         update={"active_signals": reconciled_signals}
     )
 
+def align_evidence_to_user_message(evidence: str, user_message: str) -> str | None:
+    """Map an LLM evidence candidate to an exact contiguous span in the raw user message.
+
+    Handles surface-level variations such as Unicode NFKC differences, Arabic/Persian
+    character mappings, irregular spacing, and zero-width non-joiners (ZWNJ) by tracking
+    character index offsets between normalized/compacted text and the raw input string.
+
+    Args:
+        evidence: Predicted evidence string from the LLM extractor.
+        user_message: Original raw user message string.
+
+    Returns:
+        str | None: The exact matching substring from `user_message` corresponding to
+            the candidate evidence span, or None if no valid alignment can be found.
+    """
+    if not evidence:
+        return None
+
+    if evidence in user_message:
+        return evidence
+
+    def compact_with_map(text: str) -> tuple[str, list[int]]:
+        compact_chars: list[str] = []
+        source_indices: list[int] = []
+
+        for index, char in enumerate(text):
+            norm_char = unicodedata.normalize("NFKC", char).translate(_CHAR_TRANS)
+            for sub_char in norm_char:
+                if sub_char.isspace() or sub_char == "\u200c":
+                    continue
+                compact_chars.append(sub_char)
+                source_indices.append(index)
+
+        return "".join(compact_chars), source_indices
+
+    candidate = evidence.strip()
+    compact_candidate, _ = compact_with_map(candidate)
+    compact_message, source_indices = compact_with_map(user_message)
+
+    if not compact_candidate or compact_candidate not in compact_message:
+        return None
+
+    start = compact_message.index(compact_candidate)
+    end = start + len(compact_candidate)
+
+    raw_start = source_indices[start]
+    raw_end = source_indices[end - 1] + 1
+
+    return user_message[raw_start:raw_end]
+
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
 
@@ -227,8 +273,7 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
     """
     valid_node_ids = set(resilience_graph.nodes)
     seen_nodes: set[str] = set()
-    normalized_message = normalize_persian_text(user_message)
-    compact_message = compact_persian_text(user_message)
+    corrected_signals = []
 
     for signal in result.active_signals:
         if signal.node_id not in valid_node_ids:
@@ -242,24 +287,22 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
             )
         seen_nodes.add(signal.node_id)
 
-        evidence = signal.evidence.strip()
-        if not evidence:
+        evidence = align_evidence_to_user_message(
+            signal.evidence,
+            user_message,
+        )
+
+        if evidence is None:
             raise ValueError(
-                f"Extractor returned empty evidence for {signal.node_id}"
+                f"Extractor evidence cannot be aligned to user message for "
+                f"{signal.node_id}: {signal.evidence!r}"
             )
 
-        normalized_evidence = normalize_persian_text(evidence)
+        corrected_signals.append(
+            signal.model_copy(update={"evidence": evidence})
+        )
 
-        if (
-            normalized_evidence not in normalized_message
-            and compact_persian_text(evidence) not in compact_message
-        ):
-            raise ValueError(
-                f"Extractor evidence is not a matching substring for "
-                f"{signal.node_id}: {evidence!r}"
-            )
-
-    return result
+    return result.model_copy(update={"active_signals": corrected_signals})
 
 def build_extractor_candidate_hints(user_message: str) -> str:
     """Build candidate node hints based on lexical cue matches in the user message.
