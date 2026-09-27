@@ -225,16 +225,26 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
         return evidence
 
     def compact_with_map(text: str) -> tuple[str, list[int]]:
+        normalized = unicodedata.normalize("NFKC", text)
+        normalized = normalized.translate(
+            str.maketrans({
+                "ي": "ی",
+                "ى": "ی",
+                "ئ": "ی",
+                "ك": "ک",
+                "ة": "ه",
+                "ۀ": "ه",
+            })
+        )
+
         compact_chars: list[str] = []
         source_indices: list[int] = []
 
-        for index, char in enumerate(text):
-            norm_char = unicodedata.normalize("NFKC", char).translate(_CHAR_TRANS)
-            for sub_char in norm_char:
-                if sub_char.isspace() or sub_char == "\u200c":
-                    continue
-                compact_chars.append(sub_char)
-                source_indices.append(index)
+        for index, char in enumerate(normalized):
+            if char.isspace() or char == "\u200c":
+                continue
+            compact_chars.append(char)
+            source_indices.append(index)
 
         return "".join(compact_chars), source_indices
 
