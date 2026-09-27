@@ -294,8 +294,8 @@ def build_extractor_candidate_hints(user_message: str) -> str:
 
         blocks.append(
             f"Candidate Node: {node_id}\n"
-            f"Positive cue matches: {positive_hits}\n"
-            f"Negative cue matches: {negative_hits}"
+            f"Positive cue detected: {bool(positive_hits)}\n"
+            f"Negative cue detected: {bool(negative_hits)}"
         )
 
     if not blocks:
