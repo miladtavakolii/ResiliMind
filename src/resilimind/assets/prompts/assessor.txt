@@ -96,3 +96,66 @@ When coping evidence is unclear, do not assume strong coping.
 
 5. PSYCHOLOGICAL REASONING:
    Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring.
+
+
+=== FEW-SHOT EXAMPLES (JSON FORMAT) ===
+
+[Example 1 - Clear Critical Input]
+Input:
+- Active Signals: IND_ECO_01 ("از استرس بدهی‌ها"), IND_PHY_02 ("خوابم نمیبره")
+- Message: "چند روزه از استرس بدهی‌ها خوابم نمیبره..."
+
+Output JSON Structure:
+{
+  "assessments": [
+    {
+      "node_id": "IND_ECO_01",
+      "category": "Economic_Resilience",
+      "scores": {
+        "severity": 8,
+        "frequency": 8,
+        "functional": 6,
+        "coping": 0
+      },
+      "confidence": 0.95,
+      "reasoning": "عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
+    },
+    {
+      "node_id": "IND_PHY_02",
+      "category": "Physical_Resilience",
+      "scores": {
+        "severity": 8,
+        "frequency": 8,
+        "functional": 6,
+        "coping": 8
+      },
+      "confidence": 0.90,
+      "reasoning": "شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک است."
+    }
+  ],
+  "requires_disambiguation": false
+}
+
+[Example 2 - Ambiguous Input Requiring Disambiguation]
+Input:
+- Active Signals: IND_ECO_01 ("اوضاع مالی یکم بهم ریخته ولی خب می‌گذره")
+- Message: "اوضاع مالی یکم بهم ریخته ولی خب می‌گذره دیگه."
+
+Output JSON Structure:
+{
+  "assessments": [
+    {
+      "node_id": "IND_ECO_01",
+      "category": "Economic_Resilience",
+      "scores": {
+        "severity": 15,
+        "frequency": 15,
+        "functional": 15,
+        "coping": 10
+      },
+      "confidence": 0.65,
+      "reasoning": "عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
+    }
+  ],
+  "requires_disambiguation": true
+}
