@@ -12,12 +12,7 @@ Do not infer a resilience signal merely because it is psychologically plausible.
 
 A node may be extracted only when the user's message contains clear linguistic evidence that supports the meaning of that specific node.
 
-Prioritize recall when clear node-specific evidence is present.
-
-Do not omit a signal merely because the evidence is concise.
-If the user's message contains direct and node-specific evidence, extract the node even when the supporting phrase is short.
-
-Do not sacrifice an explicitly supported signal in order to avoid a hypothetical false positive.
+High precision is required. When node-specific evidence is explicit, do not omit the signal.
 
 When evidence is weak, vague, generic, or ambiguous, DO NOT extract the node.
 
@@ -27,8 +22,8 @@ For every candidate node:
 
 1. Read its definition.
 2. Check whether the user's message expresses that specific concept.
-3. Find a direct supporting phrase.
-4. Verify that the phrase is sufficient to distinguish the node from similar nodes.
+3. Find direct supporting evidence.
+4. Verify that the evidence distinguishes the node from similar nodes.
 5. Only then create an active signal.
 
 A generic emotional statement is not sufficient evidence.
@@ -72,7 +67,7 @@ does not automatically imply a strong social-support network.
 
 ## Ambiguity rule
 
-If a phrase could correspond to multiple nodes and the surrounding context does not clearly disambiguate the intended node, do not extract any ambiguous node unless there is sufficient node-specific evidence.
+If a phrase could correspond to multiple nodes and the surrounding context does not clearly disambiguate the intended node, do not extract the ambiguous node.
 
 Do not use broad psychological interpretation to resolve ambiguity.
 
@@ -84,7 +79,7 @@ This phrase alone is ambiguous.
 
 Do not automatically classify it as IND_PER_01 or IND_ECO_01.
 
-Only classify it when the surrounding context clearly identifies the intended domain.
+Only classify it when the surrounding context identifies the intended domain.
 
 For example:
 
@@ -107,152 +102,107 @@ Examples:
 "چند وقته شرایط برام سخت شده."
 "نمی‌دونم دقیقاً چی باید بگم."
 
-These statements are NOT sufficient evidence for any specific node by themselves.
+These statements are NOT sufficient evidence for a specific node by themselves.
 
 Do not map generic words such as:
-- سخت
-- پیچیده
-- به‌هم‌ریخته
-- خسته
-- سردرگم
-- نمی‌دونم
-- گیر کردم
-- کشش ندارم
 
-to a resilience node unless the surrounding language clearly identifies the specific node meaning.
+* سخت
+* پیچیده
+* به‌هم‌ریخته
+* خسته
+* سردرگم
+* نمی‌دونم
+* گیر کردم
+* کشش ندارم
 
-When a message remains underspecified after considering its full context, return:
+to a resilience node unless the surrounding context clearly identifies the specific node meaning.
+
+When the message remains underspecified, return:
+
 active_signals = []
 
-## Evidence requirement
+## Evidence
 
-Every extracted signal MUST contain an exact verbatim evidence span copied from the user's message.
+Every extracted signal MUST contain one exact contiguous evidence span copied from the user's message.
 
 The evidence must:
 
-- appear exactly in the user message;
-- directly support the selected node;
-- be the minimum sufficient phrase;
-- contain no unnecessary context;
-- not be paraphrased;
-- not be invented;
-- not contain information that only appears in the node definition.
-
-Do not extract a signal without direct evidence.
-
-## Source-of-truth rule for evidence
+* exist in the original user message;
+* directly support the selected node;
+* be the shortest sufficient contiguous span;
+* preserve the original characters, spaces, punctuation, and ZWNJ/half-space;
+* never be paraphrased, rewritten, reconstructed, or combined from separate parts.
 
 The user message is the ONLY source of evidence text.
 
-Knowledge Graph definitions, cue lists, examples, and previous outputs may help determine the node and polarity, but MUST NEVER be copied into the evidence field unless the exact same character sequence appears in the user message.
+Knowledge Graph definitions, cue lists, examples, candidate hints, and previous reasoning may help identify the node or polarity, but MUST NEVER be copied into `evidence` unless the exact same text appears in the user message.
 
-Do not normalize evidence before returning it.
-
-Do not replace:
-- spaces with no spaces;
-- no spaces with spaces;
-- Persian half-space with a normal space;
-- one spelling variant with another;
-- punctuation with another punctuation mark.
-
-The evidence field must reproduce the original user substring exactly.
-
-Before returning each signal, mentally verify:
-"Can I search this exact evidence string in the user message and find it unchanged?"
-If not, do not return that evidence.
-
-## Evidence minimality
-
-Prefer the smallest phrase that fully establishes the signal.
-
-Good:
+Example:
 
 User:
 "دیگه نمی‌تونم هزینه‌هام رو مدیریت کنم و واقعاً خسته شدم."
 
-Evidence for IND_ECO_01:
+Correct evidence:
 "نمی‌تونم هزینه‌هام رو مدیریت کنم"
 
-Bad:
+Incorrect evidence:
 "دیگه نمی‌تونم هزینه‌هام رو مدیریت کنم و واقعاً خسته شدم"
 
-The second span includes an unrelated physical/emotional statement.
+The evidence must be a single continuous sequence of characters from the user message.
 
-The evidence span MUST be a single contiguous span from the user's message.
-
-Do not skip, omit, reorder, merge, or jump over words inside the evidence.
-
-The evidence must correspond to one continuous sequence of characters in the user message.
-
-For example, if the user says:
-
-"هر وقت به این فکر می‌کنم که چقدر شرایط داره بدتر میشه و چقدر ما بی‌تاثیر هستیم"
-
-You MUST NOT return:
-
-"هر وقت به این فکر می‌کنم که چقدر ما بی‌تاثیر هستیم"
-
-because words were omitted from the middle.
-
-Instead, either return a contiguous span such as:
-
-"ما بی‌تاثیر هستیم"
-
-or return:
-
-"هر وقت به این فکر می‌کنم که چقدر شرایط داره بدتر میشه و چقدر ما بی‌تاثیر هستیم"
-
-Never construct evidence by selecting non-adjacent words from the message.
-
-## One signal, one evidence
-
-Each node may appear AT MOST ONCE in the output.
-
-A node represents one semantic concept, not one phrase.
-
-If multiple phrases in the user's message support the same node:
-- return exactly ONE signal for that node;
-- choose the single strongest and most specific evidence span;
-- do not create multiple signals for the same node;
-- do not split one semantic concept into multiple entries.
+Never skip words in the middle of an evidence span.
 
 For example:
 
 User:
-"از پس هیچ کاری برنمیام و دیگه اعتماد به نفسم هم خیلی کم شده."
+"هر وقت به این فکر می‌کنم که چقدر شرایط داره بدتر میشه و چقدر ما بی‌تاثیر هستیم"
 
-Correct:
-IND_PER_01 → "از پس هیچ کاری برنمیام"
+Invalid:
+"هر وقت به این فکر می‌کنم که چقدر ما بی‌تاثیر هستیم"
 
-Incorrect:
-IND_PER_01 → "از پس هیچ کاری برنمیام"
-IND_PER_01 → "اعتماد به نفسم هم خیلی کم شده"
+Valid:
+"ما بی‌تاثیر هستیم"
 
-Before returning the final output, verify that every node_id appears exactly zero or one time.
+Before returning each signal, verify:
 
-If multiple signals are generated for the same node:
+"Can this exact evidence string be found unchanged inside the user message?"
 
-- never return the same node more than once;
-- merge duplicate signals into one signal;
-- if the duplicate polarities are the same, keep that polarity;
-- if one polarity is "mixed", the merged polarity must be "mixed";
-- if one signal is "positive" and another is "negative", the merged polarity must be "mixed";
-- keep exactly one evidence span for the canonical signal.
+If not, choose a shorter valid span or omit the signal.
+
+## One signal per node
+
+Each `node_id` may appear AT MOST ONCE.
+
+A node represents one semantic concept, not one phrase.
+
+If multiple phrases support the same node:
+
+* return exactly one signal;
+* choose the strongest and most specific evidence span;
+* do not create duplicate signals.
+
+If the same node has both positive and negative evidence, use:
+
+`detected_signal = "mixed"`
+
+Otherwise use the polarity supported by the local context.
 
 ## Polarity
 
 Determine polarity only for the selected node.
 
-positive:
+`positive`:
 The user expresses capability, control, adaptation, persistence, stability, hope, or another positive aspect of that node.
 
-negative:
+`negative`:
 The user expresses inability, distress, deterioration, helplessness, instability, or another negative aspect of that node.
 
-mixed:
-The user explicitly expresses both positive and negative aspects of the same node.
+`mixed`:
+The user explicitly expresses both positive and negative aspects of the SAME node.
 
-Do not infer polarity from unrelated emotional language.
+Do not mark a node as mixed merely because unrelated positive and negative language appears elsewhere in the message.
+
+Do not infer polarity from a keyword alone.
 
 ## Negation and context
 
@@ -264,66 +214,64 @@ Example:
 
 The final statement indicates positive self-efficacy.
 
-Do not extract a negative signal simply because a negative phrase appears in the message.
+Do not classify a signal as negative merely because a negative phrase appears earlier in the message.
 
-The local context determines the final polarity.
+Use the local semantic context to determine the final polarity.
 
 ## Do not over-extract
 
 Do not extract every psychological concept that can be inferred from the message.
 
-Extract only the nodes that have sufficient evidence.
+Extract only sufficiently supported nodes.
 
 A message can have zero active signals.
 
-Returning an empty list is correct when no node is sufficiently supported.
+Returning:
+
+active_signals = []
+
+is correct when no node has sufficient evidence.
 
 ## Knowledge graph restrictions
 
 Use only the exact Node IDs provided in the Knowledge Graph semantic definitions.
 
-Node IDs are strict identifiers, not abbreviations.
-
 Never:
-- shorten a Node ID;
-- remove leading zeros;
-- replace digits;
-- invent an alternative spelling;
-- convert identifiers such as IND_SPI_02 into IND_SPI_2 or IND_SPI_1.
 
-The node_id must match one of the provided Knowledge Graph Node IDs character-for-character.
+* shorten a Node ID;
+* remove leading zeros;
+* replace digits;
+* invent an identifier;
+* change identifiers such as `IND_SPI_02` to `IND_SPI_2`.
+
+The `node_id` must exactly match a provided Knowledge Graph Node ID.
 
 ## Candidate hints
 
-The system may provide explicit graph cue candidates detected from the user message.
+The system may provide graph-based candidate hints detected from the user message.
 
 Candidate hints are NOT automatic extraction decisions.
 
-For every candidate:
-1. inspect the full message;
-2. verify that the candidate meaning is actually expressed;
-3. verify the node-specific semantic boundary;
-4. verify polarity from local context;
-5. extract it only when the evidence is sufficient.
+For each candidate:
 
-Do not stop after finding the first valid candidate.
-Review all candidate hints before producing the final list.
+1. inspect the full user message;
+2. verify that the node's meaning is actually expressed;
+3. verify the semantic boundary;
+4. determine polarity from context;
+5. extract only when evidence is sufficient.
+
+Candidate hints help identify possible nodes but MUST NOT be used as evidence.
+
+Review all relevant candidates before producing the final output.
 
 ## Final verification
 
 Before returning the structured output:
 
-1. Every selected node has direct evidence in the user message.
-2. Every evidence span is copied verbatim.
-3. Every evidence span is minimal.
-4. Every selected node is semantically distinguishable from nearby nodes.
-5. No node was selected from weak or generic context.
-6. Ambiguous expressions without sufficient context are rejected.
-7. Polarity is determined from the local context.
-8. No duplicate node signals are produced.
-9. Return an empty list when evidence is insufficient.
-10. Every node_id appears at most once in the final output.
-11. If multiple evidence spans support the same node, keep only the strongest one.
-12. The evidence is one contiguous span copied directly from the user message.
-13. No words are omitted from the middle of an evidence span.
-14. Never paraphrase or reconstruct evidence from multiple non-contiguous parts of the message.
+1. Every selected node is explicitly supported by the user message.
+2. Every `evidence` is one exact contiguous substring of the user message.
+3. Every evidence span is sufficiently specific and minimal.
+4. Every `node_id` is valid and unique.
+5. Polarity is determined from context, not keywords alone.
+6. Ambiguous or underspecified signals are omitted.
+7. The final output contains no unsupported inference.
