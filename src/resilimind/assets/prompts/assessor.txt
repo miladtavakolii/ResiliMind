@@ -53,109 +53,88 @@ Important:
 - Positive polarity does NOT automatically mean full functioning or strong coping.
 - Score each dimension only from evidence relevant to that dimension.
 
+=== EVIDENCE SUFFICIENCY ===
+
+Never treat missing evidence as positive evidence.
+
+The absence of a statement about impairment, functioning, or coping does NOT mean that the user is functioning well or coping effectively.
+
+For every dimension:
+- Score only what is explicitly supported by the user's message and the extracted evidence.
+- Do not fill missing information with the highest score.
+- When a dimension is unclear, use the conservative middle anchor rather than the best-case anchor.
+- Do not infer severity, frequency, functioning, or coping from node polarity alone.
+
+For a negative signal:
+- Do not assume severe impairment unless functional difficulty is explicitly expressed.
+- Do not assume strong coping unless effective coping is explicitly expressed.
+- Do not convert silence about coping into evidence of successful coping.
+
+For a positive signal:
+- Do not assign maximum scores to every dimension automatically.
+- Positive ability in one dimension does not imply strong functioning, low frequency, or strong coping in the other dimensions.
+
 === DIMENSION-SPECIFIC EVIDENCE RULES ===
 
 Severity:
-Use the explicit intensity of distress.
-Do not infer severe distress from a negative signal alone.
+- 22 = explicit mild or minimal distress, or explicit absence of meaningful distress.
+- 16 = moderate distress OR intensity is not fully specified.
+- 8 = explicit severe, overwhelming, or highly intense distress.
+- Do not assign 22 merely because severe distress was not mentioned.
 
 Frequency:
-Use explicit temporal evidence such as:
-"همیشه", "هر روز", "مدام", "چند وقته" → chronic
-"گاهی", "بعضی وقت‌ها", "هر از گاهی" → episodic
-No repeated or temporal pattern stated → rare/isolated
+- 22 = explicitly rare, isolated, or one-time.
+- 16 = episodic, occasional, or frequency is unclear.
+- 8 = chronic, constant, daily, or repeatedly ongoing.
+- Do not assign 22 merely because no temporal phrase is present.
 
 Functional:
-Only assign impaired-function scores when the message explicitly indicates difficulty functioning, such as inability to work, study, sleep, maintain relationships, or perform normal activities.
-
-Do not infer functional impairment merely from sadness, anxiety, fatigue, or a negative polarity.
+- 24 = explicit evidence that normal functioning is preserved or effective.
+- 18 = mostly preserved functioning with mild difficulty.
+- 12 = clear partial or meaningful impairment.
+- 6 = clear severe impairment or inability to perform normal activities.
+- Never assign 24 merely because impairment is not mentioned.
+- Never infer functional impairment solely from negative polarity.
 
 Coping:
-Assign strong coping only when the user explicitly describes an active coping behavior, strategy, adaptation, persistence, or solution.
-Assign weak coping when the user explicitly expresses helplessness, surrender, or lack of coping.
-When coping evidence is unclear, do not assume strong coping.
+- 24 = explicit active and effective coping, adaptation, persistence, or problem-solving.
+- 16 = some coping, adaptation, or effort is present but limited or uncertain.
+- 8 = explicit helplessness, surrender, inability to cope, or lack of effective coping.
+- Never assign 24 merely because coping failure is not mentioned.
+- A user's attempt to cope must be supported by actual behavior or strategy in the message.
 
-3. CONFIDENCE SCORE CALCULATION:
-  Confidence represents certainty in the assessment, not the severity of the user's condition.
+=== SCORE CONSISTENCY ===
 
-  0.85 - 1.00:
-  Evidence is explicit, node-specific, and sufficient for the four dimensions.
+Determine each dimension independently.
 
-  0.70 - 0.84:
-  Evidence is clear but one or more dimensions require contextual interpretation.
+Do not start from a desired total score or status and work backward.
 
-  Below 0.70:
-  Evidence is vague, incomplete, contradictory, or insufficient for reliable scoring.
+Do not choose dimension values merely to match GREEN, YELLOW, or RED.
 
-4. DISAMBIGUATION FLAG (requires_disambiguation):
-   Set `requires_disambiguation` to TRUE if:
-   a) Any assessment confidence score falls below 0.70.
-   b) Contradictory evidence exists across signals or within the message.
-   c) The evidence substring is too brief/vague to confidently assign rubric scores.
-   Otherwise, set `requires_disambiguation` to FALSE.
+The correct procedure is:
 
-5. PSYCHOLOGICAL REASONING:
-   Provide a concise, objective reasoning in PERSIAN (Farsi) explaining why the specific rubric scores were assigned, explicitly referencing the extracted evidence substring.
+1. Identify evidence for severity.
+2. Identify evidence for frequency.
+3. Identify evidence for functional impact.
+4. Identify evidence for coping.
+5. Assign each dimension independently.
+6. Sum the four dimensions.
+7. Derive the final status from the deterministic score range.
 
+The status descriptions in the graph are contextual descriptions only.
+They are NOT shortcuts for assigning the final status.
 
-=== FEW-SHOT EXAMPLES (JSON FORMAT) ===
+=== CONFIDENCE ===
 
-[Example 1 - Clear Critical Input]
-Input:
-- Active Signals: IND_ECO_01 ("از استرس بدهی‌ها"), IND_PHY_02 ("خوابم نمیبره")
-- Message: "چند روزه از استرس بدهی‌ها خوابم نمیبره..."
+Confidence represents certainty that the four dimension scores are supported by available evidence.
 
-Output JSON Structure:
-{
-  "assessments": [
-    {
-      "node_id": "IND_ECO_01",
-      "category": "Economic_Resilience",
-      "scores": {
-        "severity": 8,
-        "frequency": 8,
-        "functional": 6,
-        "coping": 0
-      },
-      "confidence": 0.95,
-      "reasoning": "عبارت 'از استرس بدهی‌ها' شدت بالا و ناتوانی در مقابله را نشان می‌دهد."
-    },
-    {
-      "node_id": "IND_PHY_02",
-      "category": "Physical_Resilience",
-      "scores": {
-        "severity": 8,
-        "frequency": 8,
-        "functional": 6,
-        "coping": 8
-      },
-      "confidence": 0.90,
-      "reasoning": "شاهد متنی 'خوابم نمیبره' نشان‌دهنده اختلال در عملکرد بیولوژیک است."
-    }
-  ],
-  "requires_disambiguation": false
-}
+0.85 - 1.00:
+All or nearly all dimensions are directly supported by explicit evidence.
 
-[Example 2 - Ambiguous Input Requiring Disambiguation]
-Input:
-- Active Signals: IND_ECO_01 ("اوضاع مالی یکم بهم ریخته ولی خب می‌گذره")
-- Message: "اوضاع مالی یکم بهم ریخته ولی خب می‌گذره دیگه."
+0.70 - 0.84:
+The signal is clear, but one or more dimensions require conservative contextual interpretation.
 
-Output JSON Structure:
-{
-  "assessments": [
-    {
-      "node_id": "IND_ECO_01",
-      "category": "Economic_Resilience",
-      "scores": {
-        "severity": 15,
-        "frequency": 15,
-        "functional": 15,
-        "coping": 10
-      },
-      "confidence": 0.65,
-      "reasoning": "عبارت 'می‌گذره' مکانیسم مقابله‌ای ضعیف را نشان می‌دهد اما ابعاد دیگر نامشخص است."
-    }
-  ],
-  "requires_disambiguation": true
-}
+Below 0.70:
+Multiple dimensions are unclear, evidence is vague, contradictory, or insufficient.
+
+Do not report high confidence when several dimensions are based mainly on absence of evidence.
