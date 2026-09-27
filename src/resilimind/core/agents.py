@@ -333,7 +333,6 @@ def build_extractor_candidate_hints(user_message: str) -> str:
 
     for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
         cues = node_data.get("cues", {})
-
         positive_hits = _find_polarity_cues(
             user_message,
             cues.get("positive_keywords", []),
@@ -346,16 +345,26 @@ def build_extractor_candidate_hints(user_message: str) -> str:
         if not positive_hits and not negative_hits:
             continue
 
+        positive_text = ", ".join(positive_hits) if positive_hits else "none"
+        negative_text = ", ".join(negative_hits) if negative_hits else "none"
+
         blocks.append(
             f"Candidate Node: {node_id}\n"
-            f"Positive cue detected: {bool(positive_hits)}\n"
-            f"Negative cue detected: {bool(negative_hits)}"
+            f"Positive cue matches: {positive_text}\n"
+            f"Negative cue matches: {negative_text}"
         )
 
     if not blocks:
         return "No explicit graph cue candidates were found."
 
-    return "\n\n".join(blocks)
+    return (
+        "Review EVERY candidate below independently.\n"
+        "A candidate hint is NOT an extraction decision.\n"
+        "Cue matches are only locator hints for finding relevant parts of USER INPUT.\n"
+        "Final evidence MUST still be copied from USER INPUT and must satisfy the semantic boundary.\n"
+        "Do not stop after selecting the first candidate.\n\n"
+        + "\n\n".join(blocks)
+    )
 
 def extractor_node(state: AgentState) -> Dict[str, Any]:
     """

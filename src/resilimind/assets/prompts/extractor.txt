@@ -272,6 +272,16 @@ Check all relevant candidates before returning the final output.
 
 Review all relevant candidates before producing the final output.
 
+Before producing the final answer, perform a candidate coverage check:
+
+1. Review every candidate node independently.
+2. A single message may contain zero, one, or multiple valid signals.
+3. Do not stop after finding the first valid signal.
+4. For every candidate, decide whether its exact semantic meaning is expressed.
+5. If multiple candidates are independently supported, return all supported nodes.
+6. Do not add a node only because a cue word appears; semantic verification is still required.
+7. Before finalizing, compare the selected nodes against ALL candidate hints and ensure that no independently supported candidate was skipped.
+
 ## Final verification
 
 Before returning the structured output:
