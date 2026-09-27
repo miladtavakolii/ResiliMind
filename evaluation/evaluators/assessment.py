@@ -41,7 +41,7 @@ class AssessmentEvaluator(BaseEvaluator):
             item.node_id: item.rubric for item in gold.assessment.assessments
         }
         predicted_assessments = {
-            item.get("node_id"): item.get("rubric", {})
+            item.get("node_id"): item.get("scores", {})
             for item in prediction.get("assessment", {}).get("assessments", [])
             if item.get("node_id")
         }
@@ -86,7 +86,7 @@ class AssessmentEvaluator(BaseEvaluator):
             if predicted_item is None:
                 continue
 
-            predicted_rubric = predicted_item.get("rubric", {})
+            predicted_rubric = predicted_item.get("scores", {})
             predicted_score = sum(
                 predicted_rubric.get(dimension, 0)
                 for dimension in self.DIMENSIONS
