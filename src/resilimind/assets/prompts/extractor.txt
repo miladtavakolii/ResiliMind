@@ -28,6 +28,11 @@ For every candidate node:
 
 A generic emotional statement is not sufficient evidence.
 
+After finding one valid signal, scan the entire user message again for other independent signals.
+
+A message may contain multiple valid signals from different nodes.
+Do not stop after finding the first valid node.
+
 Examples:
 
 "خیلی تحت فشارم"
