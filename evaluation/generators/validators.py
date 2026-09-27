@@ -202,29 +202,69 @@ def validate_rendered_input(case: EvaluationCase, *, require_rendered: bool = Fa
 
     return errors
 
-
 def validate_scenario_gold_alignment(case: EvaluationCase) -> list[str]:
+    """Validate internal consistency between scenario assessment profiles and gold rubrics.
+
+    Ensures that every gold assessment node possesses a corresponding assessment
+    profile in the scenario specification, checks for unexpected or missing node profiles,
+    and validates that rubric point scores match the qualitative dimension levels
+    (severity, frequency, functional impact, coping capacity).
+
+    Args:
+        case: EvaluationCase instance containing scenario metadata and gold assessments.
+
+    Returns:
+        list[str]: Formatted error messages describing alignment discrepancies or
+            missing profile attributes, empty if alignment is completely consistent.
+    """
     errors: list[str] = []
     scenario = case.scenario
-    expected = {
-        "severity": {"low": 22, "moderate": 16, "high": 8}[scenario.severity_level],
-        "frequency": {"rare": 22, "episodic": 16, "chronic": 8}[scenario.frequency_level],
-        "functional": {"none": 24, "mild": 18, "moderate": 12, "severe": 6}[scenario.functional_level],
-        "coping": {"strong": 24, "moderate": 16, "weak": 8}[scenario.coping_level],
+    assessment_profiles = getattr(scenario, "assessment_profiles", {})
+
+    if not assessment_profiles:
+        errors.append(f"{case.case_id}: assessment_profiles is empty")
+        return errors
+
+    expected_node_ids = {
+        assessment.node_id for assessment in case.gold.assessment.assessments
+    }
+    profile_node_ids = set(assessment_profiles)
+
+    for node_id in sorted(expected_node_ids - profile_node_ids):
+        errors.append(f"{case.case_id}: missing assessment profile for {node_id}")
+
+    for node_id in sorted(profile_node_ids - expected_node_ids):
+        errors.append(f"{case.case_id}: unexpected assessment profile for {node_id}")
+
+    dimension_maps = {
+        "severity": {"low": 22, "moderate": 16, "high": 8},
+        "frequency": {"rare": 22, "episodic": 16, "chronic": 8},
+        "functional": {"none": 24, "mild": 18, "moderate": 12, "severe": 6},
+        "coping": {"strong": 24, "moderate": 16, "weak": 8},
     }
 
     for assessment in case.gold.assessment.assessments:
-        rubric = assessment.rubric
-        for dimension, expected_value in expected.items():
-            actual_value = getattr(rubric, dimension)
+        profile = assessment_profiles.get(assessment.node_id)
+        if profile is None:
+            continue
+
+        for dimension, val_map in dimension_maps.items():
+            profile_val = (
+                profile.get(dimension)
+                if isinstance(profile, dict)
+                else getattr(profile, dimension, None)
+            )
+            expected_value = val_map.get(profile_val)
+            actual_value = getattr(assessment.rubric, dimension, None)
+
             if actual_value != expected_value:
                 errors.append(
-                    f"{case.case_id}: {assessment.node_id} {dimension}={actual_value}, "
-                    f"expected {expected_value} from scenario profile"
+                    f"{case.case_id}: {assessment.node_id} {dimension}="
+                    f"{actual_value}, expected {expected_value} "
+                    f"from per-node assessment profile"
                 )
 
     return errors
-
 
 def validate_dataset(cases: Iterable[EvaluationCase], valid_node_ids: set[str], require_rendered: bool = False) -> None:
     """Validate a complete evaluation dataset.

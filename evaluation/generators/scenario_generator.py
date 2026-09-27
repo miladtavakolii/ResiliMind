@@ -204,6 +204,14 @@ class ScenarioGenerator:
         domain = self._choose_domain(case_type=case_type)
         turn_count = self._choose_turn_count(case_type=case_type)
 
+        safety = self._generate_safety(case_type=case_type)
+
+        signals = self._generate_signals(
+            domain=domain,
+            case_type=case_type,
+            safety=safety,
+        )
+
         assessment_profiles = {
             signal.node_id: self._sample_assessment_profile(
                 difficulty=difficulty,
@@ -224,10 +232,11 @@ class ScenarioGenerator:
             assessment_profiles=assessment_profiles,
         )
 
-        safety = self._generate_safety(case_type=case_type)
-        signals = self._generate_signals(
-            domain=domain, case_type=case_type, safety=safety)
-        assessments = self._generate_assessments(signals=signals, scenario=scenario)
+        assessments = self._generate_assessments(
+            signals=signals,
+            scenario=scenario,
+        )
+
         routing = self._generate_routing(
             safety=safety,
             difficulty=difficulty,
