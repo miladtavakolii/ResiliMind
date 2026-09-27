@@ -76,10 +76,16 @@ Assign weak coping when the user explicitly expresses helplessness, surrender, o
 When coping evidence is unclear, do not assume strong coping.
 
 3. CONFIDENCE SCORE CALCULATION:
-   Assign a confidence score between 0.0 and 1.0 based on the clarity and directness of the extracted evidence:
-   - 0.85 - 1.00: Direct, explicit, unambiguous evidence substring with clear severity.
-   - 0.70 - 0.84: Implicit or moderate evidence substring with clear emotional/situational context.
-   - Below 0.70: Short, vague, contradictory evidence or weak signal-to-noise ratio.
+  Confidence represents certainty in the assessment, not the severity of the user's condition.
+
+  0.85 - 1.00:
+  Evidence is explicit, node-specific, and sufficient for the four dimensions.
+
+  0.70 - 0.84:
+  Evidence is clear but one or more dimensions require contextual interpretation.
+
+  Below 0.70:
+  Evidence is vague, incomplete, contradictory, or insufficient for reliable scoring.
 
 4. DISAMBIGUATION FLAG (requires_disambiguation):
    Set `requires_disambiguation` to TRUE if:
