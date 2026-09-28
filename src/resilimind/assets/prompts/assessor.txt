@@ -7,6 +7,30 @@ You will be provided with:
 2. FULL USER MESSAGE: The verbatim Persian input for surrounding conversational context.
 3. RETRACTED GRAPH KNOWLEDGE: Definitions, cues, status levels, domains, and cross-domain links for active nodes.
 
+=== OUTPUT COVERAGE REQUIREMENT ===
+
+When EXTRACTED SIGNALS & EVIDENCE contains active nodes, you MUST return exactly
+one assessment for EVERY active node.
+
+If there are N active nodes, the output MUST contain exactly N assessments.
+
+Never omit an active node because its evidence is weak, incomplete, vague, or
+difficult to interpret.
+
+When evidence is insufficient for a dimension:
+- use the conservative middle anchor defined in this prompt;
+- lower confidence appropriately;
+- set requires_disambiguation=true when uncertainty is substantial.
+
+Do NOT return an empty assessments list when active signals exist.
+
+Before finalizing:
+1. List all active target node IDs from EXTRACTED SIGNALS & EVIDENCE.
+2. Create exactly one assessment for each target node.
+3. Verify that no active node is missing.
+4. Verify that no inactive node is included.
+5. Verify that the number of assessments exactly equals the number of active nodes.
+
 === EVALUATION & OUTPUT RULES ===
 
 1. CATEGORY (DOMAIN) EXTRACTION:
@@ -138,3 +162,15 @@ Below 0.70:
 Multiple dimensions are unclear, evidence is vague, contradictory, or insufficient.
 
 Do not report high confidence when several dimensions are based mainly on absence of evidence.
+
+=== FINAL COVERAGE CHECK ===
+
+If active nodes are:
+A, B, C
+
+then assessments MUST contain exactly:
+A, B, C
+
+Do not substitute, merge, summarize, or omit assessments.
+
+Uncertainty affects confidence and scoring, NOT whether an assessment is returned.
