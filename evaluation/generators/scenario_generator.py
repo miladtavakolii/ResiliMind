@@ -6,6 +6,7 @@ import random
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+from itertools import product
 
 from evaluation.generators.validators import validate_dataset
 from evaluation.schemas import (
@@ -406,28 +407,48 @@ class ScenarioGenerator:
         functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
         coping_map = {"strong": 24, "moderate": 16, "weak": 8}
 
-        for _ in range(100):
+        candidates = []
+
+        for severity, frequency, functional, coping in product(
+            options["severity"],
+            options["frequency"],
+            options["functional"],
+            options["coping"],
+        ):
             profile = {
-                "severity": self.rng.choice(options["severity"]),
-                "frequency": self.rng.choice(options["frequency"]),
-                "functional": self.rng.choice(options["functional"]),
-                "coping": self.rng.choice(options["coping"]),
+                "severity": severity,
+                "frequency": frequency,
+                "functional": functional,
+                "coping": coping,
             }
 
             total = (
-                severity_map[profile["severity"]]
-                + frequency_map[profile["frequency"]]
-                + functional_map[profile["functional"]]
-                + coping_map[profile["coping"]]
+                severity_map[severity]
+                + frequency_map[frequency]
+                + functional_map[functional]
+                + coping_map[coping]
             )
 
-            if min(abs(total - 40), abs(total - 70)) >= 5:
-                return AssessmentProfile(**profile)
+            margin = min(abs(total - 40), abs(total - 70))
+            candidates.append((margin, profile))
 
-        raise RuntimeError(
-            f"Could not sample a stable assessment profile for "
-            f"difficulty={difficulty}, polarity={polarity}"
-        )
+        stable_candidates = [
+            profile
+            for margin, profile in candidates
+            if margin >= 5
+        ]
+
+        if stable_candidates:
+            return AssessmentProfile(**self.rng.choice(stable_candidates))
+
+        max_margin = max(margin for margin, _ in candidates)
+        fallback_candidates = [
+            profile
+            for margin, profile in candidates
+            if margin == max_margin
+        ]
+
+        return AssessmentProfile(**self.rng.choice(fallback_candidates))
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
         """Generate ground-truth safety annotations.
