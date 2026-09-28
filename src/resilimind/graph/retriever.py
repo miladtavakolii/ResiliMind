@@ -29,35 +29,23 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
             logger.warning(f"[Retriever] Node ID '{node_id}' not found in the resilience graph.")
             continue
 
-        node_data: Dict[str, Any] = graph.nodes[node_id]
-        
-        # Format Node Basic Info
-        block: str = f"=== Node: {node_id} ({node_data.get('name_fa', '')}) ===\n"
-        block += f"Domain: {node_data.get('domain', '')}\n"
-        block += f"Domain (FA): {node_data.get('domain_fa', '')}\n"
-        block += f"Description: {node_data.get('description', '')}\n\n"
+        node_data = graph.nodes[node_id]
+        block = (
+            f"=== Node: {node_id} ({node_data.get('name_fa', '')}) ===\n"
+            f"Domain: {node_data.get('domain', '')}\n"
+            f"Domain (FA): {node_data.get('domain_fa', '')}\n"
+            f"Description: {node_data.get('description', '')}\n\n"
+            "Status Level Definitions:\n"
+        )
 
-        # Format Status Levels
-        status_levels: Dict[str, Any] = node_data.get("status_levels", {})
-        block += "Status Level Definitions:\n"
+        status_levels = node_data.get("status_levels", {})
         for level_color, level_info in status_levels.items():
             if isinstance(level_info, dict):
-                block += f"  - [{level_color.upper()}] ({level_info.get('code', '')}): {level_info.get('description', '')}\n"
-        
-        # Format Interventions
-        interventions: Dict[str, str] = node_data.get("interventions", {})
-        block += "\nRecommended Interventions:\n"
-        for cond, action in interventions.items():
-            block += f"  - {cond}: {action}\n"
-
-        # Format Outgoing Cross-Domain Edges
-        successors: List[str] = list(graph.successors(node_id))
-        if successors:
-            block += "\nCross-Domain Impacts on Other Nodes:\n"
-            for succ in successors:
-                edge_data: Dict[str, Any] = graph.get_edge_data(node_id, succ)
-                succ_name: str = graph.nodes[succ].get("name_fa", succ)
-                block += f"  -> Affects '{succ_name}' [{succ}] | Relation: {edge_data.get('relation_type', '')} ({edge_data.get('description', '')})\n"
+                block += (
+                    f"  - [{level_color.upper()}] "
+                    f"({level_info.get('code', '')}): "
+                    f"{level_info.get('description', '')}\n"
+                )
 
         context_blocks.append(block)
 
