@@ -530,7 +530,8 @@ def calculate_composite_confidence(
     raw_confidence: float,
     status: str,
     signal_polarity: str,
-    evidence_text: str
+    evidence_text: str,
+    node_id: str,
 ) -> float:
     """
     Compute a heuristic routing confidence score.
@@ -563,29 +564,55 @@ def calculate_composite_confidence(
     evidence_score = 1.0 if evidence_text.strip() else 0.0
     evidence_weight = evidence_score * 0.30
 
-    # 3. Logical Consistency Score (40%)
-    # Penalize contradictions (e.g., RED status but Extractor found 'positive' polarity)
-    consistency_score = 0.5  # Neutral default
-    status_upper = status.upper()
+    node_data = resilience_graph.nodes.get(node_id, {})
+    cues = node_data.get("cues", {})
+
+    positive_hits = _find_polarity_cues(
+        evidence_text,
+        cues.get("positive_keywords", []),
+    )
+    negative_hits = _find_polarity_cues(
+        evidence_text,
+        cues.get("negative_keywords", []),
+    )
+
     polarity_lower = signal_polarity.lower()
 
-    if status_upper == "RED" and polarity_lower == "negative":
-        consistency_score = 1.0
-    elif status_upper == "GREEN" and polarity_lower == "positive":
-        consistency_score = 1.0
-    elif status_upper == "YELLOW" and polarity_lower in ["mixed", "negative", "positive"]:
-        consistency_score = 0.8
-    elif status_upper == "RED" and polarity_lower == "positive":
-        consistency_score = 0.0  # Fatal contradiction
-    elif status_upper == "GREEN" and polarity_lower == "negative":
-        consistency_score = 0.0  # Fatal contradiction
+    if polarity_lower == "positive":
+        if positive_hits and not negative_hits:
+            consistency_score = 1.0
+        elif negative_hits and not positive_hits:
+            consistency_score = 0.0
+        else:
+            consistency_score = 0.5
+    elif polarity_lower == "negative":
+        if negative_hits and not positive_hits:
+            consistency_score = 1.0
+        elif positive_hits and not negative_hits:
+            consistency_score = 0.0
+        else:
+            consistency_score = 0.5
+    elif polarity_lower == "mixed":
+        consistency_score = 1.0 if positive_hits and negative_hits else 0.5
+    else:
+        consistency_score = 0.5
 
-    consistency_weight = consistency_score * 0.40
+    composite_score = (
+        llm_score
+        + evidence_weight
+        + consistency_score * 0.40
+    )
 
-    # Aggregate and cap at 1.0
-    composite_score = llm_score + evidence_weight + consistency_weight
-    final_conf = min(max(round(composite_score, 2), 0.0), 1.0)
-    logger.debug(f"[Confidence] Calculated composite confidence: {final_conf} (raw: {raw_confidence})")
+    final_conf = min(
+        max(round(composite_score, 2), 0.0),
+        1.0,
+    )
+
+    logger.debug(
+        f"[Confidence] node={node_id} score={final_conf} raw={raw_confidence} polarity={signal_polarity} "
+        f"positive_cues={positive_hits} negative_cues=negative_hits"
+    )
+
     return final_conf
 
 
@@ -779,7 +806,8 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
             raw_confidence=assessment_dict["confidence"],
             status=assessment_dict["status"],
             signal_polarity=signal_polarity,
-            evidence_text=evidence_text
+            evidence_text=evidence_text,
+            node_id=node_id,
         )
         
         # Override the LLM's self-reported confidence
