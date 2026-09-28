@@ -36,33 +36,64 @@ Only strong semantic evidence counts.
 
 Each target signal contains an independent assessment profile.
 
-For every target signal, verify that the generated user message provides sufficient first-person evidence for:
+For EVERY target signal, verify ALL FOUR dimensions independently:
 
-- severity
-- frequency
-- functional
-- coping
+1. severity
+2. frequency
+3. functional
+4. coping
 
-Use ONLY evidence that belongs to that target signal.
+Each dimension must have direct, first-person, observable evidence in the user's
+own statements.
 
-Do not infer a dimension from silence.
+Do not infer missing information.
 
-Do not treat the absence of impairment as preserved functioning.
+### Severity
 
-Do not treat the absence of coping difficulty as strong coping.
+- low: mild, minimal, or limited intensity must be observable.
+- moderate: noticeable but not overwhelming intensity must be observable.
+- high: strong, severe, or overwhelming intensity must be observable.
 
-Verify the profile independently for each target signal.
+### Frequency
+
+- rare: isolated or one-time occurrence must be observable.
+- episodic: occasional or intermittent occurrence must be observable.
+- chronic: persistent, frequent, ongoing, or long-lasting occurrence must be observable.
+
+### Functional
+
+- none: preserved normal functioning must be explicitly stated.
+- mild: only minor or limited functional disruption may be present.
+- moderate: meaningful disruption to normal activities must be explicit.
+- severe: major impairment or inability to perform normal activities must be explicit.
+
+### Coping
+
+- strong: active and effective coping/adaptation/problem-solving must be explicit.
+- moderate: some coping effort exists but is limited or difficult.
+- weak: helplessness, surrender, inability to cope, or lack of effective strategy
+  must be explicit.
+
+### Rejection rules
+
+Reject the rendering when:
+
+- any required dimension is only implied;
+- any dimension depends on silence;
+- any dimension is inferred from polarity alone;
+- evidence for one target is used to satisfy another target;
+- the textual evidence contradicts the configured profile.
 
 Examples:
 
-- functional=severe requires clear evidence of major impairment or inability to perform normal activities.
-- functional=none requires explicit evidence that normal functioning is preserved.
-- coping=strong requires explicit active and effective coping, adaptation, persistence, or problem-solving.
-- coping=weak requires explicit helplessness, surrender, inability to cope, or lack of an effective strategy.
-- severity=high requires strong or overwhelming distress.
-- frequency=chronic requires persistent, frequent, or ongoing occurrence.
+- functional=severe with no clear impairment → invalid
+- functional=none with no explicit preserved functioning → invalid
+- coping=weak with no helplessness/inability/lack of strategy → invalid
+- coping=strong with no explicit coping/adaptation/action → invalid
+- frequency=chronic with no persistence/long-duration evidence → invalid
 
-When a dimension cannot be reasonably identified from the user's own statements, add a concise explanation to assessment_errors and set valid=false.
+For every failed dimension, add one concise item to assessment_errors containing:
+node ID + dimension + reason.
 
 ## Ambiguous-case validation
 
@@ -116,31 +147,3 @@ When expected_safety_category is SEVERE_ABUSE:
 When the generated message does not provide sufficient evidence for the expected safety category:
 - set valid=false;
 - add a concise explanation to safety_errors.
-
-## Assessment profile validation
-
-For every target signal, verify that the generated conversation provides direct evidence for:
-
-1. severity
-2. frequency
-3. functional
-4. coping
-
-Do not consider silence to be evidence.
-
-A case is invalid when one or more gold assessment dimensions cannot be reasonably identified from the user's own statements.
-
-For each failed dimension, add a concise entry to assessment_errors.
-
-## Output
-
-Return only structured JSON.
-
-Set valid=true only if:
-
-- all target signals are sufficiently expressed;
-- target polarities are correct;
-- no unintended resilience signal is clearly expressed;
-- there is no major evidence inconsistency.
-
-Otherwise set valid=false and report the specific node IDs and issues.

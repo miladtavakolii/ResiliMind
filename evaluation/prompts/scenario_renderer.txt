@@ -172,44 +172,111 @@ Never generate a semantically contradictory sentence merely to make the conversa
 
 ## 7. Assessment profile fidelity
 
-The assessment profile contains four independent dimensions:
+Each target signal has an independent assessment profile with four dimensions:
 
 - severity
 - frequency
 - functional
 - coping
 
-All four dimensions must be expressed through the target signal itself.
+These dimensions are HARD CONSTRAINTS.
 
-The renderer must provide enough first-person evidence for an independent assessor to distinguish the intended profile.
+The generated user messages must contain direct, first-person, observable evidence
+for ALL FOUR dimensions.
 
-Severity:
-- low: mild or limited intensity
-- moderate: clearly noticeable but manageable intensity
-- high: strong, severe, or overwhelming intensity
+Do not merely imply a dimension.
+Do not rely on silence.
+Do not let one dimension determine another.
+Do not use another target signal to satisfy a dimension.
 
-Frequency:
-- rare: one-time or isolated occurrence
-- episodic: occasional or recurring at intervals
-- chronic: persistent, frequent, or ongoing
+### Severity
 
-Functional:
-- none: explicitly preserved normal functioning
-- mild: mostly preserved functioning with small difficulty
-- moderate: clear impact on work, study, relationships, or daily activities
-- severe: major impairment or inability to perform normal activities
+- low:
+  explicitly communicate minimal, mild, or limited intensity.
 
-Coping:
-- strong: explicit active and effective coping, adaptation, persistence, or problem-solving
-- moderate: some effort or adaptation is present but limited
-- weak: explicit helplessness, surrender, inability to cope, or lack of an effective strategy
+- moderate:
+  explicitly communicate noticeable but not overwhelming intensity.
 
-Do not represent a missing dimension through silence.
+- high:
+  explicitly communicate strong, severe, or overwhelming intensity.
 
-Do not expect the evaluator to infer a dimension simply because it was not mentioned.
+### Frequency
 
-Do not introduce an unrelated resilience node to express an assessment dimension.
-The evidence for each dimension must remain within the target node's semantic scope.
+- rare:
+  explicitly communicate a one-time, isolated, or rare occurrence.
+
+- episodic:
+  explicitly communicate occasional, intermittent, recurring-at-intervals,
+  or situation-dependent occurrence.
+
+- chronic:
+  explicitly communicate persistent, ongoing, frequent, or long-lasting occurrence.
+
+### Functional
+
+- none:
+  explicitly state that normal daily functioning is preserved.
+
+- mild:
+  explicitly state that functioning is mostly preserved with a small or limited difficulty.
+
+- moderate:
+  explicitly state a meaningful disruption to work, study, relationships,
+  or daily activities.
+
+- severe:
+  explicitly state major impairment, inability to perform normal activities,
+  or substantial loss of functioning.
+
+### Coping
+
+- strong:
+  explicitly describe active and effective coping, adaptation, persistence,
+  planning, or problem-solving.
+
+- moderate:
+  explicitly describe some coping effort or adaptation, but with limitation or difficulty.
+
+- weak:
+  explicitly describe helplessness, surrender, inability to cope,
+  or lack of an effective strategy.
+
+### Critical evidence rule
+
+Every profile dimension must be supported by the user's own words.
+
+The following are NOT valid shortcuts:
+
+- absence of impairment does NOT mean functional=none;
+- absence of coping difficulty does NOT mean coping=strong;
+- absence of a temporal expression does NOT mean frequency=rare;
+- polarity alone does NOT determine severity;
+- polarity alone does NOT determine functional impact;
+- polarity alone does NOT determine coping.
+
+The target signal must remain semantically isolated while expressing all four dimensions.
+
+Do not introduce an unrelated resilience node, symptom, or problem merely to express
+an assessment dimension.
+
+### Polarity-profile compatibility
+
+For positive targets:
+- ability, control, adaptation, persistence, confidence, or effective functioning
+  must be explicitly expressed.
+- helplessness, surrender, severe impairment, or inability to cope must not be used.
+- the evidence span itself must support the positive interpretation.
+
+For negative targets:
+- difficulty, distress, deterioration, reduced functioning, helplessness,
+  or loss of control must be explicitly expressed when required by the profile.
+- do not resolve the problem with strong coping unless explicitly required.
+
+For mixed targets:
+- express both positive and negative aspects of the SAME target concept.
+- the two aspects must be semantically distinguishable.
+
+Polarity has priority over stylistic realism.
 
 ## 8. Conversation realism
 
