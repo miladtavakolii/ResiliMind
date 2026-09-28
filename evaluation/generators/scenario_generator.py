@@ -353,11 +353,14 @@ class ScenarioGenerator:
             "hard": ["weak", "moderate"],
             "adversarial": ["weak", "moderate"],
         }
-
         if polarity == "positive":
             severity_options[difficulty] = [
                 level for level in severity_options[difficulty]
                 if level in {"low", "moderate"}
+            ]
+            frequency_options[difficulty] = [
+                level for level in frequency_options[difficulty]
+                if level in {"rare", "episodic"}
             ]
             functional_options[difficulty] = [
                 level for level in functional_options[difficulty]
@@ -372,6 +375,10 @@ class ScenarioGenerator:
                 level for level in severity_options[difficulty]
                 if level in {"moderate", "high"}
             ]
+            frequency_options[difficulty] = [
+                level for level in frequency_options[difficulty]
+                if level in {"episodic", "chronic"}
+            ]
             functional_options[difficulty] = [
                 level for level in functional_options[difficulty]
                 if level in {"mild", "moderate", "severe"}
@@ -382,9 +389,9 @@ class ScenarioGenerator:
             ]
         else:
             severity_options[difficulty] = ["moderate"]
+            frequency_options[difficulty] = ["episodic"]
             functional_options[difficulty] = ["mild", "moderate"]
             coping_options[difficulty] = ["moderate"]
-
         severity_options = {
             "easy": ["low", "moderate"],
             "moderate": ["moderate", "high"],
