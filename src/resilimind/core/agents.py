@@ -619,13 +619,14 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
     # 1. Format extracted signals & evidence substrings for prompt ingestion
     if active_signals:
         evidence_blocks = []
-        for sig in active_signals:
+        for index, sig in enumerate(active_signals, start=1):
             evidence_blocks.append(
-                f"• Target Node: {sig.get('node_id')}\n"
-                f"  - Extracted Polarity: {sig.get('detected_signal', 'mixed').upper()}\n"
-                f"  - Exact User Substring (Evidence): \"{sig.get('evidence', '')}\""
+                f"TARGET {index}/{len(active_signals)}\n"
+                f"Node ID: {sig.get('node_id')}\n"
+                f"Polarity: {sig.get('detected_signal', 'mixed').upper()}\n"
+                f"Exact Evidence: \"{sig.get('evidence', '')}\""
             )
-        formatted_evidence = "\n".join(evidence_blocks)
+        formatted_evidence = "\n\n".join(evidence_blocks)
     else:
         logger.warning("[Assessor] No explicit extracted signals provided.")
         formatted_evidence = "No explicit extracted signals provided."
@@ -640,21 +641,62 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
 
     # 3. Invoke LLM chain with evidence payload
     assessor_chain = llm_engine.get_assessor_runner(prompts.ASSESSOR_SYSTEM_PROMPT)
-    raw_result = assessor_chain.invoke({
-        "user_message": enriched_input,
-        "subgraph_context": context
-    })
+    max_assessment_attempts = 3
+    last_validation_error: Exception | None = None
 
-    if raw_result.get("parsed") is None:
-        raw = raw_result.get("raw")
-        logger.error("[Assessor] Structured output parsing failed. Raw model output: %r", raw)
-        raise ValueError(f"Assessor returned invalid structured output: {raw!r}")
+    for attempt in range(max_assessment_attempts):
+        attempt_input = enriched_input
 
-    result: AssessmentOutput = raw_result["parsed"]
-    result = validate_assessment_result(
-        result=result,
-        active_signals=active_signals,
-    )
+        if last_validation_error is not None:
+            attempt_input += (
+                "\n\n=== PREVIOUS ASSESSMENT VALIDATION FAILURE ===\n"
+                f"{last_validation_error}\n\n"
+                "Regenerate the assessment output completely.\n"
+                "You MUST return exactly one assessment for every active node.\n"
+                "Do not omit any active node.\n"
+                "Do not return an empty assessments list.\n"
+            )
+
+        raw_result = assessor_chain.invoke({
+            "user_message": attempt_input,
+            "subgraph_context": context,
+        })
+
+        if raw_result.get("parsed") is None:
+            raw = raw_result.get("raw")
+            last_validation_error = ValueError(
+                f"Assessor returned invalid structured output: {raw!r}"
+            )
+            logger.warning(
+                "[Assessor] Structured output validation failed "
+                "(attempt %d/%d). Retrying...",
+                attempt + 1,
+                max_assessment_attempts,
+            )
+            continue
+
+        result = raw_result["parsed"]
+
+        try:
+            result = validate_assessment_result(
+                result=result,
+                active_signals=active_signals,
+            )
+            break
+        except ValueError as exc:
+            last_validation_error = exc
+            logger.warning(
+                "[Assessor] Assessment coverage validation failed "
+                "(attempt %d/%d): %s",
+                attempt + 1,
+                max_assessment_attempts,
+                exc,
+            )
+    else:
+        raise RuntimeError(
+            f"[Assessor] Failed to produce complete assessments after "
+            f"{max_assessment_attempts} attempts"
+        ) from last_validation_error
     
     # Create a quick lookup for active signals to match with assessments
     signal_lookup = {sig["node_id"]: sig for sig in active_signals}

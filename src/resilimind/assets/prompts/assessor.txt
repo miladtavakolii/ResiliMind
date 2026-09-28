@@ -98,6 +98,20 @@ For a positive signal:
 - Do not assign maximum scores to every dimension automatically.
 - Positive ability in one dimension does not imply strong functioning, low frequency, or strong coping in the other dimensions.
 
+=== MULTI-NODE ASSESSMENT ISOLATION ===
+
+For each active node, assess ONLY that node.
+
+The evidence substring associated with one node must not be reused as the primary
+evidence for another node.
+
+When multiple active nodes are present:
+- evaluate node A independently;
+- evaluate node B independently;
+- return both assessments;
+- never merge them into one assessment;
+- never omit one because the other is easier to assess.
+
 === DIMENSION-SPECIFIC EVIDENCE RULES ===
 
 Severity:
