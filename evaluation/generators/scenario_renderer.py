@@ -379,7 +379,7 @@ class ScenarioRenderer:
                 if attempt >= self.max_retries:
                     break
 
-                delay = self.retry_delay * (2**attempt)
+                delay = min(self.retry_delay * (attempt + 1), 20.0)
 
                 logger.warning(
                     "%s: semantic audit failed on attempt %d/%d: %s. "
