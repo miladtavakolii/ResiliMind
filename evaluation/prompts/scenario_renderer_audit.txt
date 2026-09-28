@@ -32,6 +32,38 @@ Do not mark a node as unintended because of:
 
 Only strong semantic evidence counts.
 
+## Assessment profile validation
+
+Each target signal contains an independent assessment profile.
+
+For every target signal, verify that the generated user message provides sufficient first-person evidence for:
+
+- severity
+- frequency
+- functional
+- coping
+
+Use ONLY evidence that belongs to that target signal.
+
+Do not infer a dimension from silence.
+
+Do not treat the absence of impairment as preserved functioning.
+
+Do not treat the absence of coping difficulty as strong coping.
+
+Verify the profile independently for each target signal.
+
+Examples:
+
+- functional=severe requires clear evidence of major impairment or inability to perform normal activities.
+- functional=none requires explicit evidence that normal functioning is preserved.
+- coping=strong requires explicit active and effective coping, adaptation, persistence, or problem-solving.
+- coping=weak requires explicit helplessness, surrender, inability to cope, or lack of an effective strategy.
+- severity=high requires strong or overwhelming distress.
+- frequency=chronic requires persistent, frequent, or ongoing occurrence.
+
+When a dimension cannot be reasonably identified from the user's own statements, add a concise explanation to assessment_errors and set valid=false.
+
 ## Ambiguous-case validation
 
 When case_type is "ambiguous":
