@@ -22,6 +22,58 @@ logger = logging.getLogger(__name__)
 llm_engine: LLMEngine = LLMEngine()
 resilience_graph: nx.DiGraph = load_resilience_graph()
 
+EXTRACTOR_NODE_BOUNDARIES: dict[str, str] = {
+    "IND_PER_01": (
+        "Requires explicit self-efficacy or hardiness about overcoming a challenge. "
+        "Generic task completion, planning, calmness, social support, or coping effort alone "
+        "does not activate this node."
+    ),
+    "IND_PER_02": (
+        "Requires emotional regulation or dysregulation such as anxiety, anger, panic, "
+        "loss of emotional control, or explicit calming. Generic confusion alone is insufficient."
+    ),
+    "IND_PER_03": (
+        "Requires future goals, future outlook, hope, or purposeful personal direction. "
+        "Generic task completion is insufficient."
+    ),
+    "IND_POL_01": (
+        "Requires evaluating political/news information, source verification, misinformation, "
+        "or critical analysis of news."
+    ),
+    "IND_POL_02": (
+        "Requires civic or political agency/alienation. Generic 'I cannot do anything' "
+        "is insufficient unless the statement is explicitly about political or civic impact."
+    ),
+    "IND_ECO_01": (
+        "Requires financial management or financial adaptation. General stress about work "
+        "is not sufficient."
+    ),
+    "IND_ECO_02": (
+        "Requires employment, career, job security, dismissal, or professional adaptation. "
+        "Generic self-efficacy is not sufficient."
+    ),
+    "IND_PHY_01": (
+        "Requires bodily symptoms, fatigue, energy, or physical recovery. Psychological "
+        "stress alone is insufficient."
+    ),
+    "IND_PHY_02": (
+        "Requires sleep, wakefulness, appetite, or biological-rhythm evidence. Generic fatigue "
+        "alone is insufficient."
+    ),
+    "IND_SOC_01": (
+        "Requires family-specific support, cohesion, conflict, or safety."
+    ),
+    "IND_SOC_02": (
+        "Requires friends, peers, social network, or social-support evidence."
+    ),
+    "IND_SPI_01": (
+        "Requires spiritual/religious meaning, faith, prayer, God, or spiritual coping."
+    ),
+    "IND_SPI_02": (
+        "Requires cultural identity, roots, traditions, heritage, or cultural belonging."
+    ),
+}
+
 def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput:
     """Collapse duplicate signals for the same node when their polarity agrees.
 
@@ -135,6 +187,7 @@ def build_extractor_graph_context() -> str:
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
             f"Definition: {node_data.get('description', '')}\n"
+            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
             f"Positive cues: {', '.join(positive)}\n"
             f"Negative cues: {', '.join(negative)}"
         )
