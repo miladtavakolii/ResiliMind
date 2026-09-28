@@ -383,14 +383,8 @@ def evaluate_dataset(
         Per-case evaluation results.
     """
     runner = build_evaluator_runner(max_retries, retry_delay, request_delay)
-    prediction_map = {pred.case_id: pred for pred in predictions}
-    results: list[CaseEvaluationResult] = []
-
-    for case in cases:
-        prediction = prediction_map[case.case_id]
-        results.append(runner.evaluate_case(case, build_evaluator_prediction(prediction)))
-
-    return results
+    prediction_map = build_prediction_mapping(predictions)
+    return runner.evaluate_dataset(cases=cases, predictions=prediction_map)
 
 def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
     """Store per-case evaluation results to a JSON Lines file.

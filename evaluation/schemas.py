@@ -361,24 +361,6 @@ class CaseEvaluationResult(BaseModel):
     )
 
 
-class EvaluationSummary(BaseModel):
-    """
-    Aggregated benchmark evaluation report.
-
-    Contains metrics calculated across the complete dataset.
-    """
-
-    dataset_size: int
-
-    evaluators: dict[str, dict[str, Any]] = Field(
-        default_factory=dict
-    )
-
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow
-    )
-
-
 class ResponseJudgeResult(BaseModel):
     """
     Structured output returned by the LLM response judge.

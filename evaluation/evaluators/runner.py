@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from evaluation.evaluators.base import BaseEvaluator
-from evaluation.schemas import CaseEvaluationResult, EvaluationCase, EvaluationSummary
+from evaluation.schemas import CaseEvaluationResult, EvaluationCase
 
 logger = logging.getLogger(__name__)
 
@@ -125,31 +125,3 @@ class EvaluationRunner:
 
         logger.info("[EvaluationRunner] Dataset evaluation completed.")
         return results
-
-    def summarize(self, results: Sequence[CaseEvaluationResult]) -> EvaluationSummary:
-        """Group per-case metrics by evaluator name.
-
-        This method intentionally does not calculate final statistical metrics
-        because different evaluators require different aggregation strategies
-        (e.g., classification metrics vs. regression metrics vs. LLM judge scores).
-
-        Args:
-            results: Sequence of per-case evaluation results.
-
-        Returns:
-            EvaluationSummary: Aggregated summary containing total dataset size
-                and metrics grouped by evaluator name.
-
-        Raises:
-            ValueError: If the input results sequence is empty.
-        """
-        if not results:
-            raise ValueError("Cannot summarize empty results.")
-
-        grouped = {}
-
-        for result in results:
-            for evaluator_name, metrics in result.metrics.items():
-                grouped.setdefault(evaluator_name, []).append(metrics)
-
-        return EvaluationSummary(dataset_size=len(results), evaluators=grouped)
