@@ -6,7 +6,7 @@ import random
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from itertools import product
+from collections import Counter
 
 from evaluation.generators.validators import validate_dataset
 from evaluation.schemas import (
@@ -70,6 +70,7 @@ class ScenarioGenerator:
         self.graph_path = Path(graph_path)
         self.seed = seed
         self.rng = random.Random(seed)
+        self.profile_counts: Counter[tuple[str, str, str, str, str]] = Counter()
 
         self.graph = self._load_graph()
         self.nodes = self._load_nodes()
@@ -336,33 +337,6 @@ class ScenarioGenerator:
                 coping="weak",
             )
 
-        difficulty_options = {
-            "severity": {
-                "easy": ["low", "moderate"],
-                "moderate": ["moderate", "high"],
-                "hard": ["moderate", "high"],
-                "adversarial": ["moderate", "high"],
-            },
-            "frequency": {
-                "easy": ["rare", "episodic"],
-                "moderate": ["episodic", "chronic"],
-                "hard": ["episodic", "chronic"],
-                "adversarial": ["episodic", "chronic"],
-            },
-            "functional": {
-                "easy": ["none", "mild"],
-                "moderate": ["mild", "moderate"],
-                "hard": ["moderate", "severe"],
-                "adversarial": ["moderate", "severe"],
-            },
-            "coping": {
-                "easy": ["strong", "moderate"],
-                "moderate": ["moderate", "weak"],
-                "hard": ["weak", "moderate"],
-                "adversarial": ["weak", "moderate"],
-            },
-        }
-
         polarity_options = {
             "positive": {
                 "severity": ["low", "moderate"],
@@ -384,71 +358,130 @@ class ScenarioGenerator:
             },
         }
 
-        if polarity not in polarity_options:
-            raise ValueError(f"Unknown signal polarity: {polarity}")
+        difficulty_targets = {
+            "easy": {
+                "severity": 0,
+                "frequency": 0,
+                "functional": 0,
+                "coping": 2,
+            },
+            "moderate": {
+                "severity": 1,
+                "frequency": 1,
+                "functional": 1,
+                "coping": 1,
+            },
+            "hard": {
+                "severity": 2,
+                "frequency": 2,
+                "functional": 2,
+                "coping": 0,
+            },
+            "adversarial": {
+                "severity": 2,
+                "frequency": 2,
+                "functional": 2,
+                "coping": 0,
+            },
+        }
 
-        options: dict[str, list[str]] = {}
-
-        for dimension in (
-            "severity",
-            "frequency",
-            "functional",
-            "coping",
-        ):
-            compatible = [
-                level
-                for level in difficulty_options[dimension][difficulty]
-                if level in polarity_options[polarity][dimension]
-            ]
-            options[dimension] = compatible or list(polarity_options[polarity][dimension])
+        ranks = {
+            "severity": {"low": 0, "moderate": 1, "high": 2},
+            "frequency": {"rare": 0, "episodic": 1, "chronic": 2},
+            "functional": {"none": 0, "mild": 1, "moderate": 2, "severe": 3},
+            "coping": {"weak": 0, "moderate": 1, "strong": 2},
+        }
 
         severity_map = {"low": 22, "moderate": 16, "high": 8}
         frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
         functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
         coping_map = {"strong": 24, "moderate": 16, "weak": 8}
 
+        dimensions = ("severity", "frequency", "functional", "coping")
+
         candidates = []
 
-        for severity, frequency, functional, coping in product(
-            options["severity"],
-            options["frequency"],
-            options["functional"],
-            options["coping"],
-        ):
-            profile = {
-                "severity": severity,
-                "frequency": frequency,
-                "functional": functional,
-                "coping": coping,
-            }
+        for severity in polarity_options[polarity]["severity"]:
+            for frequency in polarity_options[polarity]["frequency"]:
+                for functional in polarity_options[polarity]["functional"]:
+                    for coping in polarity_options[polarity]["coping"]:
+                        profile = {
+                            "severity": severity,
+                            "frequency": frequency,
+                            "functional": functional,
+                            "coping": coping,
+                        }
 
-            total = (
-                severity_map[severity]
-                + frequency_map[frequency]
-                + functional_map[functional]
-                + coping_map[coping]
-            )
+                        total = (
+                            severity_map[severity]
+                            + frequency_map[frequency]
+                            + functional_map[functional]
+                            + coping_map[coping]
+                        )
 
-            margin = min(abs(total - 40), abs(total - 70))
-            candidates.append((margin, profile))
+                        margin = min(abs(total - 40), abs(total - 70))
 
-        stable_candidates = [
-            profile
-            for margin, profile in candidates
-            if margin >= 5
+                        difficulty_distance = sum(
+                            abs(
+                                ranks[dimension][profile[dimension]]
+                                - difficulty_targets[difficulty][dimension]
+                            )
+                            for dimension in dimensions
+                        )
+
+                        key = (
+                            polarity,
+                            severity,
+                            frequency,
+                            functional,
+                            coping,
+                        )
+                        usage = self.profile_counts[key]
+
+                        candidates.append(
+                            (
+                                margin,
+                                difficulty_distance,
+                                usage,
+                                profile,
+                            )
+                        )
+
+        stable = [
+            candidate
+            for candidate in candidates
+            if candidate[0] >= 5
         ]
 
-        if stable_candidates:
-            return AssessmentProfile(**self.rng.choice(stable_candidates))
+        pool = stable or candidates
 
-        max_margin = max(margin for margin, _ in candidates)
-        fallback_candidates = [
-            profile
-            for margin, profile in candidates
-            if margin == max_margin
+        best_distance = min(candidate[1] for candidate in pool)
+        difficulty_candidates = [
+            candidate
+            for candidate in pool
+            if candidate[1] == best_distance
         ]
 
-        return AssessmentProfile(**self.rng.choice(fallback_candidates))
+        min_usage = min(candidate[2] for candidate in difficulty_candidates)
+        balanced_candidates = [
+            candidate
+            for candidate in difficulty_candidates
+            if candidate[2] == min_usage
+        ]
+
+        selected = self.rng.choice(balanced_candidates)
+        profile = selected[3]
+
+        key = (
+            polarity,
+            profile["severity"],
+            profile["frequency"],
+            profile["functional"],
+            profile["coping"],
+        )
+        self.profile_counts[key] += 1
+
+        return AssessmentProfile(**profile)
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
         """Generate ground-truth safety annotations.
