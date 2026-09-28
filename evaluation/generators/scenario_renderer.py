@@ -525,6 +525,7 @@ class ScenarioRenderer:
                     + audit.unintended_signal_nodes
                     + audit.polarity_errors
                     + audit.evidence_issues
+                    + audit.assessment_errors
                     + audit.safety_errors
                 )
 
