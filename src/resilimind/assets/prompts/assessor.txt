@@ -162,6 +162,25 @@ The correct procedure is:
 The status descriptions in the graph are contextual descriptions only.
 They are NOT shortcuts for assigning the final status.
 
+=== EVIDENCE-FIRST NODE ISOLATION ===
+
+For each assessment:
+
+1. Read the exact evidence assigned to that node.
+2. Identify the local clause/context that gives that evidence its meaning.
+3. Score the node using that evidence first.
+4. Use the rest of the message only to clarify the meaning of that same local context.
+5. Never borrow a dimension from another target node.
+
+A functional statement about one node cannot establish functional status for another node.
+
+A coping statement about one node cannot establish coping for another node.
+
+A sentence such as "کارهای روزمره‌ام را انجام می‌دهم" is NOT evidence of IND_PER_01
+unless the surrounding local context explicitly connects it to overcoming a personal challenge.
+
+For a multi-node message, treat each node as an independent assessment problem.
+
 === CONFIDENCE ===
 
 Confidence represents certainty that the four dimension scores are supported by available evidence.
