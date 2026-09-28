@@ -686,10 +686,15 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
 
     # 2. Construct clear evidence-aware payload conforming to assessor.txt prompt
     enriched_input = (
-        f"=== EXTRACTED SIGNALS & EVIDENCE ===\n"
+        "=== PRIMARY EVIDENCE BY TARGET NODE ===\n"
         f"{formatted_evidence}\n\n"
-        f"=== FULL USER MESSAGE ===\n"
-        f"{user_msg}"
+        "=== FULL USER MESSAGE ===\n"
+        f"{user_msg}\n\n"
+        "RULE:\n"
+        "The exact evidence assigned to each node is the primary evidence for that node.\n"
+        "Use the full message only to resolve local context or polarity.\n"
+        "Do not borrow severity, frequency, functional impact, or coping evidence from "
+        "another target node.\n"
     )
 
     # 3. Invoke LLM chain with evidence payload
