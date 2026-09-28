@@ -107,6 +107,44 @@ def normalize_match_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip().lower()
     return text
 
+def _build_assessment_requirements(profile: Any) -> dict[str, str]:
+    """Describe the observable first-person evidence required by an assessment profile."""
+    values = {
+        "severity": profile.severity,
+        "frequency": profile.frequency,
+        "functional": profile.functional,
+        "coping": profile.coping,
+    }
+
+    requirements = {
+        "severity": {
+            "low": "حداقل یا خفیف بودن شدت مشکل/تجربه را به‌صورت قابل مشاهده بیان کن.",
+            "moderate": "شدت قابل توجه اما نه overwhelming را به‌صورت مستقیم بیان کن.",
+            "high": "شدت زیاد، شدید یا طاقت‌فرسا را به‌صورت مستقیم بیان کن.",
+        },
+        "frequency": {
+            "rare": "یک مورد نادر، منفرد یا یک‌باره را به‌صورت صریح بیان کن.",
+            "episodic": "رخداد گهگاهی، دوره‌ای یا وابسته به موقعیت را به‌صورت صریح بیان کن.",
+            "chronic": "تداوم، تکرار مداوم، استمرار یا طولانی‌مدت بودن را به‌صورت صریح بیان کن.",
+        },
+        "functional": {
+            "none": "صریحاً نشان بده که عملکرد عادی روزمره حفظ شده است.",
+            "mild": "صریحاً نشان بده که فقط اختلال یا دشواری جزئی در عملکرد وجود دارد.",
+            "moderate": "صریحاً نشان بده که مشکل اثر قابل توجهی بر کار، تحصیل، روابط یا فعالیت‌های روزمره دارد.",
+            "severe": "صریحاً نشان بده که عملکرد به‌شدت مختل شده یا فرد قادر به انجام بخشی از فعالیت‌های عادی نیست.",
+        },
+        "coping": {
+            "strong": "صریحاً نشان بده که فرد به‌طور فعال و مؤثر با وضعیت مقابله، سازگار، برنامه‌ریزی، پیگیری یا مسئله را حل می‌کند.",
+            "moderate": "صریحاً نشان بده که تلاش یا سازگاری وجود دارد ولی محدود یا دشوار است.",
+            "weak": "صریحاً نشان بده که فرد درمانده است، تسلیم شده، نمی‌تواند از عهده وضعیت برآید یا راهکار مؤثری ندارد.",
+        },
+    }
+
+    return {
+        dimension: requirements[dimension][value]
+        for dimension, value in values.items()
+    }
+
 class ScenarioRenderer:
     """Render latent evaluation scenarios into natural Persian conversations.
 
@@ -310,6 +348,7 @@ class ScenarioRenderer:
                         "functional": profile.functional,
                         "coping": profile.coping,
                     },
+                    "assessment_requirements": _build_assessment_requirements(profile),
                 }
             )
 
@@ -649,6 +688,7 @@ class ScenarioRenderer:
                         "functional": profile.functional,
                         "coping": profile.coping,
                     },
+                    "assessment_requirements": _build_assessment_requirements(profile),
                 }
             )
 
