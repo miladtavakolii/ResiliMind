@@ -149,6 +149,27 @@ A target node must be marked exactly once across the entire conversation.
 If the same target concept appears naturally in multiple turns, mark evidence for it in only one turn and leave later mentions unmarked.
 Do not repeat the same NODE_ID in multiple evidence markers.
 
+## Polarity-profile consistency
+
+The target signal polarity is a hard constraint.
+
+For a POSITIVE target:
+- The user must describe ability, control, adaptation, persistence, confidence, or effective functioning.
+- Do NOT use helplessness, inability, surrender, severe distress, or loss of control to express the target.
+- Avoid negative constructions such as "نمی‌توانم", "عاجزم", "کم آوردم", "از پسش برنمیام" unless they are explicitly negated or clearly reversed by a final positive statement.
+- The generated evidence must itself support the positive interpretation.
+
+For a NEGATIVE target:
+- The user must describe difficulty, distress, deterioration, inability, helplessness, instability, or reduced functioning.
+- Do NOT include strong coping, preserved control, or confident problem-solving unless the target profile explicitly requires a mixed/contrasting expression.
+
+For a MIXED target:
+- Include both a meaningful positive and a meaningful negative aspect of the SAME target concept.
+- The positive and negative aspects must be clearly distinguishable.
+
+Polarity has priority over stylistic realism.
+Never generate a semantically contradictory sentence merely to make the conversation sound natural.
+
 ## 7. Assessment profile fidelity
 
 The assessment profile contains four independent dimensions:
