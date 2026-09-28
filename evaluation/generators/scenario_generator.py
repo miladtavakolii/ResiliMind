@@ -216,6 +216,7 @@ class ScenarioGenerator:
             signal.node_id: self._sample_assessment_profile(
                 difficulty=difficulty,
                 case_type=case_type,
+                polarity=signal.detected_signal,
             )
             for signal in signals
         }
@@ -306,7 +307,7 @@ class ScenarioGenerator:
             return self.rng.choice([1, 2])
         return 1
 
-    def _sample_assessment_profile(self, *, difficulty: str, case_type: str) -> dict[str, str]:
+    def _sample_assessment_profile(self, *, difficulty: str, case_type: str, polarity: str) -> dict[str, str]:
         """Sample independent latent assessment dimensions based on difficulty and case type.
 
         Args:
@@ -324,6 +325,65 @@ class ScenarioGenerator:
                 "functional": "severe",
                 "coping": "weak",
             }
+
+        severity_options = {
+            "easy": ["low", "moderate"],
+            "moderate": ["moderate", "high"],
+            "hard": ["moderate", "high"],
+            "adversarial": ["moderate", "high"],
+        }
+
+        frequency_options = {
+            "easy": ["rare", "episodic"],
+            "moderate": ["episodic", "chronic"],
+            "hard": ["episodic", "chronic"],
+            "adversarial": ["episodic", "chronic"],
+        }
+
+        functional_options = {
+            "easy": ["none", "mild"],
+            "moderate": ["mild", "moderate"],
+            "hard": ["moderate", "severe"],
+            "adversarial": ["moderate", "severe"],
+        }
+
+        coping_options = {
+            "easy": ["strong", "moderate"],
+            "moderate": ["moderate", "weak"],
+            "hard": ["weak", "moderate"],
+            "adversarial": ["weak", "moderate"],
+        }
+
+        if polarity == "positive":
+            severity_options[difficulty] = [
+                level for level in severity_options[difficulty]
+                if level in {"low", "moderate"}
+            ]
+            functional_options[difficulty] = [
+                level for level in functional_options[difficulty]
+                if level in {"none", "mild"}
+            ]
+            coping_options[difficulty] = [
+                level for level in coping_options[difficulty]
+                if level in {"strong", "moderate"}
+            ]
+        elif polarity == "negative":
+            severity_options[difficulty] = [
+                level for level in severity_options[difficulty]
+                if level in {"moderate", "high"}
+            ]
+            functional_options[difficulty] = [
+                level for level in functional_options[difficulty]
+                if level in {"mild", "moderate", "severe"}
+            ]
+            coping_options[difficulty] = [
+                level for level in coping_options[difficulty]
+                if level in {"weak", "moderate"}
+            ]
+        else:
+            severity_options[difficulty] = ["moderate"]
+            functional_options[difficulty] = ["mild", "moderate"]
+            coping_options[difficulty] = ["moderate"]
 
         severity_options = {
             "easy": ["low", "moderate"],
