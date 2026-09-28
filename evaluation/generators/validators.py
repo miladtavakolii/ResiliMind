@@ -41,6 +41,82 @@ def validate_assessment(assessment: GoldAssessment) -> list[str]:
 
     return errors
 
+def _validate_assessment_profile_polarity(case: EvaluationCase) -> list[str]:
+    """Validate that per-node assessment profiles align with gold signal polarities.
+
+    Checks that every configured assessment profile corresponds to an active gold signal,
+    that the signal's polarity is recognized, and that qualitative dimension ratings
+    (severity, frequency, functional impact, coping capacity) adhere strictly to the
+    clinical bounds permitted for that polarity.
+
+    Args:
+        case: EvaluationCase instance containing scenario assessment profiles
+            and gold extraction signals.
+
+    Returns:
+        list[str]: Formatted error messages detailing missing signals, unknown polarities,
+            or incompatible qualitative dimensions, empty if all profiles are valid.
+    """
+    errors: list[str] = []
+    profiles = case.scenario.assessment_profiles
+
+    allowed = {
+        "positive": {
+            "severity": {"low", "moderate"},
+            "frequency": {"rare", "episodic"},
+            "functional": {"none", "mild"},
+            "coping": {"strong", "moderate"},
+        },
+        "negative": {
+            "severity": {"moderate", "high"},
+            "frequency": {"episodic", "chronic"},
+            "functional": {"mild", "moderate", "severe"},
+            "coping": {"weak", "moderate"},
+        },
+        "mixed": {
+            "severity": {"moderate"},
+            "frequency": {"episodic"},
+            "functional": {"mild", "moderate"},
+            "coping": {"moderate"},
+        },
+    }
+
+    signals = {
+        signal.node_id: signal.detected_signal
+        for signal in case.gold.extraction.active_signals
+    }
+
+    for node_id, profile in profiles.items():
+        polarity = signals.get(node_id)
+        if polarity is None:
+            errors.append(
+                f"{case.case_id}: assessment profile exists for "
+                f"node without gold signal: {node_id}"
+            )
+            continue
+
+        if polarity not in allowed:
+            errors.append(
+                f"{case.case_id}: unknown polarity '{polarity}' "
+                f"for {node_id}"
+            )
+            continue
+
+        values = {
+            "severity": profile.severity,
+            "frequency": profile.frequency,
+            "functional": profile.functional,
+            "coping": profile.coping,
+        }
+
+        for dimension, value in values.items():
+            if value not in allowed[polarity][dimension]:
+                errors.append(
+                    f"{case.case_id}: {node_id} polarity={polarity} "
+                    f"has incompatible {dimension}={value}"
+                )
+
+    return errors
 
 def validate_case_structure(case: EvaluationCase, valid_node_ids: set[str]) -> list[str]:
     """Validate the structural consistency of an evaluation case.
@@ -222,24 +298,32 @@ def validate_scenario_gold_alignment(case: EvaluationCase) -> list[str]:
     assessment_profiles = getattr(scenario, "assessment_profiles", {})
 
     expected_node_ids = {
-        assessment.node_id for assessment in case.gold.assessment.assessments
+        assessment.node_id
+        for assessment in case.gold.assessment.assessments
     }
     profile_node_ids = set(assessment_profiles)
 
     if not expected_node_ids:
         if assessment_profiles:
-            errors.append(f"{case.case_id}: unexpected assessment profiles for case without assessments")
+            for node_id in sorted(profile_node_ids):
+                errors.append(
+                    f"{case.case_id}: unexpected assessment profile for "
+                    f"{node_id} in case without assessments"
+                )
         return errors
 
-    if not assessment_profiles:
-        errors.append(f"{case.case_id}: assessment_profiles is empty")
-        return errors
+    missing_profiles = expected_node_ids - profile_node_ids
+    unexpected_profiles = profile_node_ids - expected_node_ids
 
-    for node_id in sorted(expected_node_ids - profile_node_ids):
-        errors.append(f"{case.case_id}: missing assessment profile for {node_id}")
+    for node_id in sorted(missing_profiles):
+        errors.append(
+            f"{case.case_id}: missing assessment profile for {node_id}"
+        )
 
-    for node_id in sorted(profile_node_ids - expected_node_ids):
-        errors.append(f"{case.case_id}: unexpected assessment profile for {node_id}")
+    for node_id in sorted(unexpected_profiles):
+        errors.append(
+            f"{case.case_id}: unexpected assessment profile for {node_id}"
+        )
 
     dimension_maps = {
         "severity": {"low": 22, "moderate": 16, "high": 8},
@@ -248,25 +332,94 @@ def validate_scenario_gold_alignment(case: EvaluationCase) -> list[str]:
         "coping": {"strong": 24, "moderate": 16, "weak": 8},
     }
 
+    polarity_constraints = {
+        "positive": {
+            "severity": {"low", "moderate"},
+            "frequency": {"rare", "episodic"},
+            "functional": {"none", "mild"},
+            "coping": {"strong", "moderate"},
+        },
+        "negative": {
+            "severity": {"moderate", "high"},
+            "frequency": {"episodic", "chronic"},
+            "functional": {"mild", "moderate", "severe"},
+            "coping": {"weak", "moderate"},
+        },
+        "mixed": {
+            "severity": {"moderate"},
+            "frequency": {"episodic"},
+            "functional": {"mild", "moderate"},
+            "coping": {"moderate"},
+        },
+    }
+
+    signal_polarities = {
+        signal.node_id: signal.detected_signal
+        for signal in case.gold.extraction.active_signals
+    }
+
     for assessment in case.gold.assessment.assessments:
-        profile = assessment_profiles.get(assessment.node_id)
+        node_id = assessment.node_id
+        profile = assessment_profiles.get(node_id)
+
         if profile is None:
             continue
 
-        for dimension, val_map in dimension_maps.items():
-            profile_val = (
+        profile_values = {
+            dimension: (
                 profile.get(dimension)
                 if isinstance(profile, dict)
                 else getattr(profile, dimension, None)
             )
+            for dimension in dimension_maps
+        }
+
+        for dimension, val_map in dimension_maps.items():
+            profile_val = profile_values[dimension]
             expected_value = val_map.get(profile_val)
             actual_value = getattr(assessment.rubric, dimension, None)
 
+            if expected_value is None:
+                errors.append(
+                    f"{case.case_id}: {node_id} has invalid {dimension}="
+                    f"{profile_val}"
+                )
+                continue
+
             if actual_value != expected_value:
                 errors.append(
-                    f"{case.case_id}: {assessment.node_id} {dimension}="
+                    f"{case.case_id}: {node_id} {dimension}="
                     f"{actual_value}, expected {expected_value} "
-                    f"from per-node assessment profile"
+                    f"from assessment profile"
+                )
+
+        polarity = signal_polarities.get(node_id)
+
+        if polarity is None:
+            errors.append(
+                f"{case.case_id}: assessment profile for {node_id} "
+                f"has no corresponding gold signal"
+            )
+            continue
+
+        constraints = polarity_constraints.get(polarity)
+
+        if constraints is None:
+            errors.append(
+                f"{case.case_id}: {node_id} has unknown signal polarity "
+                f"{polarity}"
+            )
+            continue
+
+        for dimension, allowed_values in constraints.items():
+            profile_val = profile_values[dimension]
+
+            if profile_val not in allowed_values:
+                allowed = ", ".join(sorted(allowed_values))
+                errors.append(
+                    f"{case.case_id}: {node_id} polarity={polarity} "
+                    f"has incompatible {dimension}={profile_val}; "
+                    f"allowed: {allowed}"
                 )
 
     return errors

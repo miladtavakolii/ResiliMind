@@ -307,115 +307,99 @@ class ScenarioGenerator:
             return self.rng.choice([1, 2])
         return 1
 
-    def _sample_assessment_profile(self, *, difficulty: str, case_type: str, polarity: str) -> dict[str, str]:
-        """Sample independent latent assessment dimensions based on difficulty and case type.
+    def _sample_assessment_profile(self, *, difficulty: str, case_type: str, polarity: str) -> dict[str, AssessmentProfile]:
+        """Sample independent latent assessment dimensions based on difficulty, case type, and polarity.
+
+        Combines difficulty-constrained and polarity-aligned options across clinical
+        dimensions (severity, frequency, functional impact, coping capacity). Rejects
+        sampled configurations falling within boundary uncertainty zones (near 40 or 70)
+        to guarantee stable resilience risk categorization.
 
         Args:
-            difficulty: Difficulty level of the scenario (e.g., 'easy', 'moderate', 'hard').
-            case_type: Case type category (e.g., 'high_risk', 'normal', 'ambiguous').
+            difficulty: Scenario difficulty level (e.g., 'easy', 'moderate', 'hard', 'adversarial').
+            case_type: Case categorization (e.g., 'high_risk', 'normal', 'ambiguous').
+            polarity: Active signal polarity ('positive', 'negative', or 'mixed').
 
         Returns:
-            dict[str, str]: Mapping of assessment dimensions ('severity', 'frequency',
-                'functional', 'coping') to their sampled qualitative levels.
+            AssessmentProfile: Sampled qualitative assessment profile.
+
+        Raises:
+            ValueError: If an unknown signal polarity is provided.
+            RuntimeError: If a stable assessment profile cannot be sampled within 100 iterations.
         """
         if case_type == "high_risk":
-            return {
-                "severity": "high",
-                "frequency": "chronic",
-                "functional": "severe",
-                "coping": "weak",
-            }
+            return AssessmentProfile(
+                severity="high",
+                frequency="chronic",
+                functional="severe",
+                coping="weak",
+            )
 
-        severity_options = {
-            "easy": ["low", "moderate"],
-            "moderate": ["moderate", "high"],
-            "hard": ["moderate", "high"],
-            "adversarial": ["moderate", "high"],
+        difficulty_options = {
+            "severity": {
+                "easy": ["low", "moderate"],
+                "moderate": ["moderate", "high"],
+                "hard": ["moderate", "high"],
+                "adversarial": ["moderate", "high"],
+            },
+            "frequency": {
+                "easy": ["rare", "episodic"],
+                "moderate": ["episodic", "chronic"],
+                "hard": ["episodic", "chronic"],
+                "adversarial": ["episodic", "chronic"],
+            },
+            "functional": {
+                "easy": ["none", "mild"],
+                "moderate": ["mild", "moderate"],
+                "hard": ["moderate", "severe"],
+                "adversarial": ["moderate", "severe"],
+            },
+            "coping": {
+                "easy": ["strong", "moderate"],
+                "moderate": ["moderate", "weak"],
+                "hard": ["weak", "moderate"],
+                "adversarial": ["weak", "moderate"],
+            },
         }
 
-        frequency_options = {
-            "easy": ["rare", "episodic"],
-            "moderate": ["episodic", "chronic"],
-            "hard": ["episodic", "chronic"],
-            "adversarial": ["episodic", "chronic"],
+        polarity_options = {
+            "positive": {
+                "severity": ["low", "moderate"],
+                "frequency": ["rare", "episodic"],
+                "functional": ["none", "mild"],
+                "coping": ["strong", "moderate"],
+            },
+            "negative": {
+                "severity": ["moderate", "high"],
+                "frequency": ["episodic", "chronic"],
+                "functional": ["mild", "moderate", "severe"],
+                "coping": ["weak", "moderate"],
+            },
+            "mixed": {
+                "severity": ["moderate"],
+                "frequency": ["episodic"],
+                "functional": ["mild", "moderate"],
+                "coping": ["moderate"],
+            },
         }
 
-        functional_options = {
-            "easy": ["none", "mild"],
-            "moderate": ["mild", "moderate"],
-            "hard": ["moderate", "severe"],
-            "adversarial": ["moderate", "severe"],
-        }
+        if polarity not in polarity_options:
+            raise ValueError(f"Unknown signal polarity: {polarity}")
 
-        coping_options = {
-            "easy": ["strong", "moderate"],
-            "moderate": ["moderate", "weak"],
-            "hard": ["weak", "moderate"],
-            "adversarial": ["weak", "moderate"],
-        }
-        if polarity == "positive":
-            severity_options[difficulty] = [
-                level for level in severity_options[difficulty]
-                if level in {"low", "moderate"}
+        options: dict[str, list[str]] = {}
+
+        for dimension in (
+            "severity",
+            "frequency",
+            "functional",
+            "coping",
+        ):
+            compatible = [
+                level
+                for level in difficulty_options[dimension][difficulty]
+                if level in polarity_options[polarity][dimension]
             ]
-            frequency_options[difficulty] = [
-                level for level in frequency_options[difficulty]
-                if level in {"rare", "episodic"}
-            ]
-            functional_options[difficulty] = [
-                level for level in functional_options[difficulty]
-                if level in {"none", "mild"}
-            ]
-            coping_options[difficulty] = [
-                level for level in coping_options[difficulty]
-                if level in {"strong", "moderate"}
-            ]
-        elif polarity == "negative":
-            severity_options[difficulty] = [
-                level for level in severity_options[difficulty]
-                if level in {"moderate", "high"}
-            ]
-            frequency_options[difficulty] = [
-                level for level in frequency_options[difficulty]
-                if level in {"episodic", "chronic"}
-            ]
-            functional_options[difficulty] = [
-                level for level in functional_options[difficulty]
-                if level in {"mild", "moderate", "severe"}
-            ]
-            coping_options[difficulty] = [
-                level for level in coping_options[difficulty]
-                if level in {"weak", "moderate"}
-            ]
-        else:
-            severity_options[difficulty] = ["moderate"]
-            frequency_options[difficulty] = ["episodic"]
-            functional_options[difficulty] = ["mild", "moderate"]
-            coping_options[difficulty] = ["moderate"]
-        severity_options = {
-            "easy": ["low", "moderate"],
-            "moderate": ["moderate", "high"],
-            "hard": ["moderate", "high"],
-            "adversarial": ["moderate", "high"],
-        }
-        frequency_options = {
-            "easy": ["rare", "episodic"],
-            "moderate": ["episodic", "chronic"],
-            "hard": ["episodic", "chronic"],
-            "adversarial": ["episodic", "chronic"],
-        }
-        functional_options = {
-            "easy": ["none", "mild"],
-            "moderate": ["mild", "moderate"],
-            "hard": ["moderate", "severe"],
-            "adversarial": ["moderate", "severe"],
-        }
-        coping_options = {
-            "easy": ["strong", "moderate"],
-            "moderate": ["moderate", "weak"],
-            "hard": ["weak", "moderate"],
-            "adversarial": ["weak", "moderate"],
-        }
+            options[dimension] = compatible or list(polarity_options[polarity][dimension])
 
         severity_map = {"low": 22, "moderate": 16, "high": 8}
         frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
@@ -424,10 +408,10 @@ class ScenarioGenerator:
 
         for _ in range(100):
             profile = {
-                "severity": self.rng.choice(severity_options[difficulty]),
-                "frequency": self.rng.choice(frequency_options[difficulty]),
-                "functional": self.rng.choice(functional_options[difficulty]),
-                "coping": self.rng.choice(coping_options[difficulty]),
+                "severity": self.rng.choice(options["severity"]),
+                "frequency": self.rng.choice(options["frequency"]),
+                "functional": self.rng.choice(options["functional"]),
+                "coping": self.rng.choice(options["coping"]),
             }
 
             total = (
@@ -438,10 +422,11 @@ class ScenarioGenerator:
             )
 
             if min(abs(total - 40), abs(total - 70)) >= 5:
-                return profile
+                return AssessmentProfile(**profile)
 
         raise RuntimeError(
-            f"Could not sample a stable assessment profile for difficulty={difficulty}"
+            f"Could not sample a stable assessment profile for "
+            f"difficulty={difficulty}, polarity={polarity}"
         )
 
     def _generate_safety(self, *, case_type: str) -> GoldSafety:
@@ -597,28 +582,6 @@ class ScenarioGenerator:
                 )
             )
         return assessments
-
-    def _generate_rubric(self, *, scenario: ScenarioSpec) -> AssessmentRubric:
-        """Generate a 4-dimensional assessment rubric from latent scenario levels.
-
-        Args:
-            scenario: Ground-truth scenario specification containing qualitative
-                severity, frequency, functional, and coping levels.
-
-        Returns:
-            AssessmentRubric: Rubric instance populated with mapped numerical scores.
-        """
-        severity_map = {"low": 22, "moderate": 16, "high": 8}
-        frequency_map = {"rare": 22, "episodic": 16, "chronic": 8}
-        functional_map = {"none": 24, "mild": 18, "moderate": 12, "severe": 6}
-        coping_map = {"strong": 24, "moderate": 16, "weak": 8}
-
-        return AssessmentRubric(
-            severity=severity_map[scenario.severity_level],
-            frequency=frequency_map[scenario.frequency_level],
-            functional=functional_map[scenario.functional_level],
-            coping=coping_map[scenario.coping_level],
-        )
 
     def _generate_routing(
         self,
