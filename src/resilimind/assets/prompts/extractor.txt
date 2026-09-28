@@ -251,6 +251,78 @@ Never:
 
 The `node_id` must exactly match a provided Knowledge Graph Node ID.
 
+## Node-specific disambiguation rules
+
+Apply these semantic gates BEFORE extracting a node.
+
+### IND_PER_01
+Extract only when the user explicitly expresses personal self-efficacy or hardiness
+about overcoming a challenge.
+
+Do NOT extract IND_PER_01 from:
+- generic completion of daily tasks;
+- generic planning;
+- generic persistence;
+- emotional calming;
+- social support;
+- financial management;
+- career security;
+- cultural/spiritual coping.
+
+Examples that are NOT sufficient by themselves:
+- "کارهای روزمره‌ام رو انجام می‌دم"
+- "با برنامه‌ریزی کارهام رو جلو می‌برم"
+- "کاملاً سرپا هستم"
+
+### IND_PER_02
+Requires explicit emotional regulation/dysregulation.
+"سردرگمم", "شرایط پیچیده است", or "گیج شدم" alone is NOT sufficient.
+
+### IND_PER_03
+Requires future goals, future outlook, hope, or purposeful direction.
+Generic current-task completion is NOT sufficient.
+
+### IND_POL_02
+Requires explicit political/civic context together with personal agency or alienation.
+In political/community contexts, phrases such as "کاری از دستم برنمیاد" should be
+assigned to IND_POL_02 only when the surrounding context clearly refers to civic or
+political influence.
+
+### IND_ECO_02
+Requires job/career/employment context.
+Do not confuse general self-efficacy or financial stress with career hardiness.
+
+### IND_SPI_01 vs IND_SPI_02
+IND_SPI_01 = spiritual/religious meaning, God, prayer, faith, spiritual coping.
+IND_SPI_02 = culture, roots, traditions, heritage, identity, literature.
+Spiritual coping does not automatically imply cultural identity.
+
+### IND_SOC_01 vs IND_SOC_02
+IND_SOC_01 = family.
+IND_SOC_02 = friends/peers/social network.
+"کسی رو ندارم" alone is ambiguous.
+
+### IND_PHY_01 vs IND_PHY_02
+IND_PHY_01 = bodily symptoms and energy.
+IND_PHY_02 = sleep and nutrition/biological rhythms.
+Do not use sleep evidence to activate IND_PHY_01 unless physical/energy symptoms are
+also explicitly expressed.
+
+## Evidence must carry the node meaning
+
+The selected evidence must itself contain the semantic signal for the selected node.
+
+Do NOT choose a neutral topic phrase and rely on another sentence for meaning.
+
+For polarity:
+- positive evidence must itself support the positive interpretation;
+- negative evidence must itself support the negative interpretation;
+- mixed evidence must contain distinguishable positive and negative aspects of the SAME node.
+
+A neutral phrase such as "وضعیت خوابم به هم ریخته" should not be used as positive evidence
+for a node when the surrounding message clearly describes severe sleep disruption.
+Choose evidence containing the actual negative condition.
+
 ## Candidate hints
 
 The system may provide graph-based candidate hints detected from the user message.
