@@ -288,15 +288,30 @@ class ScenarioRenderer:
                 f"{unknown_targets}"
             )
 
-        target_nodes = [
-            {
-                "node_id": signal.node_id,
-                "polarity": signal.detected_signal,
-                "name_fa": self.nodes[signal.node_id].get("name_fa", ""),
-                "description": self.nodes[signal.node_id].get("description", ""),
-            }
-            for signal in case.gold.extraction.active_signals
-        ]
+        target_nodes = []
+
+        for signal in case.gold.extraction.active_signals:
+            profile = case.scenario.assessment_profiles.get(signal.node_id)
+
+            if profile is None:
+                raise ValueError(
+                    f"{case.case_id}: missing assessment profile for {signal.node_id}"
+                )
+
+            target_nodes.append(
+                {
+                    "node_id": signal.node_id,
+                    "polarity": signal.detected_signal,
+                    "name_fa": self.nodes[signal.node_id].get("name_fa", ""),
+                    "description": self.nodes[signal.node_id].get("description", ""),
+                    "assessment_profile": {
+                        "severity": profile.severity,
+                        "frequency": profile.frequency,
+                        "functional": profile.functional,
+                        "coping": profile.coping,
+                    },
+                }
+            )
 
         candidates = []
 
