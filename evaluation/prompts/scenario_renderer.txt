@@ -278,6 +278,78 @@ For mixed targets:
 
 Polarity has priority over stylistic realism.
 
+## 7.1 Target-specific assessment realization
+
+Assessment dimensions MUST be expressed inside the semantic scope of the target node.
+
+Do not use generic coping, productivity, or self-efficacy language to satisfy
+functional or coping requirements.
+
+The following generic phrases are especially dangerous and MUST NOT be used
+for non-target nodes unless the phrase is explicitly about the target concept:
+
+- "از پس کارها برمیام"
+- "از پسش برمیام"
+- "نمی‌تونم از پسش بربیام"
+- "کارهای روزمره‌ام رو انجام می‌دم"
+- "کارهای روزمره‌ام مختل شده"
+- "با برنامه‌ریزی کارها رو جلو می‌برم"
+- "کاملاً بر اوضاع مسلطم"
+
+For non-IND_PER_01 targets, functional/coping evidence must be causally anchored
+to that target's own semantic domain.
+
+Examples:
+
+IND_PHY_01:
+Use physical recovery, energy, fatigue, or bodily management.
+Do not use generic "از پس کارها برمیام" as coping evidence.
+
+IND_PHY_02:
+Use sleep/nutrition routines and their direct management.
+Do not convert generic productivity into sleep resilience.
+
+IND_ECO_01:
+Use budgeting, expense control, income adaptation, or financial planning.
+
+IND_ECO_02:
+Use job-security actions, skill development, job search, or career adaptation.
+
+IND_SOC_01:
+Use family communication, family support, or family cohesion.
+
+IND_SOC_02:
+Use friends, peers, social contact, or social support.
+
+IND_SPI_01:
+Use prayer, faith, meaning-making, or spiritual interpretation.
+
+IND_SPI_02:
+Use roots, traditions, cultural identity, literature, or cultural belonging.
+
+IND_POL_01:
+Use source checking, verification, media evaluation, or resistance to misinformation.
+
+IND_POL_02:
+Use civic participation, social influence, collective action, or perceived civic agency.
+
+IND_PER_03:
+Use future goals, future planning, hope, and personal direction.
+
+IND_PER_02:
+Use emotional control, anxiety regulation, anger regulation, or composure.
+
+For functional impact, mentioning daily activities is allowed only when the sentence
+explicitly ties the impairment to the target node.
+
+Example:
+"به خاطر بی‌خوابی، صبح‌ها نمی‌تونم مثل قبل سر کار تمرکز کنم."
+
+Do NOT follow it with a generic self-efficacy statement such as:
+"ولی در کل از پس همه‌چیز برمیام."
+
+For coping, use a target-specific coping behavior rather than generic resilience language.
+
 ## 8. Conversation realism
 
 Use natural Persian.
