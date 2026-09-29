@@ -230,8 +230,19 @@ def run_case(
                 )
             else:
                 state = {
-                    "user_message": user_message,
-                    "messages": [HumanMessage(content=user_message)],
+                "user_id": user_id,
+                "user_message": user_message,
+                "safety_status": "UNAVAILABLE",
+                "safety_flag": False,
+                "safety_risk_category": "SAFE",
+                "route": "service_unavailable",
+                "active_nodes": [],
+                "active_signals": [],
+                "subgraph_context": "",
+                "assessments": [],
+                "requires_disambiguation": False,
+                "final_response": "",
+                "messages": [HumanMessage(content=user_message)],
                 }
 
             final_state = app.invoke(state, config=config)
