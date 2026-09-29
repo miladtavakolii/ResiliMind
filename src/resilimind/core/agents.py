@@ -225,6 +225,8 @@ def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
 
         if positive_hits and negative_hits:
             inferred_polarity = "mixed"
+        elif signal.detected_signal == "mixed":
+            inferred_polarity = "mixed"
         elif positive_hits and not negative_hits:
             inferred_polarity = "positive"
         elif negative_hits and not positive_hits:
