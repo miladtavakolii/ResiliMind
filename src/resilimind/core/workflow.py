@@ -74,24 +74,20 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
     # 2. Retrieve extracted node assessments
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
     
-    # If no nodes were extracted or active, route to Questioner for clarification
     if not assessments:
-        previous_route = state.get("route")
-
-        if previous_route == "advisor":
-            logger.info("[Workflow] No new assessments. Preserving previous advisor route...")
-            return "advisor"
-
-        logger.info("[Workflow] No assessments generated. Routing to Questioner for context...")
+        logger.info("[Workflow] No assessments generated. Routing to Questioner...")
         return "questioner"
 
-    # If any confidence score falls below the 0.70 threshold, force disambiguation
     for item in assessments:
-        confidence: float = item.get("confidence", 1.0)
+        confidence: float = item.get("confidence", 0.0)
+
         if confidence < 0.70:
-            logger.warning(f"[Workflow] Low confidence detected ({confidence}). Routing to Questioner...")
+            logger.warning(
+                "[Workflow] Low confidence detected (%s). Routing to Questioner...",
+                confidence,
+            )
             return "questioner"
-            
+
     logger.info("[Workflow] Assessment confidence is high. Routing to Advisor...")
     return "advisor"
 
