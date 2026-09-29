@@ -591,12 +591,7 @@ def calculate_composite_confidence(
                If fatal contradictions are detected (e.g., RED status with 'positive' polarity), 
                the score is severely penalized to enforce disambiguation routing.
     """
-    # 1. LLM Self-Reported Score (30%)
-    llm_score = raw_confidence * 0.30
-
-    # 2. Evidence Density Score (30%)
-    evidence_score = 1.0 if evidence_text.strip() else 0.0
-    evidence_weight = evidence_score * 0.30
+    llm_score = max(min(raw_confidence, 1.0), 0.0)
 
     node_data = resilience_graph.nodes.get(node_id, {})
     cues = node_data.get("cues", {})
@@ -612,28 +607,27 @@ def calculate_composite_confidence(
 
     polarity_lower = signal_polarity.lower()
 
-    if polarity_lower == "positive":
-        if positive_hits and not negative_hits:
-            consistency_score = 1.0
-        elif negative_hits and not positive_hits:
-            consistency_score = 0.0
-        else:
-            consistency_score = 0.5
-    elif polarity_lower == "negative":
-        if negative_hits and not positive_hits:
-            consistency_score = 1.0
-        elif positive_hits and not negative_hits:
-            consistency_score = 0.0
-        else:
-            consistency_score = 0.5
-    elif polarity_lower == "mixed":
-        consistency_score = 1.0 if positive_hits and negative_hits else 0.5
+    if positive_hits and negative_hits:
+        consistency_score = 1.0 if polarity_lower == "mixed" else 0.5
+    elif positive_hits:
+        consistency_score = 1.0 if polarity_lower == "positive" else 0.0
+    elif negative_hits:
+        consistency_score = 1.0 if polarity_lower == "negative" else 0.0
     else:
         consistency_score = 0.5
 
+    normalized_evidence = normalize_persian_text(evidence_text)
+    evidence_tokens = [
+        token
+        for token in normalized_evidence.split()
+        if len(token) > 1
+    ]
+
+    evidence_score = min(len(evidence_tokens) / 6.0, 1.0)
+
     composite_score = (
-        llm_score
-        + evidence_weight
+        llm_score * 0.40
+        + evidence_score * 0.20
         + consistency_score * 0.40
     )
 
@@ -643,8 +637,15 @@ def calculate_composite_confidence(
     )
 
     logger.debug(
-        f"[Confidence] node={node_id} score={final_conf} raw={raw_confidence} polarity={signal_polarity} "
-        f"positive_cues={positive_hits} negative_cues=negative_hits"
+        "[Confidence] node=%s score=%s raw=%s polarity=%s "
+        "evidence_score=%s positive_cues=%s negative_cues=%s",
+        node_id,
+        final_conf,
+        raw_confidence,
+        signal_polarity,
+        evidence_score,
+        positive_hits,
+        negative_hits,
     )
 
     return final_conf
