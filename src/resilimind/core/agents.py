@@ -177,19 +177,13 @@ def build_extractor_graph_context() -> str:
     blocks = []
 
     for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
-        cues = node_data.get("cues", {})
-        positive = cues.get("positive_keywords", [])
-        negative = cues.get("negative_keywords", [])
-
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node_data.get('name_fa', '')}\n"
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
             f"Definition: {node_data.get('description', '')}\n"
-            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
-            f"Positive cues: {', '.join(positive)}\n"
-            f"Negative cues: {', '.join(negative)}"
+            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}"
         )
 
     return (
