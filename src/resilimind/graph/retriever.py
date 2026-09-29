@@ -30,24 +30,16 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
             continue
 
         node_data = graph.nodes[node_id]
-        block = (
+
+        context_blocks.append(
             f"=== Node: {node_id} ({node_data.get('name_fa', '')}) ===\n"
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
-            f"Description: {node_data.get('description', '')}\n\n"
-            "Status Level Definitions:\n"
+            f"Description: {node_data.get('description', '')}"
         )
 
-        status_levels = node_data.get("status_levels", {})
-        for level_color, level_info in status_levels.items():
-            if isinstance(level_info, dict):
-                block += (
-                    f"  - [{level_color.upper()}] "
-                    f"({level_info.get('code', '')}): "
-                    f"{level_info.get('description', '')}\n"
-                )
-
-        context_blocks.append(block)
+    if not context_blocks:
+        return "No specific resilience domains were activated."
 
     logger.debug(f"[Retriever] Successfully built context blocks for {len(context_blocks)} nodes.")
-    return "\n" + "=" * 50 + "\n".join(context_blocks)
+    return "\n\n".join(context_blocks)
