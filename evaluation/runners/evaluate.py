@@ -192,6 +192,39 @@ def validate_alignment(
                     "predictions and evaluation cases are not from the same snapshot."
                 )
 
+def validate_dataset_versions(
+    cases: list[EvaluationCase],
+    predictions: list[CasePrediction],
+) -> None:
+    """Ensure cases and predictions belong to the same dataset version.
+
+    Args:
+        cases: Ground-truth evaluation cases.
+        predictions: Benchmark predictions.
+
+    Raises:
+        ValueError: If versions do not match.
+    """
+    case_versions = {case.dataset_version for case in cases}
+    prediction_versions = {prediction.dataset_version for prediction in predictions}
+
+    if len(case_versions) != 1:
+        raise ValueError(
+            f"Multiple dataset versions found in cases: {sorted(case_versions)}"
+        )
+    if len(prediction_versions) != 1:
+        raise ValueError(
+            f"Multiple dataset versions found in predictions: {sorted(prediction_versions)}"
+        )
+
+    case_version = next(iter(case_versions))
+    prediction_version = next(iter(prediction_versions))
+
+    if case_version != prediction_version:
+        raise ValueError(
+            f"Dataset version mismatch: cases={case_version}, predictions={prediction_version}"
+        )
+
 def build_evaluator_runner(max_retries: int, retry_delay: float, request_delay: float) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
     Args:
