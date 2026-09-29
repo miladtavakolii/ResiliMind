@@ -380,6 +380,20 @@ def build_extractor_candidate_hints(user_message: str) -> str:
     """
     blocks = []
 
+    cue_owners: dict[str, list[str]] = {}
+
+    for node_id, node_data in resilience_graph.nodes(data=True):
+        cues = node_data.get("cues", {})
+
+        for cue in (
+            cues.get("positive_keywords", [])
+            + cues.get("negative_keywords", [])
+        ):
+            normalized_cue = normalize_persian_text(cue)
+
+            if normalized_cue:
+                cue_owners.setdefault(normalized_cue, []).append(node_id)
+
     for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
         cues = node_data.get("cues", {})
         positive_hits = _find_polarity_cues(
@@ -397,11 +411,32 @@ def build_extractor_candidate_hints(user_message: str) -> str:
         positive_text = ", ".join(positive_hits) if positive_hits else "none"
         negative_text = ", ".join(negative_hits) if negative_hits else "none"
 
+        matched_cues = {
+        normalize_persian_text(cue)
+            for cue in positive_hits + negative_hits
+        }
+
+        shared_cues = [
+            cue
+            for cue in positive_hits + negative_hits
+            if len(cue_owners.get(normalize_persian_text(cue), [])) > 1
+        ]
+
+        shared_text = (
+            ", ".join(
+                f"{cue} -> {cue_owners[normalize_persian_text(cue)]}"
+                for cue in shared_cues
+            )
+            if shared_cues
+            else "none"
+        )
+
         blocks.append(
             f"Candidate Node: {node_id}\n"
             f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
             f"Positive cue matches: {positive_text}\n"
-            f"Negative cue matches: {negative_text}"
+            f"Negative cue matches: {negative_text}\n"
+            f"Shared cue warning: {shared_text}"
         )
 
     if not blocks:
