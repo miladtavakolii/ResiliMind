@@ -308,6 +308,27 @@ IND_PHY_02 = sleep and nutrition/biological rhythms.
 Do not use sleep evidence to activate IND_PHY_01 unless physical/energy symptoms are
 also explicitly expressed.
 
+## Shared-cue disambiguation
+
+Some lexical cues belong to multiple graph nodes.
+
+A shared cue is NOT evidence that all nodes owning the cue are active.
+
+Examples:
+- "کم آوردم" may refer to personal resilience or financial adaptation.
+- "کمک" may refer to family or broader social support.
+- "برنامه دارم" may indicate future orientation, but planning alone does not prove self-efficacy.
+
+When a cue belongs to multiple nodes:
+
+1. Identify every node associated with the cue.
+2. Inspect the surrounding context.
+3. Select a node only if the context explicitly establishes its semantic meaning.
+4. Do not activate multiple nodes merely because they share the same cue.
+5. If the context does not disambiguate the cue, extract none of the conflicting nodes.
+
+The evidence span must contain the semantic meaning that distinguishes the selected node.
+
 ## Evidence must carry the node meaning
 
 The selected evidence must itself contain the semantic signal for the selected node.
