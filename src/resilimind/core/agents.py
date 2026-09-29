@@ -397,6 +397,7 @@ def build_extractor_candidate_hints(user_message: str) -> str:
 
         blocks.append(
             f"Candidate Node: {node_id}\n"
+            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
             f"Positive cue matches: {positive_text}\n"
             f"Negative cue matches: {negative_text}"
         )
@@ -405,10 +406,12 @@ def build_extractor_candidate_hints(user_message: str) -> str:
         return "No explicit graph cue candidates were found."
 
     return (
-        "Review EVERY candidate below independently.\n"
-        "A candidate hint is NOT an extraction decision.\n"
-        "Cue matches are only locator hints for finding relevant parts of USER INPUT.\n"
-        "Final evidence MUST still be copied from USER INPUT and must satisfy the semantic boundary.\n"
+        "Review EVERY candidate independently.\n"
+        "Candidate hints are locator hints only, NOT extraction decisions.\n"
+        "A cue match alone is never sufficient for extraction.\n"
+        "The matched cue MUST satisfy the candidate node's semantic boundary.\n"
+        "Shared or generic cues require surrounding context for disambiguation.\n"
+        "If the context does not clearly distinguish the node, do not extract it.\n"
         "Do not stop after selecting the first candidate.\n\n"
         + "\n\n".join(blocks)
     )
