@@ -22,6 +22,34 @@ DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "evaluation" / "results"
 DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "evaluation" / "runtime"
 
+def compute_case_fingerprint(case: EvaluationCase) -> str:
+    """Compute a deterministic SHA-256 fingerprint for an evaluation case.
+
+    Serializes the case's core components (identifier, dataset version, scenario
+    metadata, gold annotations, and input conversation) into a canonical, sorted-key,
+    compact JSON representation to generate a unique content hash.
+
+    Args:
+        case: EvaluationCase instance whose content will be fingerprinted.
+
+    Returns:
+        str: Hexadecimal SHA-256 digest uniquely identifying the case contents.
+    """
+    payload = {
+        "case_id": case.case_id,
+        "dataset_version": case.dataset_version,
+        "scenario": case.scenario.model_dump(mode="json"),
+        "gold": case.gold.model_dump(mode="json"),
+        "input": case.input.model_dump(mode="json"),
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 def create_run_id() -> str:
     """Create a unique identifier for one benchmark execution."""
@@ -220,6 +248,7 @@ def run_case(
             case_id=case.case_id,
             dataset_version=case.dataset_version,
             thread_id=thread_id,
+            case_fingerprint=compute_case_fingerprint(case),
             successful=True,
             turns=turns,
             final_response=turns[-1].final_response if turns else "",
@@ -231,6 +260,7 @@ def run_case(
             case_id=case.case_id,
             dataset_version=case.dataset_version,
             thread_id=thread_id,
+            case_fingerprint=compute_case_fingerprint(case),
             successful=False,
             turns=turns,
             final_response=turns[-1].final_response if turns else "",

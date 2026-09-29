@@ -341,6 +341,7 @@ class CasePrediction(BaseModel):
     case_id: str
     dataset_version: str
     thread_id: str
+    case_fingerprint: str = ""
     successful: bool
     turns: list[TurnPrediction] = Field(default_factory=list)
     final_response: str = ""

@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 from collections.abc import Sequence
 from dotenv import load_dotenv
+import hashlib
 
 from evaluation.schemas import EvaluationCase, CasePrediction, CaseEvaluationResult, TurnPrediction
 from evaluation.evaluators.runner import EvaluationRunner
@@ -30,6 +31,33 @@ GEMINI_MAX_RETRIES = 5
 GEMINI_RETRY_DELAY = 5
 GEMINI_REQUEST_DELAY = 5
 
+def compute_case_fingerprint(case: EvaluationCase) -> str:
+    """Compute a deterministic SHA-256 fingerprint for an evaluation case.
+
+    Serializes the case's core components (identifier, dataset version, scenario
+    metadata, gold annotations, and input conversation) into a canonical, sorted-key,
+    compact JSON representation to generate a unique content hash.
+
+    Args:
+        case: EvaluationCase instance whose content will be fingerprinted.
+
+    Returns:
+        str: Hexadecimal SHA-256 digest uniquely identifying the case contents.
+    """
+    payload = {
+        "case_id": case.case_id,
+        "dataset_version": case.dataset_version,
+        "scenario": case.scenario.model_dump(mode="json"),
+        "gold": case.gold.model_dump(mode="json"),
+        "input": case.input.model_dump(mode="json"),
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 def load_cases(path: Path) -> list[EvaluationCase]:
     """Load and validate evaluation cases from a JSONL file.
@@ -116,7 +144,7 @@ def validate_alignment(
     Raises:
         ValueError: If IDs are missing, duplicated, or unexpected.
     """
-    case_ids = {case.case_id for case in cases}
+    case_map = {case.case_id: case for case in cases}
     prediction_ids = [prediction.case_id for prediction in predictions]
     prediction_id_set = set(prediction_ids)
 
@@ -128,51 +156,41 @@ def validate_alignment(
         )
         raise ValueError(f"Duplicate case IDs found in predictions: {duplicates}")
 
-    missing_predictions = case_ids - prediction_id_set
-    unexpected_predictions = prediction_id_set - case_ids
+    missing_predictions = set(case_map) - prediction_id_set
+    unexpected_predictions = prediction_id_set - set(case_map)
 
     if missing_predictions:
         raise ValueError(
             f"Missing predictions for cases: {sorted(missing_predictions)}"
         )
+
     if unexpected_predictions:
         raise ValueError(
             f"Predictions contain unknown case IDs: {sorted(unexpected_predictions)}"
         )
 
+    for prediction in predictions:
+        case = case_map[prediction.case_id]
+        expected_messages = case.input.messages
+        predicted_messages = [
+            turn.user_message
+            for turn in prediction.turns
+        ]
 
-def validate_dataset_versions(
-    cases: list[EvaluationCase],
-    predictions: list[CasePrediction],
-) -> None:
-    """Ensure cases and predictions belong to the same dataset version.
+        if expected_messages != predicted_messages:
+            raise ValueError(
+                f"Input mismatch for {case.case_id}: "
+                "predictions were generated from a different case snapshot."
+            )
 
-    Args:
-        cases: Ground-truth evaluation cases.
-        predictions: Benchmark predictions.
+        if prediction.case_fingerprint:
+            expected_fingerprint = compute_case_fingerprint(case)
 
-    Raises:
-        ValueError: If versions do not match.
-    """
-    case_versions = {case.dataset_version for case in cases}
-    prediction_versions = {prediction.dataset_version for prediction in predictions}
-
-    if len(case_versions) != 1:
-        raise ValueError(
-            f"Multiple dataset versions found in cases: {sorted(case_versions)}"
-        )
-    if len(prediction_versions) != 1:
-        raise ValueError(
-            f"Multiple dataset versions found in predictions: {sorted(prediction_versions)}"
-        )
-
-    case_version = next(iter(case_versions))
-    prediction_version = next(iter(prediction_versions))
-
-    if case_version != prediction_version:
-        raise ValueError(
-            f"Dataset version mismatch: cases={case_version}, predictions={prediction_version}"
-        )
+            if prediction.case_fingerprint != expected_fingerprint:
+                raise ValueError(
+                    f"Case fingerprint mismatch for {case.case_id}: "
+                    "predictions and evaluation cases are not from the same snapshot."
+                )
 
 def build_evaluator_runner(max_retries: int, retry_delay: float, request_delay: float) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
