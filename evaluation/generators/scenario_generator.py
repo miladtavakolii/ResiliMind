@@ -339,7 +339,7 @@ class ScenarioGenerator:
 
         polarity_options = {
             "positive": {
-                "severity": ["low", "moderate"],
+                "severity": ["low"],
                 "frequency": ["rare", "episodic"],
                 "functional": ["none", "mild"],
                 "coping": ["strong", "moderate"],
