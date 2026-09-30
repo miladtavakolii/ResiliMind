@@ -25,6 +25,7 @@ class AppConfig(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: Path = Path("resilimind.log")
+    RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD: float = 0.70
     
     # Centralized Storage Directory (Defaults to 'data' in the current working directory)
     DATA_DIR: Path = Path("data")
