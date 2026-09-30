@@ -66,29 +66,22 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
     Returns:
         Literal["questioner", "advisor"]: Target agent node identifier.
     """
-    # 1. Check explicit disambiguation flag set by Assessor Agent
-    if state.get("requires_disambiguation", False):
-        logger.info("[Workflow] Disambiguation flag is TRUE. Routing to Questioner...")
-        return "questioner"
-    
-    # 2. Retrieve extracted node assessments
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
-    
+
     if not assessments:
         logger.info("[Workflow] No assessments generated. Routing to Questioner...")
         return "questioner"
 
-    for item in assessments:
-        confidence: float = item.get("confidence", 0.0)
+    threshold = settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD
 
-        if confidence < 0.70:
-            logger.warning(
-                "[Workflow] Low confidence detected (%s). Routing to Questioner...",
-                confidence,
-            )
+    for item in assessments:
+        confidence = float(item.get("confidence", 0.0))
+
+        if confidence < threshold:
+            logger.info(f"[Workflow] Confidence {confidence} below threshold {threshold} for node {item.get("node_id")}. Routing to Questioner...")
             return "questioner"
 
-    logger.info("[Workflow] Assessment confidence is high. Routing to Advisor...")
+    logger.info(f"[Workflow] All assessment confidences are >= {threshold}. Routing to Advisor...")
     return "advisor"
 
 
