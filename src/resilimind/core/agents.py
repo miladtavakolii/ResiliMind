@@ -224,12 +224,18 @@ def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
 
         inferred_polarity = signal.detected_signal
 
-        if positive_hits and negative_hits:
+        if positive_hits and not negative_hits:
+            if signal.detected_signal in {"positive", "mixed"}:
+                inferred_polarity = "positive"
+            else:
+                inferred_polarity = signal.detected_signal
+        elif negative_hits and not positive_hits:
+            if signal.detected_signal in {"negative", "mixed"}:
+                inferred_polarity = "negative"
+            else:
+                inferred_polarity = signal.detected_signal
+        elif positive_hits and negative_hits:
             inferred_polarity = "mixed"
-        elif positive_hits:
-            inferred_polarity = "positive"
-        elif negative_hits:
-            inferred_polarity = "negative"
         else:
             inferred_polarity = signal.detected_signal
 
