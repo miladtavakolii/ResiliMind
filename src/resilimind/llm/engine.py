@@ -4,7 +4,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage
 
-from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
+from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput, NodeSelectionOutput, SignalResolutionOutput
 from ..core.config import settings
 
 # Initialize module logger
@@ -61,9 +61,81 @@ class LLMEngine:
             self._assessor_llm: Optional[Any] = None
             self._safety_llm: Optional[Any] = None
             self._conversational_llm: Optional[ChatOllama] = None
-            
+            self._node_selector_llm: Optional[Any] = None
+            self._signal_resolver_llm: Optional[Any] = None
             self.is_initialized: bool = True
             logger.info(f"[LLMEngine] Initialized engine with model '{self.model_name}' at URL '{self.base_url}'.")
+
+    def get_node_selector_runner(self, system_prompt: str) -> RunnableSerializable[dict[str, Any], Any]:
+        """Build and cache the LangChain runnable pipeline for candidate node selection.
+
+        Initializes a structured-output Ollama LLM configured with the `NodeSelectionOutput`
+        JSON schema and binds it to a chat prompt template accepting `user_message`.
+
+        Args:
+            system_prompt: System instructions and knowledge graph context for node selection.
+
+        Returns:
+            RunnableSerializable: Composed LCEL chain mapping prompt variables to structured
+                node selection results.
+        """
+        if self._node_selector_llm is None:
+            self._node_selector_llm = ChatOllama(
+                model=self.model_name,
+                base_url=self.base_url,
+                temperature=0.0,
+                reasoning=False,
+                num_ctx=8192,
+                num_predict=512,
+            ).with_structured_output(
+                NodeSelectionOutput,
+                method="json_schema",
+                include_raw=True,
+            )
+
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_prompt),
+            ("human", "User input: {user_message}"),
+        ])
+        return prompt | self._node_selector_llm
+
+    def get_signal_resolver_runner(self, system_prompt: str) -> RunnableSerializable[dict[str, Any], Any]:
+        """Build and cache the LangChain runnable pipeline for signal resolution.
+
+        Initializes a structured-output Ollama LLM configured with the `SignalResolutionOutput`
+        JSON schema and binds it to a two-part chat prompt template accepting `user_message`
+        and `selected_nodes`.
+
+        Args:
+            system_prompt: System instructions detailing polarity extraction and evidence alignment.
+
+        Returns:
+            RunnableSerializable: Composed LCEL chain resolving candidate nodes into verified
+                active signals with evidence spans and polarities.
+        """
+        if self._signal_resolver_llm is None:
+            self._signal_resolver_llm = ChatOllama(
+                model=self.model_name,
+                base_url=self.base_url,
+                temperature=0.0,
+                reasoning=False,
+                num_ctx=8192,
+                num_predict=1024,
+            ).with_structured_output(
+                SignalResolutionOutput,
+                method="json_schema",
+                include_raw=True,
+            )
+
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_prompt),
+            (
+                "human",
+                "=== USER MESSAGE ===\n{user_message}\n\n"
+                "=== SELECTED NODES ===\n{selected_nodes}",
+            ),
+        ])
+        return prompt | self._signal_resolver_llm
 
     def get_safety_runner(self, system_prompt: str) -> Any:
         """
