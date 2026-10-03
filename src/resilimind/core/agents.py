@@ -775,20 +775,25 @@ def validate_assessment_result(result: AssessmentOutput, active_signals: list[di
 
 def assessor_node(state: AgentState) -> Dict[str, Any]:
     """
-    Evaluates resilience levels using extracted evidence and polarity signals,
-    grounded in the retrieved subgraph context.
+    Evaluates resilience levels independently for each extracted node using
+    node-specific evidence and retrieved graph context.
 
     Args:
-        state (AgentState): Current state containing 'user_message', 
-                            'subgraph_context', and 'active_signals'.
+        state: Current state containing 'user_message', 'subgraph_context',
+            and 'active_signals'.
 
     Returns:
-        Dict[str, Any]: Updated state with 'assessments' and 'requires_disambiguation'.
+        Dict[str, Any]: Updated state with 'assessments' and
+            'requires_disambiguation'.
     """
-    logger.info("[Assessor] Assessor Agent is evaluating resilience status with evidence...")
+    logger.info(
+        "[Assessor] Assessor Agent is evaluating resilience status "
+        "with evidence..."
+    )
+
     user_msg: str = state.get("user_message", "")
-    context: str = state.get("subgraph_context", "")
     active_signals: List[Dict[str, Any]] = state.get("active_signals", [])
+
     if not active_signals:
         logger.info("[Assessor] No active signals. Skipping assessment.")
         return {
@@ -796,135 +801,164 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
             "requires_disambiguation": False,
         }
 
-    # 1. Format extracted signals & evidence substrings for prompt ingestion
-    if active_signals:
-        evidence_blocks = []
-        for index, sig in enumerate(active_signals, start=1):
-            evidence_blocks.append(
-                f"TARGET {index}/{len(active_signals)}\n"
-                f"Node ID: {sig.get('node_id')}\n"
-                f"Polarity: {sig.get('detected_signal', 'mixed').upper()}\n"
-                f"Exact Evidence: \"{sig.get('evidence', '')}\""
-            )
-        formatted_evidence = "\n\n".join(evidence_blocks)
-    else:
-        logger.warning("[Assessor] No explicit extracted signals provided.")
-        formatted_evidence = "No explicit extracted signals provided."
-
-    # 2. Construct clear evidence-aware payload conforming to assessor.txt prompt
-    enriched_input = (
-        "=== PRIMARY EVIDENCE BY TARGET NODE ===\n"
-        f"{formatted_evidence}\n\n"
-        "=== FULL USER MESSAGE ===\n"
-        f"{user_msg}\n\n"
-        "RULE:\n"
-        "The exact evidence assigned to each node is the primary evidence for that node.\n"
-        "Use the full message only to resolve local context or polarity.\n"
-        "Do not borrow severity, frequency, functional impact, or coping evidence from "
-        "another target node.\n"
+    assessor_chain = llm_engine.get_assessor_runner(
+        prompts.ASSESSOR_SYSTEM_PROMPT
     )
 
-    # 3. Invoke LLM chain with evidence payload
-    assessor_chain = llm_engine.get_assessor_runner(prompts.ASSESSOR_SYSTEM_PROMPT)
     max_assessment_attempts = 3
-    last_validation_error: Exception | None = None
-
-    for attempt in range(max_assessment_attempts):
-        attempt_input = enriched_input
-
-        if last_validation_error is not None:
-            attempt_input += (
-                "\n\n=== PREVIOUS ASSESSMENT VALIDATION FAILURE ===\n"
-                f"{last_validation_error}\n\n"
-                "Regenerate the assessment output completely.\n"
-                "You MUST return exactly one assessment for every active node.\n"
-                "Do not omit any active node.\n"
-                "Do not return an empty assessments list.\n"
-            )
-
-        raw_result = assessor_chain.invoke({
-            "user_message": attempt_input,
-            "subgraph_context": context,
-        })
-
-        if raw_result.get("parsed") is None:
-            raw = raw_result.get("raw")
-            last_validation_error = ValueError(
-                f"Assessor returned invalid structured output: {raw!r}"
-            )
-            logger.warning(
-                "[Assessor] Structured output validation failed "
-                "(attempt %d/%d). Retrying...",
-                attempt + 1,
-                max_assessment_attempts,
-            )
-            continue
-
-        result = raw_result["parsed"]
-
-        try:
-            result = validate_assessment_result(
-                result=result,
-                active_signals=active_signals,
-            )
-            break
-        except ValueError as exc:
-            last_validation_error = exc
-            logger.warning(
-                "[Assessor] Assessment coverage validation failed "
-                "(attempt %d/%d): %s",
-                attempt + 1,
-                max_assessment_attempts,
-                exc,
-            )
-    else:
-        raise RuntimeError(
-            f"[Assessor] Failed to produce complete assessments after "
-            f"{max_assessment_attempts} attempts"
-        ) from last_validation_error
-    
-    # Create a quick lookup for active signals to match with assessments
-    signal_lookup = {sig["node_id"]: sig for sig in active_signals}
-
-    requires_disambiguation_override = False
     assessments_list: List[Dict[str, Any]] = []
+    requires_disambiguation_override = False
 
-    # 4. Compute heuristic routing confidence from multiple signals
-    for assessment in result.assessments:
-        assessment_dict = assessment.model_dump()
-        assessment_dict["score"] = assessment.score
-        assessment_dict["status"] = assessment.status
-        node_id = assessment_dict["node_id"]
-        
-        # Get corresponding signal data from Extractor
-        signal_data = signal_lookup.get(node_id, {})
-        signal_polarity = signal_data.get("detected_signal", "mixed")
-        evidence_text = signal_data.get("evidence", "")
+    for signal in active_signals:
+        node_id = signal["node_id"]
+        evidence = signal.get("evidence", "")
+        polarity = signal.get("detected_signal", "mixed")
 
-        # Recalculate true confidence
-        routing_confidence = calculate_composite_confidence(
-            raw_confidence=assessment_dict["confidence"],
-            signal_polarity=signal_polarity,
-            evidence_text=evidence_text,
-            node_id=node_id,
-            user_message=user_msg,
-            assessment_score=assessment_dict["score"],
+        target_context = retrieve_subgraph_context(
+            resilience_graph,
+            [node_id],
         )
-        
-        # Override the LLM's self-reported confidence
-        assessment_dict["confidence"] = routing_confidence
-        assessments_list.append(assessment_dict)
 
-        # Re-evaluate routing logic based on the heuristic confidence score
-        if routing_confidence < settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD:
-            logger.warning(f"[Assessor] Low confidence detected for node {node_id} ({routing_confidence}). Flagging disambiguation.")
-            requires_disambiguation_override = True
+        enriched_input = (
+            "=== TARGET NODE ===\n"
+            f"{node_id}\n\n"
+            "=== TARGET SIGNAL ===\n"
+            f"Polarity: {polarity.upper()}\n"
+            f"Exact Evidence: \"{evidence}\"\n\n"
+            "=== FULL USER MESSAGE ===\n"
+            f"{user_msg}\n\n"
+            "RULES:\n"
+            "Assess ONLY the target node.\n"
+            "Return exactly one assessment for this target node.\n"
+            "Use the exact evidence assigned to this node as the primary evidence.\n"
+            "Use the full user message only to clarify the local meaning of this evidence.\n"
+            "Do not borrow severity, frequency, functional impact, or coping "
+            "evidence from another resilience concept.\n"
+        )
+
+        last_validation_error: Exception | None = None
+
+        for attempt in range(max_assessment_attempts):
+            attempt_input = enriched_input
+
+            if last_validation_error is not None:
+                attempt_input += (
+                    "\n\n=== PREVIOUS ASSESSMENT VALIDATION FAILURE ===\n"
+                    f"{last_validation_error}\n\n"
+                    "Regenerate the assessment completely.\n"
+                    "Return exactly one assessment.\n"
+                    f"The only allowed node_id is {node_id}.\n"
+                    "Do not assess any other node.\n"
+                    "Ensure all four dimensions contain valid rubric values.\n"
+                )
+
+            raw_result = assessor_chain.invoke({
+                "user_message": attempt_input,
+                "subgraph_context": target_context,
+            })
+
+            if raw_result.get("parsed") is None:
+                raw = raw_result.get("raw")
+
+                last_validation_error = ValueError(
+                    f"Assessor returned invalid structured output: {raw!r}"
+                )
+
+                logger.warning(
+                    "[Assessor] Structured output validation failed for %s "
+                    "(attempt %d/%d). Retrying...",
+                    node_id,
+                    attempt + 1,
+                    max_assessment_attempts,
+                )
+                continue
+
+            result = raw_result["parsed"]
+
+            try:
+                if len(result.assessments) != 1:
+                    raise ValueError(
+                        f"Expected exactly one assessment for {node_id}, "
+                        f"got {len(result.assessments)}"
+                    )
+
+                result = validate_assessment_result(
+                    result=result,
+                    active_signals=[signal],
+                )
+
+                assessment = result.assessments[0]
+
+                if assessment.node_id != node_id:
+                    raise ValueError(
+                        f"Assessor returned wrong node: "
+                        f"expected={node_id}, got={assessment.node_id}"
+                    )
+
+                assessment_dict = assessment.model_dump()
+                assessment_dict["score"] = assessment.score
+                assessment_dict["status"] = assessment.status
+
+                routing_confidence = calculate_composite_confidence(
+                    raw_confidence=assessment_dict["confidence"],
+                    signal_polarity=polarity,
+                    evidence_text=evidence,
+                    node_id=node_id,
+                    user_message=user_msg,
+                    assessment_score=assessment_dict["score"],
+                )
+
+                assessment_dict["confidence"] = routing_confidence
+
+                assessments_list.append(assessment_dict)
+
+                if (
+                    result.requires_disambiguation
+                    or routing_confidence
+                    < settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD
+                ):
+                    logger.warning(
+                        "[Assessor] Low confidence/disambiguation for %s "
+                        "(confidence=%s, model_disambiguation=%s)",
+                        node_id,
+                        routing_confidence,
+                        result.requires_disambiguation,
+                    )
+                    requires_disambiguation_override = True
+
+                logger.debug(
+                    "[Assessor] Successfully assessed %s "
+                    "(score=%s, status=%s, confidence=%s)",
+                    node_id,
+                    assessment_dict["score"],
+                    assessment_dict["status"],
+                    routing_confidence,
+                )
+
+                break
+
+            except ValueError as exc:
+                last_validation_error = exc
+
+                logger.warning(
+                    "[Assessor] Validation failed for %s "
+                    "(attempt %d/%d): %s",
+                    node_id,
+                    attempt + 1,
+                    max_assessment_attempts,
+                    exc,
+                )
+
+        else:
+            raise RuntimeError(
+                f"[Assessor] Failed to produce assessment for node "
+                f"{node_id} after {max_assessment_attempts} attempts"
+            ) from last_validation_error
 
     return {
         "assessments": assessments_list,
-        "requires_disambiguation": requires_disambiguation_override 
+        "requires_disambiguation": requires_disambiguation_override,
     }
-
 
 def questioner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """
