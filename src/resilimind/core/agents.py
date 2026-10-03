@@ -618,6 +618,48 @@ def retriever_node(state: AgentState) -> Dict[str, Any]:
     
     return {"subgraph_context": context}
 
+def calculate_evidence_quality(
+    evidence: str,
+    node_id: str,
+) -> float:
+    """Estimate the quality of extracted evidence for routing confidence."""
+    normalized_evidence = normalize_persian_text(evidence)
+
+    if not normalized_evidence:
+        return 0.0
+
+    node_data = resilience_graph.nodes.get(node_id, {})
+    cues = node_data.get("cues", {})
+
+    positive_hits = _find_polarity_cues(
+        evidence,
+        cues.get("positive_keywords", []),
+    )
+    negative_hits = _find_polarity_cues(
+        evidence,
+        cues.get("negative_keywords", []),
+    )
+
+    cue_support = min(
+        (len(positive_hits) + len(negative_hits)) / 2.0,
+        1.0,
+    )
+
+    token_count = len(normalized_evidence.split())
+
+    if 3 <= token_count <= 12:
+        span_quality = 1.0
+    elif token_count in {1, 2}:
+        span_quality = 0.6
+    else:
+        span_quality = 0.5
+
+    return round(
+        0.5 * cue_support
+        + 0.5 * span_quality,
+        2,
+    )
+
 
 def calculate_composite_confidence(
     raw_confidence: float,
@@ -627,26 +669,25 @@ def calculate_composite_confidence(
     user_message: str,
     assessment_score: int,
 ) -> float:
-    """Compute deterministic routing confidence from four independent signals.
+    """Compute a deterministic heuristic confidence score for routing.
 
-    Combines self-reported model confidence, Persian substring evidence validity,
-    lexical cue-polarity consistency, and distance-to-boundary assessment certainty:
-        - 35% LLM self-reported confidence
-        - 20% Evidence substring validity (in normalized user message)
-        - 25% Polarity consistency (concordance with knowledge graph cues)
-        - 20% Assessment certainty (distance from 40/70 clinical threshold boundaries)
+    Combines:
+        - 30% LLM self-reported confidence
+        - 30% extracted evidence quality
+        - 40% knowledge/assessment consistency
+
+    This is a composite heuristic confidence score, not a calibrated probability.
 
     Args:
-        raw_confidence: Model self-reported extraction confidence score (0.0 to 1.0).
-        signal_polarity: Detected emotional/situational polarity ('positive', 'negative', 'mixed').
-        evidence_text: Extracted supporting evidence phrase or substring.
+        raw_confidence: Model self-reported assessment confidence (0.0 to 1.0).
+        signal_polarity: Detected signal polarity ('positive', 'negative', 'mixed').
+        evidence_text: Extracted supporting evidence phrase.
         node_id: Target knowledge graph node identifier.
-        user_message: Raw user message text against which evidence is verified.
-        assessment_score: Total quantitative rubric score (e.g., 0 to 100).
+        user_message: Raw user message.
+        assessment_score: Total quantitative assessment score (0 to 100).
 
     Returns:
-        float: Calibrated routing confidence score bounded between 0.0 and 1.0,
-            rounded to two decimal places.
+        float: Heuristic confidence score bounded between 0.0 and 1.0.
     """
     llm_confidence = min(max(raw_confidence, 0.0), 1.0)
 
@@ -662,24 +703,20 @@ def calculate_composite_confidence(
         cues.get("negative_keywords", []),
     )
 
-    normalized_evidence = normalize_persian_text(evidence_text)
-    normalized_message = normalize_persian_text(user_message)
-
-    if not normalized_evidence:
-        evidence_validity = 0.0
-    elif normalized_evidence in normalized_message:
-        evidence_validity = 1.0
-    else:
-        evidence_validity = 0.0
-
     polarity_lower = signal_polarity.lower()
 
     if positive_hits and negative_hits:
-        polarity_consistency = 1.0 if polarity_lower == "mixed" else 0.0
+        polarity_consistency = (
+            1.0 if polarity_lower == "mixed" else 0.0
+        )
     elif positive_hits:
-        polarity_consistency = 1.0 if polarity_lower == "positive" else 0.0
+        polarity_consistency = (
+            1.0 if polarity_lower == "positive" else 0.0
+        )
     elif negative_hits:
-        polarity_consistency = 1.0 if polarity_lower == "negative" else 0.0
+        polarity_consistency = (
+            1.0 if polarity_lower == "negative" else 0.0
+        )
     else:
         polarity_consistency = 0.5
 
@@ -687,13 +724,26 @@ def calculate_composite_confidence(
         abs(assessment_score - 40),
         abs(assessment_score - 70),
     )
-    assessment_certainty = min(distance_to_boundary / 15.0, 1.0)
+
+    assessment_certainty = min(
+        distance_to_boundary / 15.0,
+        1.0,
+    )
+
+    knowledge_consistency = (
+        0.5 * polarity_consistency
+        + 0.5 * assessment_certainty
+    )
+
+    evidence_quality = calculate_evidence_quality(
+        evidence=evidence_text,
+        node_id=node_id,
+    )
 
     composite_score = (
-        llm_confidence * 0.35
-        + evidence_validity * 0.20
-        + polarity_consistency * 0.25
-        + assessment_certainty * 0.20
+        0.30 * llm_confidence
+        + 0.30 * evidence_quality
+        + 0.40 * knowledge_consistency
     )
 
     final_confidence = round(
@@ -703,14 +753,15 @@ def calculate_composite_confidence(
 
     logger.debug(
         "[Confidence] node=%s confidence=%s raw=%s "
-        "evidence_validity=%s polarity_consistency=%s "
-        "assessment_certainty=%s score=%s",
+        "evidence_quality=%s polarity_consistency=%s "
+        "assessment_certainty=%s knowledge_consistency=%s score=%s",
         node_id,
         final_confidence,
         raw_confidence,
-        evidence_validity,
+        evidence_quality,
         polarity_consistency,
         assessment_certainty,
+        knowledge_consistency,
         assessment_score,
     )
 
