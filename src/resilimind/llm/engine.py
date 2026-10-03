@@ -3,6 +3,7 @@ from typing import Any, Optional
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnableSerializable
 
 from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput, NodeSelectionOutput, SignalResolutionOutput
 from ..core.config import settings
