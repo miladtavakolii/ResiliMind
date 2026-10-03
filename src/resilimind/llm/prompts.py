@@ -26,7 +26,6 @@ def load_prompt_text(filename: str) -> str:
         raise FileNotFoundError(f"Failed to load prompt '{filename}' from package resources: {e}")
     
 # System Prompt Strings loaded from files
-EXTRACTOR_SYSTEM_PROMPT: str = load_prompt_text("extractor.txt")
 NODE_SELECTOR_SYSTEM_PROMPT: str = load_prompt_text("node_selector.txt")
 SIGNAL_RESOLVER_SYSTEM_PROMPT: str = load_prompt_text("signal_resolver.txt")
 ASSESSOR_SYSTEM_PROMPT: str = load_prompt_text("assessor.txt")
