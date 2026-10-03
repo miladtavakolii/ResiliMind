@@ -31,6 +31,34 @@ NodeId = Literal[
     "IND_SPI_02",
 ]
 
+class NodeSelectionOutput(BaseModel):
+    node_ids: List[NodeId] = Field(
+        default_factory=list,
+        description="Zero or more node IDs explicitly supported by the user message."
+    )
+
+
+class ResolvedSignal(BaseModel):
+    node_id: NodeId = Field(
+        ...,
+        description="Exact selected node ID."
+    )
+    detected_signal: Literal["positive", "negative", "mixed"] = Field(
+        ...,
+        description="Polarity of the selected node based on local context."
+    )
+    evidence: str = Field(
+        ...,
+        description="Shortest exact contiguous substring copied from the user message."
+    )
+
+
+class SignalResolutionOutput(BaseModel):
+    signals: List[ResolvedSignal] = Field(
+        default_factory=list,
+        description="Exactly one resolved signal for each requested node."
+    )
+
 class ActiveSignal(BaseModel):
     """
     Represents an individual node detected from user input.
