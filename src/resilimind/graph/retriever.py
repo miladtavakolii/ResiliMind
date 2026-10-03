@@ -31,11 +31,19 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
 
         node_data = graph.nodes[node_id]
 
+        status_levels = node_data.get("status_levels", {})
+        cues = node_data.get("cues", {})
+
         context_blocks.append(
             f"=== Node: {node_id} ({node_data.get('name_fa', '')}) ===\n"
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
-            f"Description: {node_data.get('description', '')}"
+            f"Description: {node_data.get('description', '')}\n"
+            f"Positive cues: {cues.get('positive_keywords', [])}\n"
+            f"Negative cues: {cues.get('negative_keywords', [])}\n"
+            f"Status GREEN: {status_levels.get('green', {})}\n"
+            f"Status YELLOW: {status_levels.get('yellow', {})}\n"
+            f"Status RED: {status_levels.get('red', {})}"
         )
 
     if not context_blocks:
