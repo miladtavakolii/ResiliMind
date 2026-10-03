@@ -454,92 +454,144 @@ def build_extractor_candidate_hints(user_message: str) -> str:
         + "\n\n".join(blocks)
     )
 
-def extractor_node(state: AgentState) -> Dict[str, Any]:
-    """
-    Analyzes the user's input message to extract active resilience nodes 
-    using the Gemma LLM with structured output enforcement.
+def build_selected_node_context(node_ids: list[str]) -> str:
+    """Format detailed semantic context for selected graph nodes.
+
+    Constructs a plain-text prompt block containing identifiers, Persian names,
+    domains, definitions, boundary constraints, and polarity keywords for each
+    requested node present in the knowledge graph.
 
     Args:
-        state (AgentState): Current state containing 'user_message'.
+        node_ids: List of candidate graph node identifiers to contextualize.
 
     Returns:
-        Dict[str, Any]: Updated state dict with 'active_nodes'.
+        str: Double-newline-separated blocks of node specifications, or an empty
+            string if none of the provided IDs exist in the resilience graph.
     """
-    logger.info("[Extractor] Extractor Agent is analyzing input...")
-    user_msg: str = state.get("user_message", "")
+    blocks = []
 
-    extractor_prompt_base = (
-        f"{prompts.EXTRACTOR_SYSTEM_PROMPT}\n\n"
+    for node_id in node_ids:
+        if node_id not in resilience_graph:
+            continue
+
+        node = resilience_graph.nodes[node_id]
+        blocks.append(
+            f"Node ID: {node_id}\n"
+            f"Name: {node.get('name_fa', '')}\n"
+            f"Domain: {node.get('domain', '')}\n"
+            f"Definition: {node.get('description', '')}\n"
+            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
+            f"Positive cues: {node.get('cues', {}).get('positive_keywords', [])}\n"
+            f"Negative cues: {node.get('cues', {}).get('negative_keywords', [])}"
+        )
+
+    return "\n\n".join(blocks)
+
+def extractor_node(state: AgentState) -> dict[str, Any]:
+    """Execute two-stage structured signal extraction in the LangGraph agent pipeline.
+
+    Performs graph node candidate selection followed by detailed signal resolution.
+    Validates evidence alignment against raw user messages, collapses duplicates,
+    reconciles emotional polarity against authoritative knowledge graph cues, and
+    ensures complete 1-to-1 consistency between selected nodes and resolved signals.
+
+    Args:
+        state: Current agent workflow state containing the input `user_message`.
+
+    Returns:
+        dict[str, Any]: State update dictionary containing:
+            - "active_nodes": List of verified graph node ID strings.
+            - "active_signals": List of serialized active signal dictionaries
+              with extracted evidence spans, polarities, and node IDs.
+
+    Raises:
+        RuntimeError: If valid extraction and reconciliation cannot be completed
+            within 3 attempts due to schema parsing errors or structural mismatches.
+    """
+    logger.info("[Extractor] Starting staged extraction...")
+    user_msg = state.get("user_message", "")
+
+    selector_prompt = (
+        f"{prompts.NODE_SELECTOR_SYSTEM_PROMPT}\n\n"
         f"{build_extractor_graph_context()}\n\n"
-        f"=== EXPLICIT CANDIDATE HINTS ===\n"
+        f"=== CANDIDATE HINTS ===\n"
         f"{build_extractor_candidate_hints(user_msg)}"
     )
+
+    selector = llm_engine.get_node_selector_runner(selector_prompt)
 
     last_error: Exception | None = None
 
     for attempt in range(3):
-        extractor_prompt = extractor_prompt_base
+        raw = selector.invoke({"user_message": user_msg})
 
-        if last_error is not None:
-            extractor_prompt += (
-                "\n\n=== VALIDATION RETRY ===\n"
-                "The previous extraction failed validation.\n"
-                "Do not reuse the previous evidence.\n"
-                "For every signal, evidence must be copied exactly from the USER INPUT.\n"
-                "Choose the shortest contiguous span that directly supports the node.\n"
-                "Do not combine multiple phrases into one evidence span.\n"
-                "If you cannot identify a valid exact span, omit the signal.\n"
-            )
-
-        extractor_chain = llm_engine.get_extractor_runner(extractor_prompt)
-        raw_result = extractor_chain.invoke({"user_message": user_msg})
-
-        if raw_result.get("parsed") is None:
-            raw = raw_result.get("raw")
+        if raw.get("parsed") is None:
             last_error = ValueError(
-                f"Extractor returned invalid structured output: {raw!r}"
+                f"Node selector returned invalid output: {raw.get('raw')!r}"
             )
-            logger.warning(
-                "[Extractor] Structured output validation failed "
-                "(attempt %d/3): %s",
-                attempt + 1,
-                last_error,
+            continue
+
+        selected_nodes = list(dict.fromkeys(raw["parsed"].node_ids))
+
+        if not selected_nodes:
+            return {
+                "active_nodes": [],
+                "active_signals": [],
+            }
+
+        resolver_prompt = prompts.SIGNAL_RESOLVER_SYSTEM_PROMPT
+        resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
+
+        raw_resolved = resolver.invoke({
+            "user_message": user_msg,
+            "selected_nodes": build_selected_node_context(selected_nodes),
+        })
+
+        if raw_resolved.get("parsed") is None:
+            last_error = ValueError(
+                f"Signal resolver returned invalid output: "
+                f"{raw_resolved.get('raw')!r}"
             )
             continue
 
         try:
-            result = canonicalize_extraction_result(
-                raw_result["parsed"]
+            result = ExtractionOutput(
+                active_signals=[
+                    signal.model_dump()
+                    for signal in raw_resolved["parsed"].signals
+                ]
             )
+
+            result = canonicalize_extraction_result(result)
             result = validate_extraction_result(
                 result=result,
                 user_message=user_msg,
             )
             result = reconcile_signal_polarity(result)
-            break
+
+            expected = set(selected_nodes)
+            actual = {signal.node_id for signal in result.active_signals}
+
+            if actual != expected:
+                raise ValueError(
+                    f"Signal resolution mismatch: "
+                    f"expected={sorted(expected)}, actual={sorted(actual)}"
+                )
+
+            return {
+                "active_nodes": selected_nodes,
+                "active_signals": [
+                    signal.model_dump()
+                    for signal in result.active_signals
+                ],
+            }
+
         except ValueError as exc:
             last_error = exc
-            logger.warning(
-                "[Extractor] Extraction validation failed "
-                "(attempt %d/3): %s",
-                attempt + 1,
-                exc,
-            )
-    else:
-        raise RuntimeError(
-            f"Extractor failed after 3 attempts"
-        ) from last_error
-    
-    signals_list: List[Dict[str, Any]] = [
-        signal.model_dump() for signal in result.active_signals
-    ]
-    
-    # Extract unique node IDs from active signals
-    active_node_ids = [signal.node_id for signal in result.active_signals]
-    logger.debug(f"[Extractor] Extracted {len(active_node_ids)} nodes and {len(signals_list)} signals.")
-    
-    return {"active_nodes": active_node_ids, "active_signals": signals_list}
 
+    raise RuntimeError(
+        "Staged extractor failed after 3 attempts"
+    ) from last_error
 
 def retriever_node(state: AgentState) -> Dict[str, Any]:
     """
