@@ -5,50 +5,31 @@ import json
 import logging
 import os
 from pathlib import Path
+import sys
 from typing import Any
 from datetime import datetime, timezone
 import hashlib
+
+# Ensure project root is in sys.path when executed directly as a script
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
 
 from evaluation.schemas import EvaluationCase, CasePrediction, TurnPrediction
+from evaluation.runners.common import (
+    PROJECT_ROOT,
+    DEFAULT_DATASET_PATH,
+    DEFAULT_RESULTS_DIR,
+    DEFAULT_RUNTIME_DIR,
+    compute_case_fingerprint,
+    load_cases,
+    write_predictions,
+)
 
 logger = logging.getLogger(__name__)
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
-DEFAULT_RESULTS_DIR = PROJECT_ROOT / "evaluation" / "results"
-DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "evaluation" / "runtime"
-
-def compute_case_fingerprint(case: EvaluationCase) -> str:
-    """Compute a deterministic SHA-256 fingerprint for an evaluation case.
-
-    Serializes the case's core components (identifier, dataset version, scenario
-    metadata, gold annotations, and input conversation) into a canonical, sorted-key,
-    compact JSON representation to generate a unique content hash.
-
-    Args:
-        case: EvaluationCase instance whose content will be fingerprinted.
-
-    Returns:
-        str: Hexadecimal SHA-256 digest uniquely identifying the case contents.
-    """
-    payload = {
-        "case_id": case.case_id,
-        "dataset_version": case.dataset_version,
-        "scenario": case.scenario.model_dump(mode="json"),
-        "gold": case.gold.model_dump(mode="json"),
-        "input": case.input.model_dump(mode="json"),
-    }
-    canonical = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def create_run_id() -> str:
@@ -56,40 +37,6 @@ def create_run_id() -> str:
     return datetime.now(timezone.utc).strftime(
         "%Y%m%dT%H%M%S%fZ"
     )
-
-def load_cases(path: Path) -> list[EvaluationCase]:
-    """Load evaluation cases from a JSONL dataset file.
-
-    Args:
-        path: Path to the dataset JSONL file.
-
-    Returns:
-        List of parsed and validated EvaluationCase instances.
-
-    Raises:
-        FileNotFoundError: If the dataset file does not exist.
-        ValueError: If the dataset is empty or if JSON validation fails.
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"Evaluation dataset not found: {path}")
-
-    cases: list[EvaluationCase] = []
-
-    with path.open("r", encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                cases.append(EvaluationCase.model_validate(data))
-            except (json.JSONDecodeError, ValidationError) as exc:
-                raise ValueError(f"Invalid case at line {line_number}: {exc}") from exc
-
-    if not cases:
-        raise ValueError("Evaluation dataset is empty")
-    logger.info("Loaded %d evaluation cases from %s", len(cases), path)
-    return cases
 
 
 def serialize_message(message: BaseMessage) -> dict[str, Any]:
@@ -179,6 +126,7 @@ def extract_turn_prediction(
         messages=serialize_messages(messages),
     )
 
+
 def build_evaluation_user_id(run_id: str, case_id: str) -> int:
     """Build a deterministic isolated synthetic user ID.
 
@@ -191,6 +139,7 @@ def build_evaluation_user_id(run_id: str, case_id: str) -> int:
     """
     digest = hashlib.sha256(f"{run_id}:{case_id}".encode("utf-8")).hexdigest()
     return int(digest[:12], 16)
+
 
 def run_case(
     app: Any,
@@ -207,7 +156,7 @@ def run_case(
         case: Target EvaluationCase instance to execute.
         case_number: Sequence number of the current case.
         total_cases: Total number of cases being executed.
-        run_id: if of current running benchmark
+        run_id: ID of current running benchmark
 
     Returns:
         CasePrediction containing executed turn predictions and execution status.
@@ -230,19 +179,19 @@ def run_case(
                 )
             else:
                 state = {
-                "user_id": user_id,
-                "user_message": user_message,
-                "safety_status": "UNAVAILABLE",
-                "safety_flag": False,
-                "safety_risk_category": "SAFE",
-                "route": "service_unavailable",
-                "active_nodes": [],
-                "active_signals": [],
-                "subgraph_context": "",
-                "assessments": [],
-                "requires_disambiguation": False,
-                "final_response": "",
-                "messages": [HumanMessage(content=user_message)],
+                    "user_id": user_id,
+                    "user_message": user_message,
+                    "safety_status": "UNAVAILABLE",
+                    "safety_flag": False,
+                    "safety_risk_category": "SAFE",
+                    "route": "service_unavailable",
+                    "active_nodes": [],
+                    "active_signals": [],
+                    "subgraph_context": "",
+                    "assessments": [],
+                    "requires_disambiguation": False,
+                    "final_response": "",
+                    "messages": [HumanMessage(content=user_message)],
                 }
 
             final_state = app.invoke(state, config=config)
@@ -277,19 +226,6 @@ def run_case(
             final_response=turns[-1].final_response if turns else "",
             error=str(exc),
         )
-
-
-def write_predictions(predictions: list[CasePrediction], output_path: Path) -> None:
-    """Write workflow predictions to a JSON Lines file.
-
-    Args:
-        predictions: List of CasePrediction instances to serialize.
-        output_path: Destination file path for JSONL output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("a", encoding="utf-8") as file:
-        for prediction in predictions:
-            file.write(json.dumps(prediction.model_dump(), ensure_ascii=False) + "\n")
 
 
 def configure_evaluation_environment(runtime_dir: Path) -> None:

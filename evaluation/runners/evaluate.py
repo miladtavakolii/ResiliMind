@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 from pathlib import Path
+import sys
 from typing import Any
-from pydantic import ValidationError
 from collections.abc import Sequence
+
 from dotenv import load_dotenv
-import hashlib
+
+# Ensure project root is in sys.path when executed directly as a script
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from evaluation.schemas import EvaluationCase, CasePrediction, CaseEvaluationResult, TurnPrediction
 from evaluation.evaluators.runner import EvaluationRunner
@@ -20,210 +24,36 @@ from evaluation.reporting.final_report import FinalReportGenerator
 from evaluation.evaluators import SafetyEvaluator, ExtractionEvaluator, AssessmentEvaluator, RoutingEvaluator, ResponseEvaluator
 from evaluation.judges.gemini import GeminiJudge
 
-logger = logging.getLogger(__name__)
+from evaluation.runners.common import (
+    PROJECT_ROOT,
+    DEFAULT_DATASET_PATH,
+    DEFAULT_PREDICTIONS_PATH,
+    DEFAULT_OUTPUT_DIR,
+    compute_case_fingerprint,
+    load_cases,
+    load_predictions,
+    write_json,
+)
+from evaluation.runners.adapters import (
+    validate_alignment,
+    validate_dataset_versions,
+    normalize_assessments,
+    build_evaluator_prediction,
+    build_prediction_mapping,
+    get_turn_gold,
+    build_turn_prediction,
+)
+from evaluation.runners.summary import (
+    build_execution_summary,
+    build_final_summary,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
-DEFAULT_PREDICTIONS_PATH = PROJECT_ROOT / "evaluation" / "results" / "predictions.jsonl"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "evaluation" / "results"
+logger = logging.getLogger(__name__)
 
 GEMINI_MAX_RETRIES = 5
 GEMINI_RETRY_DELAY = 5
 GEMINI_REQUEST_DELAY = 5
 
-def compute_case_fingerprint(case: EvaluationCase) -> str:
-    """Compute a deterministic SHA-256 fingerprint for an evaluation case.
-
-    Serializes the case's core components (identifier, dataset version, scenario
-    metadata, gold annotations, and input conversation) into a canonical, sorted-key,
-    compact JSON representation to generate a unique content hash.
-
-    Args:
-        case: EvaluationCase instance whose content will be fingerprinted.
-
-    Returns:
-        str: Hexadecimal SHA-256 digest uniquely identifying the case contents.
-    """
-    payload = {
-        "case_id": case.case_id,
-        "dataset_version": case.dataset_version,
-        "scenario": case.scenario.model_dump(mode="json"),
-        "gold": case.gold.model_dump(mode="json"),
-        "input": case.input.model_dump(mode="json"),
-    }
-    canonical = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-def load_cases(path: Path) -> list[EvaluationCase]:
-    """Load and validate evaluation cases from a JSONL file.
-
-    Args:
-        path: Path to the evaluation dataset.
-
-    Returns:
-        List of validated evaluation cases.
-
-    Raises:
-        FileNotFoundError: If the dataset does not exist.
-        ValueError: If the dataset is empty or contains an invalid record.
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"Evaluation dataset not found: {path}")
-
-    cases: list[EvaluationCase] = []
-    with path.open("r", encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                cases.append(EvaluationCase.model_validate(data))
-            except (json.JSONDecodeError, ValidationError) as exc:
-                raise ValueError(
-                    f"Invalid evaluation case at line {line_number}: {exc}"
-                ) from exc
-
-    if not cases:
-        raise ValueError(f"No evaluation cases found in {path}")
-
-    return cases
-
-
-def load_predictions(path: Path) -> list[CasePrediction]:
-    """Load benchmark predictions from a JSONL file.
-
-    Args:
-        path: Path to the raw benchmark predictions.
-
-    Returns:
-        List of validated CasePrediction instances.
-
-    Raises:
-        FileNotFoundError: If the prediction file does not exist.
-        ValueError: If the file is empty or contains an invalid record.
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"Prediction file not found: {path}")
-
-    predictions: list[CasePrediction] = []
-    with path.open("r", encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                predictions.append(CasePrediction.model_validate(data))
-            except (json.JSONDecodeError, ValidationError) as exc:
-                raise ValueError(
-                    f"Invalid prediction at line {line_number}: {exc}"
-                ) from exc
-
-    if not predictions:
-        raise ValueError(f"No predictions found in {path}")
-
-    return predictions
-
-
-def validate_alignment(
-    cases: list[EvaluationCase],
-    predictions: list[CasePrediction],
-) -> None:
-    """Validate one-to-one alignment between cases and predictions.
-
-    Args:
-        cases: Ground-truth evaluation cases.
-        predictions: Benchmark predictions.
-
-    Raises:
-        ValueError: If IDs are missing, duplicated, or unexpected.
-    """
-    case_map = {case.case_id: case for case in cases}
-    prediction_ids = [prediction.case_id for prediction in predictions]
-    prediction_id_set = set(prediction_ids)
-
-    if len(prediction_ids) != len(prediction_id_set):
-        duplicates = sorted(
-            case_id
-            for case_id in prediction_id_set
-            if prediction_ids.count(case_id) > 1
-        )
-        raise ValueError(f"Duplicate case IDs found in predictions: {duplicates}")
-
-    missing_predictions = set(case_map) - prediction_id_set
-    unexpected_predictions = prediction_id_set - set(case_map)
-
-    if missing_predictions:
-        raise ValueError(
-            f"Missing predictions for cases: {sorted(missing_predictions)}"
-        )
-
-    if unexpected_predictions:
-        raise ValueError(
-            f"Predictions contain unknown case IDs: {sorted(unexpected_predictions)}"
-        )
-
-    for prediction in predictions:
-        case = case_map[prediction.case_id]
-        expected_messages = case.input.messages
-        predicted_messages = [
-            turn.user_message
-            for turn in prediction.turns
-        ]
-
-        if expected_messages != predicted_messages:
-            raise ValueError(
-                f"Input mismatch for {case.case_id}: "
-                "predictions were generated from a different case snapshot."
-            )
-
-        if prediction.case_fingerprint:
-            expected_fingerprint = compute_case_fingerprint(case)
-
-            if prediction.case_fingerprint != expected_fingerprint:
-                raise ValueError(
-                    f"Case fingerprint mismatch for {case.case_id}: "
-                    "predictions and evaluation cases are not from the same snapshot."
-                )
-
-def validate_dataset_versions(
-    cases: list[EvaluationCase],
-    predictions: list[CasePrediction],
-) -> None:
-    """Ensure cases and predictions belong to the same dataset version.
-
-    Args:
-        cases: Ground-truth evaluation cases.
-        predictions: Benchmark predictions.
-
-    Raises:
-        ValueError: If versions do not match.
-    """
-    case_versions = {case.dataset_version for case in cases}
-    prediction_versions = {prediction.dataset_version for prediction in predictions}
-
-    if len(case_versions) != 1:
-        raise ValueError(
-            f"Multiple dataset versions found in cases: {sorted(case_versions)}"
-        )
-    if len(prediction_versions) != 1:
-        raise ValueError(
-            f"Multiple dataset versions found in predictions: {sorted(prediction_versions)}"
-        )
-
-    case_version = next(iter(case_versions))
-    prediction_version = next(iter(prediction_versions))
-
-    if case_version != prediction_version:
-        raise ValueError(
-            f"Dataset version mismatch: cases={case_version}, predictions={prediction_version}"
-        )
 
 def build_evaluator_runner(
     max_retries: int,
@@ -232,10 +62,11 @@ def build_evaluator_runner(
     include_response_eval: bool = True,
 ) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
+
     Args:
         max_retries: Maximum number of retry attempts upon failure.
         retry_delay: Base delay in seconds between retries.
-        request_delay: Delay between two requsets.
+        request_delay: Delay between two requests.
         include_response_eval: Whether to run ResponseEvaluator with LLM-as-a-Judge.
 
     Returns:
@@ -265,167 +96,6 @@ def build_evaluator_runner(
 
     return EvaluationRunner(evaluators=evaluators)
 
-def normalize_assessments(
-    assessments: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Normalize application assessment output for evaluation.
-
-    Maps the four-dimensional scoring output stored under ``scores`` to the
-    ``rubric`` key expected by evaluation modules.
-
-    Args:
-        assessments: List of raw assessment dictionaries produced by the application.
-
-    Returns:
-        list[dict[str, Any]]: List of normalized assessment dictionaries containing
-            the ``rubric`` key.
-    """
-    normalized = []
-    for assessment in assessments:
-        item = dict(assessment)
-        if "rubric" not in item:
-            item["rubric"] = dict(item.get("scores", {}))
-        normalized.append(item)
-    return normalized
-
-def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
-    """Adapt the raw CasePrediction structure to the input contract expected by evaluators.
-
-    Args:
-        prediction: CasePrediction object containing recorded conversation turns.
-
-    Returns:
-        dict[str, Any]: Structured dictionary formatted for evaluation modules.
-    """
-    if not prediction.successful:
-        return {
-            "execution_error": prediction.error or "unknown execution error",
-            "safety": {},
-            "extraction": {"signals": [], "active_nodes": []},
-            "assessment": {"assessments": []},
-            "routing": {"route": "unknown"},
-            "final_response": prediction.final_response,
-            "user_context": "\n".join(
-                turn.user_message for turn in prediction.turns
-            ),
-            "raw": prediction.model_dump(),
-        }
-
-    if not prediction.turns:
-        return {
-            "execution_error": "no turns were recorded",
-            "safety": {},
-            "extraction": {"signals": [], "active_nodes": []},
-            "assessment": {"assessments": []},
-            "routing": {"route": "unknown"},
-            "final_response": "",
-            "user_context": "",
-            "raw": prediction.model_dump(),
-        }
-
-    all_signals = [
-        signal
-        for turn in prediction.turns
-        for signal in turn.active_signals
-    ]
-
-    all_nodes = list(dict.fromkeys(
-        node_id
-        for turn in prediction.turns
-        for node_id in turn.active_nodes
-    ))
-
-    latest_assessments: dict[str, dict[str, Any]] = {}
-
-    for turn in prediction.turns:
-        for assessment in normalize_assessments(turn.assessments):
-            node_id = assessment.get("node_id")
-            if node_id:
-                latest_assessments[node_id] = assessment
-
-    final_turn = prediction.turns[-1]
-
-    is_high_risk = any(
-        turn.safety_status == "HIGH_RISK" or turn.safety_flag
-        for turn in prediction.turns
-    )
-
-    return {
-        "safety": {
-            "is_high_risk": is_high_risk,
-            "status": final_turn.safety_status,
-            "risk_category": final_turn.safety_risk_category,
-        },
-        "extraction": {
-            "signals": all_signals,
-            "active_nodes": all_nodes,
-        },
-        "assessment": {
-            "assessments": list(latest_assessments.values()),
-        },
-        "routing": {
-            "route": final_turn.route,
-        },
-        "final_response": prediction.final_response,
-        "user_context": "\n".join(
-            turn.user_message for turn in prediction.turns
-        ),
-        "raw": prediction.model_dump(),
-    }
-
-
-def build_prediction_mapping(
-    predictions: list[CasePrediction],
-) -> dict[str, dict[str, Any]]:
-    """Build a case-ID keyed mapping for EvaluationRunner.
-
-    Args:
-        predictions: Raw benchmark predictions.
-
-    Returns:
-        Mapping from case IDs to normalized evaluator predictions.
-    """
-    return {
-        prediction.case_id: build_evaluator_prediction(prediction)
-        for prediction in predictions
-    }
-
-def get_turn_gold(case: EvaluationCase, turn_index: int) -> EvaluationCase:
-    """Return a copy of the gold annotations containing only the signals that belong to one turn."""
-    turn_case = case.model_copy(deep=True)
-    turn_case.gold.extraction.active_signals = [
-        signal
-        for signal in turn_case.gold.extraction.active_signals
-        if signal.evidence_message_index == turn_index
-    ]
-    return turn_case
-
-
-def build_turn_prediction(turn: TurnPrediction) -> dict[str, Any]:
-    """Build evaluator input for one conversation turn."""
-    is_high_risk = turn.safety_status == "HIGH_RISK" or turn.safety_flag
-
-    return {
-        "safety": {
-            "is_high_risk": is_high_risk,
-            "status": turn.safety_status,
-            "risk_category": turn.safety_risk_category,
-        },
-        "extraction": {
-            "signals": turn.active_signals,
-            "active_nodes": turn.active_nodes,
-        },
-        "assessment": {
-            "assessments": normalize_assessments(turn.assessments),
-        },
-        "routing": {
-            "route": turn.route,
-        },
-        "advisor_response": turn.final_response,
-        "final_response": turn.final_response,
-        "user_context": turn.user_message,
-    }
-
 
 def evaluate_dataset(
     cases: list[EvaluationCase],
@@ -443,8 +113,8 @@ def evaluate_dataset(
         predictions: Benchmark predictions.
         max_retries: Maximum number of retry attempts upon failure.
         retry_delay: Base delay in seconds between retries.
-        request_delay: Delay between two requsets.
-        output_path: path for save results.
+        request_delay: Delay between two requests.
+        output_path: Path for saving results.
         include_response_eval: Whether to run ResponseEvaluator.
 
     Returns:
@@ -458,53 +128,6 @@ def evaluate_dataset(
     )
     prediction_map = build_prediction_mapping(predictions)
     return runner.evaluate_dataset(cases=cases, predictions=prediction_map, output_path=output_path)
-
-def write_json(data: Any, output_path: Path) -> None:
-    """Write an evaluation artifact to a formatted JSON file.
-
-    Args:
-        data: Serializable data object or dictionary.
-        output_path: Destination file path for JSON output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-def build_execution_summary(
-    predictions: Sequence[CasePrediction],
-) -> dict[str, int]:
-    """Build execution-level success statistics.
-
-    Args:
-        predictions: Benchmark predictions.
-
-    Returns:
-        Total, successful, and failed execution counts.
-    """
-    successful = sum(prediction.successful for prediction in predictions)
-    return {
-        "total": len(predictions),
-        "successful": successful,
-        "failed": len(predictions) - successful,
-    }
-
-
-def build_final_summary(
-    summary: dict[str, Any],
-    predictions: Sequence[CasePrediction],
-) -> dict[str, Any]:
-    """Add benchmark execution statistics to aggregated evaluation metrics.
-
-    Args:
-        summary: Dataset-level evaluator metrics.
-        predictions: Raw benchmark predictions.
-
-    Returns:
-        Combined evaluation summary.
-    """
-    return {
-        **summary,
-        "execution": build_execution_summary(predictions),
-    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -550,7 +173,7 @@ def parse_args() -> argparse.Namespace:
         "--request-delay",
         type=float,
         default=GEMINI_REQUEST_DELAY,
-        help="Delay between two requsets.",
+        help="Delay between two requests.",
     )
     parser.add_argument(
         "--skip-response-eval",
@@ -584,7 +207,7 @@ def main() -> None:
         max_retries=args.max_retries,
         retry_delay=args.retry_delay,
         request_delay=args.request_delay,
-        output_path=results_path,
+        output_path=str(results_path),
         include_response_eval=not args.skip_response_eval,
     )
 
@@ -615,6 +238,33 @@ def main() -> None:
     print(f"Report:      {args.output_dir / 'evaluation_report.json'}")
     print("=" * 60)
 
+
+__all__ = [
+    "compute_case_fingerprint",
+    "load_cases",
+    "load_predictions",
+    "validate_alignment",
+    "validate_dataset_versions",
+    "build_evaluator_runner",
+    "normalize_assessments",
+    "build_evaluator_prediction",
+    "build_prediction_mapping",
+    "get_turn_gold",
+    "build_turn_prediction",
+    "evaluate_dataset",
+    "write_json",
+    "build_execution_summary",
+    "build_final_summary",
+    "parse_args",
+    "main",
+    "GEMINI_MAX_RETRIES",
+    "GEMINI_RETRY_DELAY",
+    "GEMINI_REQUEST_DELAY",
+    "DEFAULT_DATASET_PATH",
+    "DEFAULT_PREDICTIONS_PATH",
+    "DEFAULT_OUTPUT_DIR",
+    "PROJECT_ROOT",
+]
 
 if __name__ == "__main__":
     logging.basicConfig(
