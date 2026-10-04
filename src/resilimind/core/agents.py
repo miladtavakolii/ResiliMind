@@ -350,21 +350,25 @@ def build_evidence_candidates(user_message: str) -> list[tuple[int, int, str]]:
     candidates: list[tuple[int, int, str]] = []
 
     for match in re.finditer(
-        r"[^،,؛;.!?؟\n]+(?:[،,؛;.!?؟]|$)",
+        r"[^،,؛;.!?؟\n]+",
         user_message,
     ):
-        start = match.start()
-        end = match.end()
+        start, end = match.span()
         raw_segment = user_message[start:end]
+
         text = raw_segment.strip()
+        if not text:
+            continue
 
-        if text:
-            leading_ws = len(raw_segment) - len(raw_segment.lstrip())
-            trailing_ws = len(raw_segment) - len(raw_segment.rstrip())
+        leading_ws = len(raw_segment) - len(raw_segment.lstrip())
+        trailing_ws = len(raw_segment) - len(raw_segment.rstrip())
 
-            start += leading_ws
-            end -= trailing_ws
-            candidates.append((start, end, user_message[start:end]))
+        start += leading_ws
+        end -= trailing_ws
+
+        candidates.append(
+            (start, end, user_message[start:end])
+        )
 
     return candidates
 
