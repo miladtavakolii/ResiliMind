@@ -275,15 +275,14 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
         str | None: The exact matching substring from `user_message` corresponding to
             the candidate evidence span, or None if no valid alignment can be found.
     """
-    if not evidence:
+    if not evidence or not user_message:
         return None
 
     if evidence in user_message:
         return evidence
 
     def compact_with_map(text: str) -> tuple[str, list[int]]:
-        normalized = unicodedata.normalize("NFKC", text)
-        normalized = normalized.translate(
+        normalized = unicodedata.normalize("NFKC", text).translate(
             str.maketrans({
                 "ي": "ی",
                 "ى": "ی",
@@ -291,34 +290,47 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
                 "ك": "ک",
                 "ة": "ه",
                 "ۀ": "ه",
+                "ؤ": "و",
             })
         )
 
-        compact_chars: list[str] = []
+        chars: list[str] = []
         source_indices: list[int] = []
 
         for index, char in enumerate(normalized):
-            if char.isspace() or char == "\u200c":
+            if char.isspace() or unicodedata.category(char) == "Cf":
                 continue
-            compact_chars.append(char)
+            chars.append(char)
             source_indices.append(index)
 
-        return "".join(compact_chars), source_indices
+        return "".join(chars), source_indices
 
     candidate = evidence.strip()
     compact_candidate, _ = compact_with_map(candidate)
     compact_message, source_indices = compact_with_map(user_message)
 
-    if not compact_candidate or compact_candidate not in compact_message:
+    if not compact_candidate:
         return None
 
-    start = compact_message.index(compact_candidate)
+    start = compact_message.find(compact_candidate)
+
+    if start == -1:
+        return None
+
     end = start + len(compact_candidate)
 
     raw_start = source_indices[start]
     raw_end = source_indices[end - 1] + 1
 
-    return user_message[raw_start:raw_end]
+    aligned = user_message[raw_start:raw_end]
+
+    logger.debug(
+        "[Extractor] Evidence aligned: predicted=%r aligned=%r",
+        evidence,
+        aligned,
+    )
+
+    return aligned
 
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
