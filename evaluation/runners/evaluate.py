@@ -225,32 +225,45 @@ def validate_dataset_versions(
             f"Dataset version mismatch: cases={case_version}, predictions={prediction_version}"
         )
 
-def build_evaluator_runner(max_retries: int, retry_delay: float, request_delay: float) -> EvaluationRunner:
+def build_evaluator_runner(
+    max_retries: int,
+    retry_delay: float,
+    request_delay: float,
+    include_response_eval: bool = True,
+) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
     Args:
         max_retries: Maximum number of retry attempts upon failure.
         retry_delay: Base delay in seconds between retries.
         request_delay: Delay between two requsets.
+        include_response_eval: Whether to run ResponseEvaluator with LLM-as-a-Judge.
 
     Returns:
         EvaluationRunner configured with all active evaluators.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
-    model = os.getenv("GEMINI_JUDGE_MODEL","gemini-3.5-flash-lite")
+    evaluators = [
+        SafetyEvaluator(),
+        ExtractionEvaluator(),
+        AssessmentEvaluator(),
+        RoutingEvaluator(),
+    ]
 
-    judge = GeminiJudge(api_key=api_key, model=model, max_retries=max_retries, retry_delay=retry_delay, request_delay=request_delay)
+    if include_response_eval:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
+        model = os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite")
 
-    return EvaluationRunner(
-        evaluators=[
-            SafetyEvaluator(),
-            ExtractionEvaluator(),
-            AssessmentEvaluator(),
-            RoutingEvaluator(),
-            ResponseEvaluator(judge=judge),
-        ]
-    )
+        judge = GeminiJudge(
+            api_key=api_key,
+            model=model,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            request_delay=request_delay,
+        )
+        evaluators.append(ResponseEvaluator(judge=judge))
+
+    return EvaluationRunner(evaluators=evaluators)
 
 def normalize_assessments(
     assessments: list[dict[str, Any]],
@@ -420,6 +433,7 @@ def evaluate_dataset(
     max_retries: int,
     retry_delay: float,
     request_delay: float,
+    include_response_eval: bool = True,
 ) -> list[CaseEvaluationResult]:
     """Run all registered evaluators over the benchmark dataset.
 
@@ -429,11 +443,17 @@ def evaluate_dataset(
         max_retries: Maximum number of retry attempts upon failure.
         retry_delay: Base delay in seconds between retries.
         request_delay: Delay between two requsets.
+        include_response_eval: Whether to run ResponseEvaluator.
 
     Returns:
         Per-case evaluation results.
     """
-    runner = build_evaluator_runner(max_retries, retry_delay, request_delay)
+    runner = build_evaluator_runner(
+        max_retries,
+        retry_delay,
+        request_delay,
+        include_response_eval=include_response_eval,
+    )
     prediction_map = build_prediction_mapping(predictions)
     return runner.evaluate_dataset(cases=cases, predictions=prediction_map)
 
@@ -543,6 +563,12 @@ def parse_args() -> argparse.Namespace:
         default=GEMINI_REQUEST_DELAY,
         help="Delay between two requsets.",
     )
+    parser.add_argument(
+        "--skip-response-eval",
+        action="store_true",
+        default=False,
+        help="Skip LLM-based response evaluation (ResponseEvaluator).",
+    )
     return parser.parse_args()
 
 
@@ -563,7 +589,14 @@ def main() -> None:
         args.predictions,
     )
 
-    results = evaluate_dataset(cases=cases, predictions=predictions, max_retries=args.max_retries, retry_delay=args.retry_delay, request_delay=args.request_delay)
+    results = evaluate_dataset(
+        cases=cases,
+        predictions=predictions,
+        max_retries=args.max_retries,
+        retry_delay=args.retry_delay,
+        request_delay=args.request_delay,
+        include_response_eval=not args.skip_response_eval,
+    )
 
     summary = EvaluationAggregator().aggregate(results)
     summary = build_final_summary(summary, predictions)
