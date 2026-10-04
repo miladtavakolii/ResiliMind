@@ -433,6 +433,7 @@ def evaluate_dataset(
     max_retries: int,
     retry_delay: float,
     request_delay: float,
+    output_path: str,
     include_response_eval: bool = True,
 ) -> list[CaseEvaluationResult]:
     """Run all registered evaluators over the benchmark dataset.
@@ -443,6 +444,7 @@ def evaluate_dataset(
         max_retries: Maximum number of retry attempts upon failure.
         retry_delay: Base delay in seconds between retries.
         request_delay: Delay between two requsets.
+        output_path: path for save results.
         include_response_eval: Whether to run ResponseEvaluator.
 
     Returns:
@@ -455,20 +457,7 @@ def evaluate_dataset(
         include_response_eval=include_response_eval,
     )
     prediction_map = build_prediction_mapping(predictions)
-    return runner.evaluate_dataset(cases=cases, predictions=prediction_map)
-
-def write_case_results(results: list[CaseEvaluationResult], output_path: Path) -> None:
-    """Store per-case evaluation results to a JSON Lines file.
-
-    Args:
-        results: Sequence of CaseEvaluationResult instances.
-        output_path: Destination file path for JSONL output.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as file:
-        for result in results:
-            file.write(json.dumps(result.model_dump(), ensure_ascii=False) + "\n")
-
+    return runner.evaluate_dataset(cases=cases, predictions=prediction_map, output_path=output_path)
 
 def write_json(data: Any, output_path: Path) -> None:
     """Write an evaluation artifact to a formatted JSON file.
@@ -588,13 +577,14 @@ def main() -> None:
         len(cases),
         args.predictions,
     )
-
+    results_path = args.output_dir / "case_results.jsonl"
     results = evaluate_dataset(
         cases=cases,
         predictions=predictions,
         max_retries=args.max_retries,
         retry_delay=args.retry_delay,
         request_delay=args.request_delay,
+        output_path=results_path,
         include_response_eval=not args.skip_response_eval,
     )
 
@@ -603,14 +593,9 @@ def main() -> None:
     failures = ErrorAnalyzer().analyze(results)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    write_case_results(results, args.output_dir / "case_results.jsonl")
     write_json(summary, args.output_dir / "summary.json")
     FailureCSVWriter().write(failures, args.output_dir / "failures.csv")
-    FinalReportGenerator().generate(
-        summary,
-        failures,
-        args.output_dir / "evaluation_report.json",
-    )
+    FinalReportGenerator().generate(summary, failures, args.output_dir / "evaluation_report.json")
 
     successful_cases = summary["execution"]["successful"]
     failed_cases = summary["execution"]["failed"]

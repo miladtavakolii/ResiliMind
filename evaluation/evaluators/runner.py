@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 from typing import Any
 
 from evaluation.evaluators.base import BaseEvaluator
@@ -19,6 +21,7 @@ class EvaluationRunner:
         - Collecting per-case evaluation metrics.
         - Handling evaluator failures without stopping the benchmark.
         - Preparing results for later aggregation.
+        - Incrementally saving results if an output path is provided.
 
     The runner does not implement evaluation logic itself.
     Each evaluator is responsible for calculating its own metrics.
@@ -94,12 +97,14 @@ class EvaluationRunner:
         self,
         cases: Iterable[EvaluationCase],
         predictions: dict[str, dict[str, Any]],
+        output_path: Path | None = None,
     ) -> list[CaseEvaluationResult]:
         """Evaluate a complete benchmark dataset.
 
         Args:
             cases: Iterable of benchmark cases.
             predictions: Mapping from case IDs to generated workflow outputs.
+            output_path: Optional path to save evaluation results incrementally.
 
         Returns:
             list[CaseEvaluationResult]: Per-case evaluation results for all processed cases.
@@ -112,6 +117,9 @@ class EvaluationRunner:
             len(case_list),
         )
 
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
         for index, case in enumerate(case_list, start=1):
             logger.info(
                 "[EvaluationRunner] Processing %d/%d: %s",
@@ -121,6 +129,11 @@ class EvaluationRunner:
             )
             prediction = predictions.get(case.case_id, {})
             result = self.evaluate_case(case=case, prediction=prediction)
+            
+            if output_path:
+                with output_path.open("a", encoding="utf-8") as file:
+                    file.write(json.dumps(result.model_dump(), ensure_ascii=False) + "\n")
+                    
             results.append(result)
 
         logger.info("[EvaluationRunner] Dataset evaluation completed.")

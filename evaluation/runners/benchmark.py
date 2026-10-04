@@ -287,7 +287,7 @@ def write_predictions(predictions: list[CasePrediction], output_path: Path) -> N
         output_path: Destination file path for JSONL output.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as file:
+    with output_path.open("a", encoding="utf-8") as file:
         for prediction in predictions:
             file.write(json.dumps(prediction.model_dump(), ensure_ascii=False) + "\n")
 
@@ -336,22 +336,52 @@ def main() -> None:
     if args.limit:
         cases = cases[:args.limit]
 
+    processed_case_ids = set()
+    successful = 0
+    failed = 0
+
+    if args.output.exists():
+        logger.info("Found existing results. Resuming from %s", args.output)
+        with args.output.open("r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        processed_case_ids.add(data["case_id"])
+                        if data.get("successful"):
+                            successful += 1
+                        else:
+                            failed += 1
+                    except json.JSONDecodeError:
+                        pass
+
+    cases_to_run = [c for c in cases if c.case_id not in processed_case_ids]
+
+    if not cases_to_run:
+        logger.info("All cases have already been processed.")
+    else:
+        logger.info("Executing %d remaining cases...", len(cases_to_run))
+
     app = build_workflow()
-    predictions: list[CasePrediction] = []
 
-    for index, case in enumerate(cases, start=1):
-        predictions.append(run_case(app, case, case_number=index, total_cases=len(cases), run_id=run_id))
+    for index, case in enumerate(cases_to_run, start=1):
+        pred = run_case(app, case, case_number=index, total_cases=len(cases_to_run), run_id=run_id)
+        
+        write_predictions([pred], args.output)
 
-    write_predictions(predictions, args.output)
+        if pred.successful:
+            successful += 1
+        else:
+            failed += 1
 
-    successful = sum(item.successful for item in predictions)
-    failed = len(predictions) - successful
+    total_executed = successful + failed
 
     print()
     print("=" * 60)
     print("ResiliMind Evaluation")
     print("=" * 60)
-    print(f"Executed: {len(predictions)}")
+    print(f"Executed: {total_executed}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
     print(f"Predictions: {args.output}")

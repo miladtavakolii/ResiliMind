@@ -1110,13 +1110,20 @@ class ScenarioRenderer:
             signal.evidence_end = item["end"]
 
     def render_dataset(
-        self, cases: list[EvaluationCase], *, skip_failures: bool = False
+        self,
+        cases: list[EvaluationCase],
+        *,
+        skip_failures: bool = False,
+        output_path: Path | None = None,
+        valid_node_ids: set | None = None,
     ) -> list[EvaluationCase]:
         """Render all cases in a dataset sequentially.
 
         Args:
             cases: Sequence of evaluation cases to render.
             skip_failures: Whether to bypass individual failures instead of raising.
+            output_path: Optional path to save incrementally.
+            valid_node_ids: Optional set of graph node IDs for individual case validation.
 
         Returns:
             list[EvaluationCase]: Successfully rendered evaluation cases.
@@ -1133,6 +1140,19 @@ class ScenarioRenderer:
 
             try:
                 rendered_case = self.render(case)
+
+                # Validate single case before saving
+                if valid_node_ids is not None:
+                    validate_dataset(
+                        [rendered_case],
+                        valid_node_ids=valid_node_ids,
+                        require_rendered=True,
+                    )
+
+                # Save instantly if output path is provided
+                if output_path:
+                    write_cases([rendered_case], output_path)
+
                 rendered_cases.append(rendered_case)
 
             except Exception:
@@ -1206,7 +1226,7 @@ def write_cases(
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with output_path.open("w", encoding="utf-8") as file:
+    with output_path.open("a", encoding="utf-8") as file:
         for case in cases:
             file.write(
                 json.dumps(
@@ -1312,6 +1332,25 @@ def main() -> None:
 
         cases = cases[:args.limit]
 
+    processed_case_ids = set()
+    if args.output.exists():
+        logger.info("Found existing results. Resuming from %s", args.output)
+        with args.output.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        if "case_id" in data:
+                            processed_case_ids.add(data["case_id"])
+                    except json.JSONDecodeError:
+                        pass
+    
+    cases_to_run = [c for c in cases if c.case_id not in processed_case_ids]
+
+    if not cases_to_run:
+        logger.info("All cases have already been processed.")
+        return
+
     renderer = ScenarioRenderer(
         model_name=args.model,
         temperature=args.temperature,
@@ -1322,25 +1361,16 @@ def main() -> None:
         request_delay=args.request_delay,
     )
 
-    rendered_cases = renderer.render_dataset(
-        cases,
-        skip_failures=args.skip_failures,
-    )
-
     valid_node_ids = set(renderer.nodes)
 
-    validate_dataset(
-        rendered_cases,
+    rendered_cases = renderer.render_dataset(
+        cases_to_run,
+        skip_failures=args.skip_failures,
+        output_path=args.output,
         valid_node_ids=valid_node_ids,
-        require_rendered=True,
     )
 
-    write_cases(
-        rendered_cases,
-        args.output,
-    )
-
-    print(f"Rendered {len(rendered_cases)} cases.")
+    print(f"Rendered {len(rendered_cases)} cases in this run.")
     print(f"Dataset: {args.output}")
     print(f"Model: {args.model}")
 
