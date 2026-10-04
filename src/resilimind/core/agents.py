@@ -13,7 +13,7 @@ from ..graph.ingestion import load_resilience_graph
 from ..graph.retriever import retrieve_subgraph_context
 from ..llm.engine import LLMEngine
 from ..llm import prompts
-from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput
+from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput, ActiveSignal
 from .config import settings
 
 # Initialize module logger
@@ -332,6 +332,42 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
 
     return aligned
 
+def build_evidence_candidates(user_message: str) -> list[tuple[int, int, str]]:
+    """Segment raw user text into candidate evidence clauses with character offsets.
+
+    Splits the message using Persian and English clause terminators and punctuation
+    marks (commas, semicolons, full stops, question marks, exclamation marks, and
+    newlines). Trims leading and trailing whitespace while adjusting exact start and
+    end slice indices to guarantee precise substring alignment with the original text.
+
+    Args:
+        user_message: Raw user message string to segment.
+
+    Returns:
+        list[tuple[int, int, str]]: Triples of `(start_index, end_index, clause_text)`
+            representing trimmed contiguous candidate spans within `user_message`.
+    """
+    candidates: list[tuple[int, int, str]] = []
+
+    for match in re.finditer(
+        r"[^،,؛;.!?؟\n]+(?:[،,؛;.!?؟]|$)",
+        user_message,
+    ):
+        start = match.start()
+        end = match.end()
+        raw_segment = user_message[start:end]
+        text = raw_segment.strip()
+
+        if text:
+            leading_ws = len(raw_segment) - len(raw_segment.lstrip())
+            trailing_ws = len(raw_segment) - len(raw_segment.rstrip())
+
+            start += leading_ws
+            end -= trailing_ws
+            candidates.append((start, end, user_message[start:end]))
+
+    return candidates
+
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
     """Validate extractor evidence and node consistency against the knowledge graph.
 
@@ -559,17 +595,25 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
 
         resolved_signals = []
 
+        evidence_candidates = build_evidence_candidates(user_msg)
+
+        if not evidence_candidates:
+            raise RuntimeError("No evidence candidates found in user message")
+
         for node_id in selected_nodes:
             resolver_prompt_base = (
                 f"{prompts.SIGNAL_RESOLVER_SYSTEM_PROMPT}\n\n"
                 "=== TARGET NODE ===\n"
                 f"{build_selected_node_context([node_id])}\n\n"
-                "The target node for this invocation is "
-                f"{node_id}.\n"
+                "=== EVIDENCE CANDIDATES ===\n"
+                + "\n".join(
+                    f"[{index}] {candidate}"
+                    for index, candidate in enumerate(evidence_candidates)
+                )
+                + "\n\n"
+                f"The target node for this invocation is {node_id}.\n"
                 "Return exactly one signal for this node.\n"
-                "Do not return another node.\n"
-                "Evidence must be one exact contiguous substring "
-                "copied from the user message."
+                "Select exactly one evidence candidate by index."
             )
 
             node_last_error: Exception | None = None
@@ -584,13 +628,18 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                         f"Reason: {node_last_error}\n"
                         "Regenerate the result from scratch.\n"
                         f"Return exactly one signal for {node_id}.\n"
-                        "The evidence MUST be one contiguous substring "
-                        "copied exactly from the USER MESSAGE.\n"
-                        "NEVER concatenate multiple phrases.\n"
-                        "NEVER return a list of evidence phrases.\n"
+                        "Select exactly one valid evidence_index.\n"
+                        "Do not generate or rewrite evidence text.\n"
                     )
 
-                resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
+                resolver = llm_engine.get_signal_resolver_runner(
+                    resolver_prompt
+                )
+
+                logger.warning(
+                    "[Extractor DEBUG] user_message=%r",
+                    user_msg,
+                )
 
                 raw_resolved = resolver.invoke({
                     "user_message": user_msg,
@@ -642,18 +691,13 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
-                aligned_evidence = align_evidence_to_user_message(
-                    signal.evidence,
-                    user_msg,
-                )
-
-                if aligned_evidence is None:
+                if not 0 <= signal.evidence_index < len(evidence_candidates):
                     node_last_error = ValueError(
-                        f"Evidence is not one contiguous substring of the user "
-                        f"message for {node_id}: {signal.evidence!r}"
+                        f"Signal resolver returned invalid evidence index for "
+                        f"{node_id}: {signal.evidence_index}"
                     )
                     logger.warning(
-                        "[Extractor] Invalid evidence for %s "
+                        "[Extractor] Invalid evidence index for %s "
                         "(attempt %d/3): %s",
                         node_id,
                         resolver_attempt + 1,
@@ -661,11 +705,13 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
-                signal = signal.model_copy(
-                    update={"evidence": aligned_evidence}
-                )
+                evidence = evidence_candidates[signal.evidence_index]
 
-                node_resolved = signal
+                node_resolved = {
+                    "node_id": signal.node_id,
+                    "detected_signal": signal.detected_signal,
+                    "evidence": evidence,
+                }
                 break
 
             if node_resolved is None:
@@ -676,10 +722,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             resolved_signals.append(node_resolved)
 
         result = ExtractionOutput(
-            active_signals=[
-                signal.model_dump()
-                for signal in resolved_signals
-            ]
+            active_signals=resolved_signals
         )
 
         result = canonicalize_extraction_result(result)
