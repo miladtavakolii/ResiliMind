@@ -778,37 +778,16 @@ def calculate_evidence_quality(
     if not normalized_evidence:
         return 0.0
 
-    node_data = resilience_graph.nodes.get(node_id, {})
-    cues = node_data.get("cues", {})
-
-    positive_hits = _find_polarity_cues(
-        evidence,
-        cues.get("positive_keywords", []),
-    )
-    negative_hits = _find_polarity_cues(
-        evidence,
-        cues.get("negative_keywords", []),
-    )
-
-    cue_support = min(
-        (len(positive_hits) + len(negative_hits)) / 2.0,
-        1.0,
-    )
-
     token_count = len(normalized_evidence.split())
 
-    if 3 <= token_count <= 12:
-        span_quality = 1.0
-    elif token_count in {1, 2}:
-        span_quality = 0.6
-    else:
-        span_quality = 0.5
+    if token_count <= 2:
+        return 0.85
+    if token_count <= 16:
+        return 1.0
+    if token_count <= 24:
+        return 0.9
 
-    return round(
-        0.5 * cue_support
-        + 0.5 * span_quality,
-        2,
-    )
+    return 0.75
 
 
 def calculate_composite_confidence(
@@ -870,30 +849,15 @@ def calculate_composite_confidence(
     else:
         polarity_consistency = 0.5
 
-    distance_to_boundary = min(
-        abs(assessment_score - 40),
-        abs(assessment_score - 70),
-    )
-
-    assessment_certainty = min(
-        distance_to_boundary / 15.0,
-        1.0,
-    )
-
-    knowledge_consistency = (
-        0.5 * polarity_consistency
-        + 0.5 * assessment_certainty
-    )
-
     evidence_quality = calculate_evidence_quality(
         evidence=evidence_text,
         node_id=node_id,
     )
 
     composite_score = (
-        0.30 * llm_confidence
+        0.50 * llm_confidence
         + 0.30 * evidence_quality
-        + 0.40 * knowledge_consistency
+        + 0.20 * polarity_consistency
     )
 
     final_confidence = round(
@@ -903,15 +867,12 @@ def calculate_composite_confidence(
 
     logger.debug(
         "[Confidence] node=%s confidence=%s raw=%s "
-        "evidence_quality=%s polarity_consistency=%s "
-        "assessment_certainty=%s knowledge_consistency=%s score=%s",
+        "evidence_quality=%s polarity_consistency=%s score=%s",
         node_id,
         final_confidence,
         raw_confidence,
         evidence_quality,
         polarity_consistency,
-        assessment_certainty,
-        knowledge_consistency,
         assessment_score,
     )
 
