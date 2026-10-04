@@ -603,6 +603,27 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                         f"expected={node_id}, actual={signal.node_id}"
                     )
                     continue
+                try:
+                    aligned_evidence = align_evidence_to_user_message(
+                        signal.evidence,
+                        user_msg,
+                    )
+                except Exception as exc:
+                    node_last_error = ValueError(
+                        f"Evidence alignment failed for {node_id}: {exc}"
+                    )
+                    continue
+
+                if aligned_evidence is None:
+                    node_last_error = ValueError(
+                        f"Evidence is not one contiguous substring of the user message "
+                        f"for {node_id}: {signal.evidence!r}"
+                    )
+                    continue
+
+                signal = signal.model_copy(
+                    update={"evidence": aligned_evidence}
+                )
 
                 node_resolved = signal
                 break
