@@ -563,6 +563,17 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             node_resolved = None
 
             for resolver_attempt in range(3):
+                if last_error is not None:
+                    resolver_prompt += (
+                        "\n\n=== PREVIOUS RESOLUTION FAILED ===\n"
+                        f"{last_error}\n"
+                        "Regenerate the output from scratch.\n"
+                        f"Return exactly one signal for {node_id}.\n"
+                        "Do not return any other node.\n"
+                        "Evidence must be copied exactly from the user message.\n"
+                    )
+                    resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
+
                 raw_resolved = resolver.invoke({
                     "user_message": user_msg,
                     "selected_nodes": build_selected_node_context([node_id]),
