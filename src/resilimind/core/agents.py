@@ -705,8 +705,13 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
-                evidence = evidence_candidates[signal.evidence_index]
-
+                evidence = evidence_candidates[signal.evidence_index][2]
+                logger.info(
+                    "[Extractor] Resolved %s -> evidence_index=%d, evidence=%r",
+                    node_id,
+                    signal.evidence_index,
+                    evidence_candidates[signal.evidence_index][2],
+                )
                 node_resolved = {
                     "node_id": signal.node_id,
                     "detected_signal": signal.detected_signal,
