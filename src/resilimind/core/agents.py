@@ -548,31 +548,37 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
         resolved_signals = []
 
         for node_id in selected_nodes:
-            resolver_prompt = (
+            resolver_prompt_base = (
                 f"{prompts.SIGNAL_RESOLVER_SYSTEM_PROMPT}\n\n"
                 "=== TARGET NODE ===\n"
                 f"{build_selected_node_context([node_id])}\n\n"
-                "You are resolving exactly ONE node.\n"
-                f"The required node is {node_id}.\n"
-                "You MUST return exactly one signal for this node.\n"
-                "Do not return any other node."
+                "The target node for this invocation is "
+                f"{node_id}.\n"
+                "Return exactly one signal for this node.\n"
+                "Do not return another node.\n"
+                "Evidence must be one exact contiguous substring "
+                "copied from the user message."
             )
 
-            resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
-
+            node_last_error: Exception | None = None
             node_resolved = None
 
             for resolver_attempt in range(3):
-                if last_error is not None:
+                resolver_prompt = resolver_prompt_base
+
+                if node_last_error is not None:
                     resolver_prompt += (
-                        "\n\n=== PREVIOUS RESOLUTION FAILED ===\n"
-                        f"{last_error}\n"
-                        "Regenerate the output from scratch.\n"
+                        "\n\n=== PREVIOUS ATTEMPT FAILED ===\n"
+                        f"Reason: {node_last_error}\n"
+                        "Regenerate the result from scratch.\n"
                         f"Return exactly one signal for {node_id}.\n"
-                        "Do not return any other node.\n"
-                        "Evidence must be copied exactly from the user message.\n"
+                        "The evidence MUST be one contiguous substring "
+                        "copied exactly from the USER MESSAGE.\n"
+                        "NEVER concatenate multiple phrases.\n"
+                        "NEVER return a list of evidence phrases.\n"
                     )
-                    resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
+
+                resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
 
                 raw_resolved = resolver.invoke({
                     "user_message": user_msg,
@@ -580,44 +586,66 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                 })
 
                 if raw_resolved.get("parsed") is None:
-                    last_error = ValueError(
+                    node_last_error = ValueError(
                         f"Signal resolver returned invalid output for {node_id}: "
                         f"{raw_resolved.get('raw')!r}"
+                    )
+                    logger.warning(
+                        "[Extractor] Resolver failed for %s "
+                        "(attempt %d/3): %s",
+                        node_id,
+                        resolver_attempt + 1,
+                        node_last_error,
                     )
                     continue
 
                 signals = raw_resolved["parsed"].signals
 
                 if len(signals) != 1:
-                    last_error = ValueError(
+                    node_last_error = ValueError(
                         f"Signal resolver returned {len(signals)} signals for "
                         f"{node_id}, expected exactly 1."
+                    )
+                    logger.warning(
+                        "[Extractor] Resolver returned wrong signal count for %s "
+                        "(attempt %d/3): %s",
+                        node_id,
+                        resolver_attempt + 1,
+                        node_last_error,
                     )
                     continue
 
                 signal = signals[0]
 
                 if signal.node_id != node_id:
-                    last_error = ValueError(
+                    node_last_error = ValueError(
                         f"Signal resolver returned wrong node: "
                         f"expected={node_id}, actual={signal.node_id}"
                     )
-                    continue
-                try:
-                    aligned_evidence = align_evidence_to_user_message(
-                        signal.evidence,
-                        user_msg,
-                    )
-                except Exception as exc:
-                    node_last_error = ValueError(
-                        f"Evidence alignment failed for {node_id}: {exc}"
+                    logger.warning(
+                        "[Extractor] Resolver returned wrong node "
+                        "(attempt %d/3): %s",
+                        resolver_attempt + 1,
+                        node_last_error,
                     )
                     continue
 
+                aligned_evidence = align_evidence_to_user_message(
+                    signal.evidence,
+                    user_msg,
+                )
+
                 if aligned_evidence is None:
                     node_last_error = ValueError(
-                        f"Evidence is not one contiguous substring of the user message "
-                        f"for {node_id}: {signal.evidence!r}"
+                        f"Evidence is not one contiguous substring of the user "
+                        f"message for {node_id}: {signal.evidence!r}"
+                    )
+                    logger.warning(
+                        "[Extractor] Invalid evidence for %s "
+                        "(attempt %d/3): %s",
+                        node_id,
+                        resolver_attempt + 1,
+                        node_last_error,
                     )
                     continue
 
@@ -631,7 +659,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             if node_resolved is None:
                 raise RuntimeError(
                     f"Signal resolution failed for node {node_id}"
-                ) from last_error
+                ) from node_last_error
 
             resolved_signals.append(node_resolved)
 
