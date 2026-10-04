@@ -640,8 +640,8 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     resolver_prompt
                 )
 
-                logger.warning(
-                    "[Extractor DEBUG] user_message=%r",
+                logger.debug(
+                    "[Extractor] user_message=%r",
                     user_msg,
                 )
 
