@@ -1,35 +1,27 @@
-"""Backward-compatible entry point for ScenarioGenerator.
-
-This module re-exports components from the modular `evaluation.generators.generator`
-subpackage so existing scripts and CLI invocations continue to function without changes.
-"""
-
-from __future__ import annotations
-
-from pathlib import Path
-import sys
-
-# Ensure project root is in sys.path when executed directly as a script
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from evaluation.generators.generator import (
-    ScenarioGenerator,
+from .engine import (
     DEFAULT_GRAPH_PATH,
     PROJECT_ROOT,
+    ScenarioGenerator,
+)
+from .strategy import (
     DEFAULT_DISTRIBUTION,
     BUCKET_CONFIG,
     scale_distribution,
     choose_domain,
     choose_turn_count,
+)
+from .sampler import (
     generate_rubric_from_profile,
     sample_assessment_profile,
+)
+from .gold import (
     generate_safety,
     generate_signals,
     generate_assessments,
     generate_routing,
     generate_response_criteria,
+)
+from .cli import (
     write_jsonl,
     load_jsonl,
     parse_args,
@@ -57,6 +49,3 @@ __all__ = [
     "parse_args",
     "main",
 ]
-
-if __name__ == "__main__":
-    main()
