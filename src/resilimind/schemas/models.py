@@ -47,9 +47,10 @@ class ResolvedSignal(BaseModel):
         ...,
         description="Polarity of the selected node based on local context."
     )
-    evidence: str = Field(
+    evidence_index: int = Field(
         ...,
-        description="Shortest exact contiguous substring copied from the user message."
+        ge=0,
+        description="Index of the exact evidence candidate from the user message."
     )
 
 
