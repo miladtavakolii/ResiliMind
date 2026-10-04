@@ -16,13 +16,13 @@ def load_prompt_text(filename: str) -> str:
         str: Raw prompt text string.
     """
     try:
-        logger.debug(f"[Prompts] Attempting to load prompt file: {filename}")
+        logger.debug("[Prompts] Attempting to load prompt file: %s", filename)
         # Load directly from the packaged resources (PEP 592/302 compatible)
         prompt_content = pkg_resources.files("resilimind.assets.prompts").joinpath(filename).read_text(encoding="utf-8")
-        logger.debug(f"[Prompts] Successfully loaded prompt '{filename}' ({len(prompt_content)} chars).")
+        logger.debug("[Prompts] Successfully loaded prompt '%s' (%s chars).", filename, len(prompt_content))
         return prompt_content.strip()
     except Exception as e:
-        logger.exception(f"[Prompts] Failed to load prompt '{filename}' from package resources: {e}")
+        logger.exception("[Prompts] Failed to load prompt '%s' from package resources: %s", filename, e)
         raise FileNotFoundError(f"Failed to load prompt '{filename}' from package resources: {e}")
     
 # System Prompt Strings loaded from files

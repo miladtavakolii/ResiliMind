@@ -25,7 +25,7 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
     try:
         if json_file_path:
             # Custom path provided (e.g., for external testing)
-            logger.info(f"[GraphLoader] Loading custom graph from: {json_file_path}")
+            logger.info("[GraphLoader] Loading custom graph from: %s", json_file_path)
             with open(json_file_path, 'r', encoding='utf-8') as f:
                 graph_data: Dict[str, Any] = json.load(f)
         else:
@@ -35,7 +35,7 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
             graph_data: Dict[str, Any] = json.loads(json_text)
             
     except Exception as e:
-        logger.error(f"[GraphLoader] Error loading graph data: {e}")
+        logger.error("[GraphLoader] Error loading graph data: %s", e)
         raise RuntimeError(
             f"Failed to load resilience graph: {json_file_path or 'bundled asset'}"
         ) from e
@@ -56,7 +56,7 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
             interventions=node_attrs.get("interventions", {})
         )
     
-    logger.info(f"[GraphLoader] Successfully loaded {G.number_of_nodes()} nodes.")
+    logger.info("[GraphLoader] Successfully loaded %s nodes.", G.number_of_nodes())
 
     # 3. Add Edges
     edges: List[Dict[str, str]] = graph_data.get("edges", [])
@@ -73,9 +73,9 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
                 description=edge.get("description")
             )
         else:
-            logger.warning(f"[GraphLoader] Edge {source} -> {target} skipped: Node missing.")
+            logger.warning("[GraphLoader] Edge %s -> %s skipped: Node missing.", source, target)
     
-    logger.info(f"[GraphLoader] Successfully loaded {G.number_of_edges()} edges.")
+    logger.info("[GraphLoader] Successfully loaded %s edges.", G.number_of_edges())
     
     return G
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     target_node: str = "IND_ECO_01"
     
     if target_node in resilience_graph:
-        logger.info(f"--- Fetching data for node: {target_node} ---")
+        logger.info("--- Fetching data for node: %s ---", target_node)
         node_data: Dict[str, Any] = resilience_graph.nodes[target_node]
         
         print(f"Domain: {node_data.get('domain')}")

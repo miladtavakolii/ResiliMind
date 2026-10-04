@@ -26,7 +26,7 @@ def render_chat_interface(app: Any, config: Dict[str, Any]) -> None:
             st.markdown(message["content"])
 
     if user_input := st.chat_input("پیام خود را اینجا بنویسید..."):
-        logger.info(f"[UI-Chat] Received user input: '{user_input[:30]}...' (length: {len(user_input)})")
+        logger.info("[UI-Chat] Received user input: '%s...' (length: %s)", user_input[:30], len(user_input))
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -70,7 +70,7 @@ def render_chat_interface(app: Any, config: Dict[str, Any]) -> None:
             if not response_text:
                 status_container.empty()
                 response_text = "⚠️ **خطا در سیستم:** گراف پردازش را تمام کرد اما ایجنت مشاور متنی تولید نکرد."
-                logger.error(f"[UI-Chat] Empty response text. Graph State Dump: {result.state.keys()}")
+                logger.error("[UI-Chat] Empty response text. Graph State Dump: %s", result.state.keys())
 
             formatted_response = response_text.replace("\n", "  \n")
             message_placeholder.markdown(formatted_response)

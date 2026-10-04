@@ -45,13 +45,13 @@ class ResilienceService:
             "final_response": "",
             "messages": [HumanMessage(content=user_input)]
         }
-        logger.debug(f"[Service] Initial state constructed for user_id={user_id}.")
+        logger.debug("[Service] Initial state constructed for user_id=%s.", user_id)
 
         try:
             final_state: Dict[str, Any] = app.invoke(initial_state, config=config)
             logger.debug("[Service] LangGraph workflow invoked successfully.")
         except Exception as e:
-            logger.exception(f"[Service] Workflow execution failed: {e}")
+            logger.exception("[Service] Workflow execution failed: %s", e)
             raise
 
         new_assessments: List[Dict[str, Any]] = final_state.get("assessments", [])
@@ -77,7 +77,7 @@ class ResilienceService:
             user_id (int): The unique identifier of the user.
             assessments (List[Dict[str, Any]]): List of assessment dictionaries from graph state.
         """
-        logger.info(f"[Service] Persisting {len(assessments)} node assessments to database...")
+        logger.info("[Service] Persisting %s node assessments to database...", len(assessments))
         
         for assessment in assessments:
             scores: Dict[str, int] = assessment.get("scores", {})
@@ -104,7 +104,7 @@ class ResilienceService:
                 confidence=float(assessment.get("confidence", 0.0)),
                 reasoning=assessment.get("reasoning", "")
             )
-            logger.debug(f"[Service] Saved assessment log for node '{assessment.get('node_id')}' with status '{status}' and score {total_score}.")
+            logger.debug("[Service] Saved assessment log for node '%s' with status '%s' and score %s.", assessment.get('node_id'), status, total_score)
 
     @staticmethod
     def build_response(final_state: Dict[str, Any]) -> str:

@@ -125,7 +125,7 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
             )
 
         if merged_polarity != existing_polarity:
-            logger.warning(f"[Extractor] Merging duplicate node {signal.node_id} polarities: {existing_polarity} + {new_polarity} -> mixed.")
+            logger.warning("[Extractor] Merging duplicate node %s polarities: %s + %s -> mixed.", signal.node_id, existing_polarity, new_polarity)
 
         unique_signals[signal.node_id] = existing.model_copy(
             update={
@@ -768,7 +768,7 @@ def retriever_node(state: AgentState) -> Dict[str, Any]:
     
     # Fetch structured string representation from NetworkX graph
     context: str = retrieve_subgraph_context(resilience_graph, active_nodes)
-    logger.debug(f"[Retriever] Fetched subgraph context for nodes: {active_nodes}")
+    logger.debug("[Retriever] Fetched subgraph context for nodes: %s", active_nodes)
     
     return {"subgraph_context": context}
 
@@ -1207,7 +1207,7 @@ def advisor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             formatted_logs.append(f"• Node {nid} Timeline: {path_str}")
             
         history_context = "\n".join(formatted_logs)
-        logger.debug(f"[Advisor] Loaded timeline history for user {user_id}.")
+        logger.debug("[Advisor] Loaded timeline history for user %s.", user_id)
     
     # Combine real-time graph context with the user's historical profile
     full_context: str = (
@@ -1315,7 +1315,7 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
 
     # Check for multi-word phrases or explicit suicide intent
     if any(phrase in normalized_msg for phrase in crisis_phrases):
-        logger.warning(f"[Safety] Fast heuristic triggered high-risk flag on normalized input.")
+        logger.warning("[Safety] Fast heuristic triggered high-risk flag on normalized input.")
         return {
             "safety_status": "HIGH_RISK",
             "safety_flag": True,
@@ -1339,10 +1339,10 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         )
 
         if result.is_high_risk != (result.risk_category != "SAFE"):
-            logger.warning(f"[Safety] Inconsistent classifier output: is_high_risk={result.is_high_risk}, risk_category={result.risk_category}. Applying fail-safe high-risk interpretation.")
+            logger.warning("[Safety] Inconsistent classifier output: is_high_risk=%s, risk_category=%s. Applying fail-safe high-risk interpretation.", result.is_high_risk, result.risk_category)
 
         if effective_high_risk:
-            logger.warning(f"[Safety] LLM Safety Classifier flagged high-risk signal. Category: {result.risk_category}")
+            logger.warning("[Safety] LLM Safety Classifier flagged high-risk signal. Category: %s", result.risk_category)
             return {
                 "safety_status": "HIGH_RISK",
                 "safety_flag": True,
@@ -1357,7 +1357,7 @@ def safety_classifier_node(state: AgentState) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"[Safety] Safety LLM execution failed ({e}). Defaulting to SAFETY_UNAVAILABLE status.")
+        logger.error("[Safety] Safety LLM execution failed (%s). Defaulting to SAFETY_UNAVAILABLE status.", e)
         return {
             "safety_status": "UNAVAILABLE",
             "safety_flag": False,

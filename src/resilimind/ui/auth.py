@@ -42,17 +42,17 @@ def render_auth_page() -> None:
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("ورود به سامانه", width="stretch"):
-                logger.debug(f"[UI-Auth] Login attempt initiated for user: {login_user}")
+                logger.debug("[UI-Auth] Login attempt initiated for user: %s", login_user)
                 if login_user and login_pass:
                     user_id: Optional[int] = authenticate_user(login_user, login_pass)
                     if user_id:
-                        logger.info(f"[UI-Auth] User '{login_user}' authenticated successfully (id={user_id}).")
+                        logger.info("[UI-Auth] User '%s' authenticated successfully (id=%s).", login_user, user_id)
                         st.session_state.user_id = user_id
                         st.session_state.username = login_user
                         st.success("ورود موفقیت‌آمیز بود! در حال انتقال...")
                         st.rerun()
                     else:
-                        logger.warning(f"[UI-Auth] Failed login attempt for user: {login_user}")
+                        logger.warning("[UI-Auth] Failed login attempt for user: %s", login_user)
                         st.error("نام کاربری یا رمز عبور اشتباه است.")
                 else:
                     logger.warning("[UI-Auth] Login attempted with empty fields.")
@@ -65,13 +65,13 @@ def render_auth_page() -> None:
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("ایجاد حساب کاربری", width="stretch"):
-                logger.debug(f"[UI-Auth] Registration attempt initiated for user: {reg_user}")
+                logger.debug("[UI-Auth] Registration attempt initiated for user: %s", reg_user)
                 if reg_user and reg_pass:
                     if register_user(reg_user, reg_pass):
-                        logger.info(f"[UI-Auth] User '{reg_user}' registered successfully.")
+                        logger.info("[UI-Auth] User '%s' registered successfully.", reg_user)
                         st.success("حساب کاربری با موفقیت ایجاد شد! اکنون می‌توانید از تب ورود استفاده کنید.")
                     else:
-                        logger.warning(f"[UI-Auth] Registration failed: Username '{reg_user}' already exists.")
+                        logger.warning("[UI-Auth] Registration failed: Username '%s' already exists.", reg_user)
                         st.error("این نام کاربری قبلاً ثبت شده است. لطفاً نام دیگری انتخاب کنید.")
                 else:
                     logger.warning("[UI-Auth] Registration attempted with empty fields.")

@@ -54,7 +54,7 @@ if st.session_state.user_id is None:
     render_auth_page()
     st.stop()
 
-logger.info(f"[Main] User authenticated successfully (user_id={st.session_state.user_id}).")
+logger.info("[Main] User authenticated successfully (user_id=%s).", st.session_state.user_id)
 
 # 3. Initialize Graph & State
 @st.cache_resource

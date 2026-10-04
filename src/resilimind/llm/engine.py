@@ -65,7 +65,7 @@ class LLMEngine:
             self._node_selector_llm: Optional[Any] = None
             self._signal_resolver_llm: Optional[Any] = None
             self.is_initialized: bool = True
-            logger.info(f"[LLMEngine] Initialized engine with model '{self.model_name}' at URL '{self.base_url}'.")
+            logger.info("[LLMEngine] Initialized engine with model '%s' at URL '%s'.", self.model_name, self.base_url)
 
     def get_node_selector_runner(self, system_prompt: str) -> RunnableSerializable[dict[str, Any], Any]:
         """Build and cache the LangChain runnable pipeline for candidate node selection.
@@ -236,7 +236,7 @@ class LLMEngine:
             ChatOllama: An initialized Ollama LLM instance configured for conversational flow.
         """
         if self._conversational_llm is None:
-            logger.debug(f"[LLMEngine] Initializing cached conversational LLM instance (temp={self.conversational_temp})...")
+            logger.debug("[LLMEngine] Initializing cached conversational LLM instance (temp=%s)...", self.conversational_temp)
             self._conversational_llm = ChatOllama(
                 model=self.model_name, 
                 base_url=self.base_url, 

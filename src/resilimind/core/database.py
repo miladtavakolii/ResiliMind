@@ -22,7 +22,7 @@ def init_db() -> None:
     if they do not exist. Ensures parent directories exist prior to database connection.
     """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    logger.info(f"[Database] Initializing database at {DB_PATH}")
+    logger.info("[Database] Initializing database at %s", DB_PATH)
     
     try:
         with get_connection() as conn:
@@ -71,7 +71,7 @@ def init_db() -> None:
             conn.commit()
             logger.debug("[Database] Tables 'users' and 'resilience_logs' verified/created.")
     except sqlite3.Error as e:
-        logger.error(f"[Database] Failed to initialize tables: {e}")
+        logger.error("[Database] Failed to initialize tables: %s", e)
         raise
 
 def get_connection() -> sqlite3.Connection:
@@ -99,13 +99,13 @@ def register_user(username: str, password: str) -> bool:
                 (username.strip(), hashed_password)
             )
             conn.commit()
-        logger.info(f"[Database] Successfully registered user: {username}")
+        logger.info("[Database] Successfully registered user: %s", username)
         return True
     except sqlite3.IntegrityError:
-        logger.warning(f"[Database] Registration failed: Username '{username}' already exists.")
+        logger.warning("[Database] Registration failed: Username '%s' already exists.", username)
         return False
     except sqlite3.Error as e:
-        logger.error(f"[Database] Registration error for '{username}': {e}")
+        logger.error("[Database] Registration error for '%s': %s", username, e)
         return False
 
 
@@ -132,12 +132,12 @@ def authenticate_user(username: str, password: str) -> Optional[int]:
             user_id, stored_hash = result
             try:
                 if ph.verify(stored_hash, password):
-                    logger.info(f"[Database] User '{username}' authenticated successfully.")
+                    logger.info("[Database] User '%s' authenticated successfully.", username)
                     return user_id
             except (VerifyMismatchError, InvalidHash):
-                logger.warning(f"[Database] Password mismatch for user: {username}")
+                logger.warning("[Database] Password mismatch for user: %s", username)
         else:
-            logger.warning(f"[Database] Authentication attempt failed: User '{username}' not found.")
+            logger.warning("[Database] Authentication attempt failed: User '%s' not found.", username)
             
         return None
 
@@ -172,7 +172,7 @@ def save_resilience_log(
                 (user_id, node_id, category, status.upper(), score, confidence, reasoning)
             )
             conn.commit()
-        logger.debug(f"[Database] Saved resilience log for user {user_id} on node {node_id}.")
+        logger.debug("[Database] Saved resilience log for user %s on node %s.", user_id, node_id)
     except sqlite3.Error as e:
         logger.exception("[Database] Failed to save resilience log for user %s", user_id)
         raise
@@ -203,7 +203,7 @@ def get_user_resilience_history(user_id: int, limit: int = 20) -> List[Dict[str,
             (user_id, limit)
         )
         rows = cursor.fetchall()
-        logger.debug(f"[Database] Retrieved {len(rows)} history logs for user {user_id}.")
+        logger.debug("[Database] Retrieved %s history logs for user %s.", len(rows), user_id)
         return [dict(row) for row in rows]
 
 
@@ -238,7 +238,7 @@ def get_user_latest_node_statuses(user_id: int) -> List[Dict[str, Any]]:
             (user_id,),
         )
         rows = cursor.fetchall()
-        logger.debug(f"[Database] Retrieved {len(rows)} latest node statuses for user {user_id}.")
+        logger.debug("[Database] Retrieved %s latest node statuses for user %s.", len(rows), user_id)
         return [dict(row) for row in rows]
 
 def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
@@ -268,5 +268,5 @@ def get_user_node_timeline(user_id: int, limit: int = 50) -> List[Dict[str, Any]
             (user_id, limit),
         )
         rows = list(reversed(cursor.fetchall()))
-        logger.debug(f"[Database] Retrieved {len(rows)} timeline records for user {user_id}.")
+        logger.debug("[Database] Retrieved %s timeline records for user %s.", len(rows), user_id)
         return [dict(row) for row in rows]

@@ -48,7 +48,7 @@ def route_safety(state: AgentState) -> Literal["emergency_response", "service_un
         logger.warning("[Workflow] Safety subsystem unavailable. Routing to service unavailable block...")
         return "service_unavailable"
     if status != "SAFE":
-        logger.error(f"[Workflow] Invalid safety status {status}. Failing closed.")
+        logger.error("[Workflow] Invalid safety status %s. Failing closed.", status)
         return "service_unavailable"
     
     logger.info("[Workflow] Safety check passed (SAFE). Routing to extractor...")
@@ -82,10 +82,10 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
         confidence = float(item.get("confidence", 0.0))
 
         if confidence < threshold:
-            logger.info(f"[Workflow] Confidence {confidence} below threshold {threshold} for node {item.get("node_id")}. Routing to Questioner...")
+            logger.info("[Workflow] Confidence %s below threshold %s for node %s. Routing to Questioner...", confidence, threshold, item.get("node_id"))
             return "questioner"
 
-    logger.info(f"[Workflow] All assessment confidences are >= {threshold}. Routing to Advisor...")
+    logger.info("[Workflow] All assessment confidences are >= %s. Routing to Advisor...", threshold)
     return "advisor"
 
 
@@ -137,7 +137,7 @@ def build_workflow() -> Any:
 
     # 8. Ensure data directory exists and set up SQLite checkpointer connection
     CHECKPOINT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    logger.debug(f"[Workflow] Connecting to checkpointer database at: {CHECKPOINT_DB_PATH}")
+    logger.debug("[Workflow] Connecting to checkpointer database at: %s", CHECKPOINT_DB_PATH)
     conn: sqlite3.Connection = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
     memory: SqliteSaver = SqliteSaver(conn)
 

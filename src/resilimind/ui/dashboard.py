@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def render_domain_resilience_chart(user_id: int) -> None:
     """Renders an interactive RADAR chart showing resilience score distribution."""
-    logger.debug(f"[UI-Dashboard] Rendering domain resilience chart for user_id={user_id}...")
+    logger.debug("[UI-Dashboard] Rendering domain resilience chart for user_id=%s...", user_id)
     logs = get_user_latest_node_statuses(user_id)
     if not logs:
         logger.debug("[UI-Dashboard] No logs available for radar chart rendering.")
@@ -64,7 +64,7 @@ def render_sidebar_dashboard() -> None:
         st.markdown(f"کاربر فعلی: **{st.session_state.username}**")
         
         if st.button("🚪 خروج از حساب", width="stretch"):
-            logger.info(f"[UI-Dashboard] User '{st.session_state.username}' logged out.")
+            logger.info("[UI-Dashboard] User '%s' logged out.", st.session_state.username)
             for key in ["user_id", "username", "messages", "last_state"]:
                 st.session_state[key] = None if key in ["user_id", "username", "last_state"] else []
             st.rerun()
@@ -80,7 +80,7 @@ def render_sidebar_dashboard() -> None:
                 
                 st.markdown("### 📡 سیگنال‌های دریافتی")
                 if active_signals:
-                    logger.debug(f"[UI-Dashboard] Rendering {len(active_signals)} active signals in sidebar.")
+                    logger.debug("[UI-Dashboard] Rendering %s active signals in sidebar.", len(active_signals))
                     
                     polarity_styles = {
                         "positive": "📈 مثبت",
@@ -107,7 +107,7 @@ def render_sidebar_dashboard() -> None:
                 assessments: List[Dict[str, Any]] = state.get("assessments", [])
                 st.markdown("### 🎯 ارزیابی نشست")
                 if assessments:
-                    logger.debug(f"[UI-Dashboard] Rendering {len(assessments)} assessments in sidebar.")
+                    logger.debug("[UI-Dashboard] Rendering %s assessments in sidebar.", len(assessments))
                     
                     status_styles = {
                         "RED": "🔴 بحرانی (RED)",
@@ -142,7 +142,7 @@ def render_sidebar_dashboard() -> None:
             history_logs = get_user_resilience_history(st.session_state.user_id, limit=15)
             
             if history_logs:
-                logger.debug(f"[UI-Dashboard] Rendering {len(history_logs)} historical logs in sidebar.")
+                logger.debug("[UI-Dashboard] Rendering %s historical logs in sidebar.", len(history_logs))
                 
                 status_styles = {
                     "RED": "🔴 بحرانی",

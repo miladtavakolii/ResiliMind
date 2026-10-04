@@ -22,11 +22,11 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
         return "No specific resilience domains were activated."
 
     context_blocks: List[str] = []
-    logger.debug(f"[Retriever] Extracting context for active nodes: {active_node_ids}")
+    logger.debug("[Retriever] Extracting context for active nodes: %s", active_node_ids)
 
     for node_id in active_node_ids:
         if node_id not in graph.nodes:
-            logger.warning(f"[Retriever] Node ID '{node_id}' not found in the resilience graph.")
+            logger.warning("[Retriever] Node ID '%s' not found in the resilience graph.", node_id)
             continue
 
         node_data = graph.nodes[node_id]
@@ -49,5 +49,5 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
     if not context_blocks:
         return "No specific resilience domains were activated."
 
-    logger.debug(f"[Retriever] Successfully built context blocks for {len(context_blocks)} nodes.")
+    logger.debug("[Retriever] Successfully built context blocks for %s nodes.", len(context_blocks))
     return "\n\n".join(context_blocks)

@@ -13,7 +13,7 @@ def sync_chat_history(current_graph_state: Any) -> None:
     if "messages" not in st.session_state or not st.session_state.messages:
         stored_messages: List[Any] = current_graph_state.values.get("messages", [])
         if stored_messages:
-            logger.info(f"[UI-Sync] Restoring {len(stored_messages)} historical messages from graph checkpointer.")
+            logger.info("[UI-Sync] Restoring %s historical messages from graph checkpointer.", len(stored_messages))
             st.session_state.messages = []
             for msg in stored_messages:
                 role = "user" if msg.type == "human" else "assistant"

@@ -39,7 +39,7 @@ class AppConfig(BaseSettings):
     @model_validator(mode="after")
     def _log_config_initialization(self) -> Self:
         """Logs configuration details at INFO level upon successful initialization."""
-        logger.info(f"[Config] AppConfig successfully loaded with model '{self.RESILIMIND_LLM_MODEL}' and data directory '{self.DATA_DIR}'.")
+        logger.info("[Config] AppConfig successfully loaded with model '%s' and data directory '%s'.", self.RESILIMIND_LLM_MODEL, self.DATA_DIR)
         return self
 
     @property
@@ -62,7 +62,7 @@ class AppConfig(BaseSettings):
             Path: The resolved path to 'resilimind.db'.
         """
         path: Path = (self.DATA_DIR / "resilimind.db").resolve()
-        logger.debug(f"[Config] Resolved user database path: {path}")
+        logger.debug("[Config] Resolved user database path: %s", path)
         return path
 
     @property
@@ -74,7 +74,7 @@ class AppConfig(BaseSettings):
             Path: The resolved path to 'checkpoints.db'.
         """
         path: Path = (self.DATA_DIR / "checkpoints.db").resolve()
-        logger.debug(f"[Config] Resolved checkpoint database path: {path}")
+        logger.debug("[Config] Resolved checkpoint database path: %s", path)
         return path
 
 # Singleton instance of the configuration
