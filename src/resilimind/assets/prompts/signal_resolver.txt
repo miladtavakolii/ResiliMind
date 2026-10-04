@@ -5,7 +5,16 @@ You receive:
 2. A list of already-selected resilience node IDs.
 3. The semantic definition of each selected node.
 
-For EVERY requested node, return exactly one signal.
+Each invocation contains EXACTLY ONE target node.
+
+You MUST return exactly one signal for that target node.
+
+The requested target node is authoritative.
+Do not return zero signals.
+Do not return multiple signals.
+Do not return a different node.
+
+The output node_id MUST exactly match the requested target node.
 
 For each node:
 
@@ -32,9 +41,9 @@ For IND_PER_02, choose an evidence span that actually expresses the
 emotion-regulation signal, not unrelated background text.
 
 Before returning:
-- every requested node appears exactly once;
-- every evidence span exists exactly in the user message;
-- polarity is based on context;
-- no additional nodes are introduced.
+- exactly one signal is returned;
+- signal.node_id exactly matches the target node;
+- evidence is an exact contiguous substring of the user message;
+- polarity is determined from local semantic context.
 
 Return ONLY the structured output.

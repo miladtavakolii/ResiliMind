@@ -545,55 +545,85 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                 "active_signals": [],
             }
 
-        resolver_prompt = prompts.SIGNAL_RESOLVER_SYSTEM_PROMPT
-        resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
+        resolved_signals = []
 
-        raw_resolved = resolver.invoke({
-            "user_message": user_msg,
-            "selected_nodes": build_selected_node_context(selected_nodes),
-        })
-
-        if raw_resolved.get("parsed") is None:
-            last_error = ValueError(
-                f"Signal resolver returned invalid output: "
-                f"{raw_resolved.get('raw')!r}"
-            )
-            continue
-
-        try:
-            result = ExtractionOutput(
-                active_signals=[
-                    signal.model_dump()
-                    for signal in raw_resolved["parsed"].signals
-                ]
+        for node_id in selected_nodes:
+            resolver_prompt = (
+                f"{prompts.SIGNAL_RESOLVER_SYSTEM_PROMPT}\n\n"
+                "=== TARGET NODE ===\n"
+                f"{build_selected_node_context([node_id])}\n\n"
+                "You are resolving exactly ONE node.\n"
+                f"The required node is {node_id}.\n"
+                "You MUST return exactly one signal for this node.\n"
+                "Do not return any other node."
             )
 
-            result = canonicalize_extraction_result(result)
-            result = validate_extraction_result(
-                result=result,
-                user_message=user_msg,
-            )
-            result = reconcile_signal_polarity(result)
+            resolver = llm_engine.get_signal_resolver_runner(resolver_prompt)
 
-            expected = set(selected_nodes)
-            actual = {signal.node_id for signal in result.active_signals}
+            node_resolved = None
 
-            if actual != expected:
-                raise ValueError(
-                    f"Signal resolution mismatch: "
-                    f"expected={sorted(expected)}, actual={sorted(actual)}"
-                )
+            for resolver_attempt in range(3):
+                raw_resolved = resolver.invoke({
+                    "user_message": user_msg,
+                    "selected_nodes": build_selected_node_context([node_id]),
+                })
 
-            return {
-                "active_nodes": selected_nodes,
-                "active_signals": [
-                    signal.model_dump()
-                    for signal in result.active_signals
-                ],
-            }
+                if raw_resolved.get("parsed") is None:
+                    last_error = ValueError(
+                        f"Signal resolver returned invalid output for {node_id}: "
+                        f"{raw_resolved.get('raw')!r}"
+                    )
+                    continue
 
-        except ValueError as exc:
-            last_error = exc
+                signals = raw_resolved["parsed"].signals
+
+                if len(signals) != 1:
+                    last_error = ValueError(
+                        f"Signal resolver returned {len(signals)} signals for "
+                        f"{node_id}, expected exactly 1."
+                    )
+                    continue
+
+                signal = signals[0]
+
+                if signal.node_id != node_id:
+                    last_error = ValueError(
+                        f"Signal resolver returned wrong node: "
+                        f"expected={node_id}, actual={signal.node_id}"
+                    )
+                    continue
+
+                node_resolved = signal
+                break
+
+            if node_resolved is None:
+                raise RuntimeError(
+                    f"Signal resolution failed for node {node_id}"
+                ) from last_error
+
+            resolved_signals.append(node_resolved)
+
+        result = ExtractionOutput(
+            active_signals=[
+                signal.model_dump()
+                for signal in resolved_signals
+            ]
+        )
+
+        result = canonicalize_extraction_result(result)
+        result = validate_extraction_result(
+            result=result,
+            user_message=user_msg,
+        )
+        result = reconcile_signal_polarity(result)
+
+        return {
+            "active_nodes": selected_nodes,
+            "active_signals": [
+                signal.model_dump()
+                for signal in result.active_signals
+            ],
+        }
 
     raise RuntimeError(
         "Staged extractor failed after 3 attempts"
