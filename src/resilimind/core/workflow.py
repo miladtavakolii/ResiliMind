@@ -68,6 +68,10 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
     """
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
 
+    if state.get("requires_disambiguation", False):
+        logger.info("[Workflow] Assessor requested disambiguation. Routing to Questioner...")
+        return "questioner"
+
     if not assessments:
         logger.info("[Workflow] No assessments generated. Routing to Questioner...")
         return "questioner"
