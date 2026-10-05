@@ -13,56 +13,137 @@ from .text_utils import normalize_persian_text, find_polarity_cues as _find_pola
 # Initialize module logger
 logger = logging.getLogger(__name__)
 
-EXTRACTOR_NODE_BOUNDARIES: dict[str, str] = {
-    "IND_PER_01": (
-        "Requires explicit self-efficacy or hardiness about overcoming a challenge. "
-        "Generic task completion, planning, calmness, social support, or coping effort alone "
-        "does not activate this node."
-    ),
-    "IND_PER_02": (
-        "Requires emotional regulation or dysregulation such as anxiety, anger, panic, "
-        "loss of emotional control, or explicit calming. Generic confusion alone is insufficient."
-    ),
-    "IND_PER_03": (
-        "Requires future goals, future outlook, hope, or purposeful personal direction. "
-        "Generic task completion is insufficient."
-    ),
-    "IND_POL_01": (
-        "Requires evaluating political/news information, source verification, misinformation, "
-        "or critical analysis of news."
-    ),
-    "IND_POL_02": (
-        "Requires civic or political agency/alienation. Generic 'I cannot do anything' "
-        "is insufficient unless the statement is explicitly about political or civic impact."
-    ),
-    "IND_ECO_01": (
-        "Requires financial management or financial adaptation. General stress about work "
-        "is not sufficient."
-    ),
-    "IND_ECO_02": (
-        "Requires employment, career, job security, dismissal, or professional adaptation. "
-        "Generic self-efficacy is not sufficient."
-    ),
-    "IND_PHY_01": (
-        "Requires bodily symptoms, fatigue, energy, or physical recovery. Psychological "
-        "stress alone is insufficient."
-    ),
-    "IND_PHY_02": (
-        "Requires sleep, wakefulness, appetite, or biological-rhythm evidence. Generic fatigue "
-        "alone is insufficient."
-    ),
-    "IND_SOC_01": (
-        "Requires family-specific support, cohesion, conflict, or safety."
-    ),
-    "IND_SOC_02": (
-        "Requires friends, peers, social network, or social-support evidence."
-    ),
-    "IND_SPI_01": (
-        "Requires spiritual/religious meaning, faith, prayer, God, or spiritual coping."
-    ),
-    "IND_SPI_02": (
-        "Requires cultural identity, roots, traditions, heritage, or cultural belonging."
-    ),
+EXTRACTOR_NODE_BOUNDARIES: dict[str, dict[str, str]] = {
+    "IND_PER_01": {
+        "positive": (
+            "Explicit belief in one's ability to overcome a personal challenge, "
+            "or explicit persistence despite difficulty."
+        ),
+        "negative": (
+            "Explicit inability, helplessness, giving up, or loss of confidence "
+            "specifically about overcoming a personal challenge."
+        ),
+    },
+    "IND_PER_02": {
+        "positive": (
+            "Explicit emotional control, calming, composure, or successful "
+            "regulation of anxiety, anger, panic, or distress."
+        ),
+        "negative": (
+            "Explicit anxiety, anger, panic, emotional overwhelm, or loss of "
+            "emotional control."
+        ),
+    },
+    "IND_PER_03": {
+        "positive": (
+            "Explicit future goals, hope, plans, purposeful direction, or "
+            "continued investment in a desired future."
+        ),
+        "negative": (
+            "Explicit hopelessness, loss of future outlook, lack of purpose, "
+            "or giving up on future goals."
+        ),
+    },
+    "IND_POL_01": {
+        "positive": (
+            "Explicit critical evaluation of political or news information, "
+            "source checking, fact checking, comparison of sources, or resistance "
+            "to misinformation."
+        ),
+        "negative": (
+            "Explicit uncritical acceptance of misinformation, sweeping distrust "
+            "of all sources, or black-and-white interpretation of political/news information."
+        ),
+    },
+    "IND_POL_02": {
+        "positive": (
+            "Explicit belief that the person can influence society, participate "
+            "civically or politically, contribute to a community, or take collective action."
+        ),
+        "negative": (
+            "Explicit political or civic helplessness, alienation, or belief that "
+            "one's civic actions have no influence on society."
+        ),
+    },
+    "IND_ECO_01": {
+        "positive": (
+            "Explicit financial management, budgeting, expense control, income "
+            "adaptation, saving, or other concrete financial coping."
+        ),
+        "negative": (
+            "Explicit financial difficulty involving inability to manage expenses, "
+            "debt, insufficient income, or inability to meet financial needs."
+        ),
+    },
+    "IND_ECO_02": {
+        "positive": (
+            "Explicit professional adaptation, skill development, career planning, "
+            "job searching, or confidence in handling employment challenges."
+        ),
+        "negative": (
+            "Explicit job insecurity, dismissal, unemployment risk, severe workplace "
+            "stress, or inability to cope with career instability."
+        ),
+    },
+    "IND_PHY_01": {
+        "positive": (
+            "Explicit stable energy, physical recovery, physical well-being, or "
+            "successful recovery from bodily stress."
+        ),
+        "negative": (
+            "Explicit physical stress symptoms, fatigue, low energy, bodily pain, "
+            "or impaired physical recovery."
+        ),
+    },
+    "IND_PHY_02": {
+        "positive": (
+            "Explicitly stable sleep, appetite, biological rhythm, or healthy "
+            "sleep/nutrition routines."
+        ),
+        "negative": (
+            "Explicit sleep disturbance, insomnia, nightmares, appetite disturbance, "
+            "or disrupted biological rhythms."
+        ),
+    },
+    "IND_SOC_01": {
+        "positive": (
+            "Explicit family support, family cohesion, constructive family interaction, "
+            "or a sense of safety within the family."
+        ),
+        "negative": (
+            "Explicit family conflict, lack of family support, family insecurity, "
+            "or deterioration of family relationships."
+        ),
+    },
+    "IND_SOC_02": {
+        "positive": (
+            "Explicit support from friends, peers, social network, or active social connection."
+        ),
+        "negative": (
+            "Explicit social isolation, loss of friends/peers, lack of social support, "
+            "or deterioration of the person's social network."
+        ),
+    },
+    "IND_SPI_01": {
+        "positive": (
+            "Explicit faith, prayer, religious belief, spiritual meaning, God, "
+            "or spiritual coping as a source of resilience."
+        ),
+        "negative": (
+            "Explicit spiritual crisis, loss of faith, spiritual alienation, or "
+            "difficulty finding spiritual meaning."
+        ),
+    },
+    "IND_SPI_02": {
+        "positive": (
+            "Explicit cultural identity, connection to roots, traditions, heritage, "
+            "or cultural belonging."
+        ),
+        "negative": (
+            "Explicit cultural alienation, loss of cultural connection, identity "
+            "conflict, or disconnection from roots or heritage."
+        ),
+    },
 }
 
 
@@ -144,18 +225,54 @@ def build_extractor_graph_context() -> str:
     blocks = []
 
     for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
+        boundary = EXTRACTOR_NODE_BOUNDARIES.get(node_id, {})
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node_data.get('name_fa', '')}\n"
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
             f"Definition: {node_data.get('description', '')}\n"
-            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}"
+            f"Positive semantic boundary: {boundary.get('positive', '')}\n"
+            f"Negative semantic boundary: {boundary.get('negative', '')}"
         )
 
     return (
         "=== KNOWLEDGE GRAPH SEMANTIC DEFINITIONS ===\n"
         + "\n\n".join(blocks)
+    )
+
+
+def build_node_selection_criteria() -> str:
+    """Format the global node selection criteria prompt block.
+
+    Iterates over all nodes defined in the resilience knowledge graph, extracting
+    their explicit semantic boundaries (falling back to node descriptions if an
+    explicit boundary override is not registered), and builds structured prompt
+    instructions for the first-stage candidate selector.
+
+    Returns:
+        str: Formatted multi-line string containing general selection guidelines
+            followed by per-node semantic boundary definitions.
+    """
+    blocks = []
+
+    for node_id, node_data in sorted(resilience_graph.nodes(data=True)):
+        boundary = EXTRACTOR_NODE_BOUNDARIES.get(
+            node_id,
+            node_data.get("description", ""),
+        )
+
+        blocks.append(
+            f"{node_id}: {boundary}"
+        )
+
+    return (
+        "=== NODE SELECTION CRITERIA ===\n"
+        "Select a node only when the user's message explicitly supports "
+        "its specific semantic boundary.\n"
+        "Clear semantic paraphrases are valid.\n"
+        "Generic or unrelated statements are not valid.\n\n"
+        + "\n".join(blocks)
     )
 
 
@@ -508,14 +625,15 @@ def build_selected_node_context(node_ids: list[str]) -> str:
             continue
 
         node = resilience_graph.nodes[node_id]
+        boundary = EXTRACTOR_NODE_BOUNDARIES.get(node_id, {})
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node.get('name_fa', '')}\n"
             f"Domain: {node.get('domain', '')}\n"
             f"Definition: {node.get('description', '')}\n"
             f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
-            f"Positive cues: {node.get('cues', {}).get('positive_keywords', [])}\n"
-            f"Negative cues: {node.get('cues', {}).get('negative_keywords', [])}"
+            f"Positive semantic boundary: {boundary.get('positive', '')}\n"
+            f"Negative semantic boundary: {boundary.get('negative', '')}"
         )
 
     return "\n\n".join(blocks)
@@ -549,7 +667,8 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
         f"{prompts.NODE_SELECTOR_SYSTEM_PROMPT}\n\n"
         f"{build_extractor_graph_context()}\n\n"
         f"=== CANDIDATE HINTS ===\n"
-        f"{build_extractor_candidate_hints(user_msg)}"
+        f"{build_extractor_candidate_hints(user_msg)}\n\n"
+        f"{build_node_selection_criteria()}"
     )
 
     selector = llm_engine.get_node_selector_runner(selector_prompt)
