@@ -103,7 +103,7 @@ def evaluate_dataset(
     max_retries: int,
     retry_delay: float,
     request_delay: float,
-    output_path: str,
+    output_path: Path | str | None = None,
     include_response_eval: bool = True,
 ) -> list[CaseEvaluationResult]:
     """Run all registered evaluators over the benchmark dataset.

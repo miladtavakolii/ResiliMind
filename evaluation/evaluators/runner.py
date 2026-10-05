@@ -97,7 +97,7 @@ class EvaluationRunner:
         self,
         cases: Iterable[EvaluationCase],
         predictions: dict[str, dict[str, Any]],
-        output_path: Path | None = None,
+        output_path: Path | str | None = None,
     ) -> list[CaseEvaluationResult]:
         """Evaluate a complete benchmark dataset.
 
@@ -117,8 +117,9 @@ class EvaluationRunner:
             len(case_list),
         )
 
-        if output_path:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_file = Path(output_path) if output_path is not None else None
+        if output_file:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
 
         for index, case in enumerate(case_list, start=1):
             logger.info(
@@ -130,8 +131,8 @@ class EvaluationRunner:
             prediction = predictions.get(case.case_id, {})
             result = self.evaluate_case(case=case, prediction=prediction)
             
-            if output_path:
-                with output_path.open("a", encoding="utf-8") as file:
+            if output_file:
+                with output_file.open("a", encoding="utf-8") as file:
                     file.write(json.dumps(result.model_dump(), ensure_ascii=False) + "\n")
                     
             results.append(result)
