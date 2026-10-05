@@ -147,7 +147,8 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
             "routing": {"route": "unknown"},
             "final_response": prediction.final_response,
             "user_context": "\n".join(
-                turn.user_message for turn in prediction.turns
+                [f"User: {t.user_message}\nAssistant: {t.final_response}" for t in prediction.turns[:-1]] + 
+                [f"User: {prediction.turns[-1].user_message}"] if prediction.turns else []
             ),
             "raw": prediction.model_dump(),
         }
@@ -209,7 +210,8 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
         },
         "final_response": prediction.final_response,
         "user_context": "\n".join(
-            turn.user_message for turn in prediction.turns
+            [f"User: {t.user_message}\nAssistant: {t.final_response}" for t in prediction.turns[:-1]] + 
+            [f"User: {prediction.turns[-1].user_message}"] if prediction.turns else []
         ),
         "raw": prediction.model_dump(),
     }

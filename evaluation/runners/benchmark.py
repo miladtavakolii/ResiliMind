@@ -167,6 +167,14 @@ def run_case(
     turns: list[TurnPrediction] = []
 
     logger.info("Running case %d/%d: %s", case_number, total_cases, case.case_id)
+    
+    from resilimind.core.database.connection import get_connection
+    try:
+        with get_connection() as conn:
+            conn.execute("INSERT OR IGNORE INTO users (id, username, password_hash) VALUES (?, ?, ?)", (user_id, f"bench_{user_id}", "dummy"))
+            conn.commit()
+    except Exception as e:
+        logger.error("Failed to insert dummy user for benchmark: %s", e)
 
     try:
         for turn_index, user_message in enumerate(case.input.messages):
@@ -195,6 +203,11 @@ def run_case(
                 }
 
             final_state = app.invoke(state, config=config)
+
+            from resilimind.services.resilience_service import ResilienceService
+            new_assessments = final_state.get("assessments", [])
+            if new_assessments:
+                ResilienceService.persist_assessments(user_id, new_assessments)
 
             turns.append(
                 extract_turn_prediction(
