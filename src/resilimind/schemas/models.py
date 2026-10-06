@@ -43,14 +43,18 @@ class ResolvedSignal(BaseModel):
         ...,
         description="Exact selected node ID."
     )
-    detected_signal: Literal["positive", "negative", "mixed"] = Field(
+    supported: bool = Field(
         ...,
-        description="Polarity of the selected node based on local context."
+        description="Whether the target node is explicitly supported by the user message."
     )
-    evidence_index: int = Field(
-        ...,
+    detected_signal: Literal["positive", "negative", "mixed"] | None = Field(
+        default=None,
+        description="Polarity of the target node when supported."
+    )
+    evidence_index: int | None = Field(
+        default=None,
         ge=0,
-        description="Index of the exact evidence candidate from the user message."
+        description="Index of the evidence candidate when supported."
     )
 
 

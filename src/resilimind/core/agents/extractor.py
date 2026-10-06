@@ -566,6 +566,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             }
 
         resolved_signals = []
+        accepted_nodes = []
 
         evidence_candidates = build_evidence_candidates(user_msg)
 
@@ -590,6 +591,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
 
             node_last_error: Exception | None = None
             node_resolved = None
+            node_rejected = False
 
             for resolver_attempt in range(3):
                 resolver_prompt = resolver_prompt_base
@@ -663,6 +665,26 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
+                if not signal.supported:
+                    logger.info(
+                        "[Extractor] Resolver rejected unsupported node %s",
+                        node_id,
+                    )
+                    node_rejected = True
+                    break
+
+                if signal.detected_signal is None:
+                    node_last_error = ValueError(
+                        f"Supported node {node_id} has no detected_signal"
+                    )
+                    continue
+
+                if signal.evidence_index is None:
+                    node_last_error = ValueError(
+                        f"Supported node {node_id} has no evidence_index"
+                    )
+                    continue
+
                 if not 0 <= signal.evidence_index < len(evidence_candidates):
                     node_last_error = ValueError(
                         f"Signal resolver returned invalid evidence index for "
@@ -678,12 +700,14 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     continue
 
                 evidence = evidence_candidates[signal.evidence_index][2]
+
                 logger.info(
                     "[Extractor] Resolved %s -> evidence_index=%d, evidence=%r",
                     node_id,
                     signal.evidence_index,
-                    evidence_candidates[signal.evidence_index][2],
+                    evidence,
                 )
+
                 node_resolved = {
                     "node_id": signal.node_id,
                     "detected_signal": signal.detected_signal,
@@ -691,12 +715,16 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                 }
                 break
 
+            if node_rejected:
+                continue
+
             if node_resolved is None:
                 raise RuntimeError(
                     f"Signal resolution failed for node {node_id}"
                 ) from node_last_error
 
             resolved_signals.append(node_resolved)
+            accepted_nodes.append(node_id)
 
         result = ExtractionOutput(
             active_signals=resolved_signals
@@ -710,7 +738,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
         result = reconcile_signal_polarity(result)
 
         return {
-            "active_nodes": selected_nodes,
+            "active_nodes": accepted_nodes,
             "active_signals": [
                 signal.model_dump()
                 for signal in result.active_signals
