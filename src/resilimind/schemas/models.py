@@ -1,5 +1,5 @@
 from typing import List, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 class SafetyOutput(BaseModel):
     """
@@ -57,6 +57,27 @@ class ResolvedSignal(BaseModel):
         description="Index of the evidence candidate when supported."
     )
 
+    @model_validator(mode="after")
+    def validate_supported_signal(self):
+        if self.supported:
+            if self.detected_signal is None:
+                raise ValueError(
+                    "supported=true requires detected_signal"
+                )
+            if self.evidence_index is None:
+                raise ValueError(
+                    "supported=true requires evidence_index"
+                )
+        else:
+            if self.detected_signal is not None:
+                raise ValueError(
+                    "supported=false requires detected_signal=null"
+                )
+            if self.evidence_index is not None:
+                raise ValueError(
+                    "supported=false requires evidence_index=null"
+                )
+        return self
 
 class SignalResolutionOutput(BaseModel):
     signals: List[ResolvedSignal] = Field(

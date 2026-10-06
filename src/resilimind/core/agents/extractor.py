@@ -719,9 +719,12 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                 continue
 
             if node_resolved is None:
-                raise RuntimeError(
-                    f"Signal resolution failed for node {node_id}"
-                ) from node_last_error
+                logger.warning(
+                    "[Extractor] Rejecting unresolved candidate %s after retries: %s",
+                    node_id,
+                    node_last_error,
+                )
+                continue
 
             resolved_signals.append(node_resolved)
             accepted_nodes.append(node_id)
