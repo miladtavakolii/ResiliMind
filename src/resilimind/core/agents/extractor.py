@@ -13,57 +13,6 @@ from .text_utils import normalize_persian_text, find_polarity_cues as _find_pola
 # Initialize module logger
 logger = logging.getLogger(__name__)
 
-EXTRACTOR_NODE_BOUNDARIES: dict[str, str] = {
-    "IND_PER_01": (
-        "خودکارآمدی و پشتکار برای غلبه بر یک چالش شخصی؛ "
-        "صرف انجام کار، برنامه‌ریزی یا سردرگمی کافی نیست."
-    ),
-    "IND_PER_02": (
-        "تنظیم یا بی‌تنظیمی هیجان مانند اضطراب، خشم، وحشت، "
-        "از دست دادن کنترل هیجانی یا تلاش صریح برای آرام‌سازی؛ "
-        "صرف سردرگمی کافی نیست."
-    ),
-    "IND_PER_03": (
-        "هدف، امید، چشم‌انداز یا برنامه مشخص برای آینده شخصی؛ "
-        "صرف انجام کار فعلی کافی نیست."
-    ),
-    "IND_POL_01": (
-        "ارزیابی انتقادی خبر یا اطلاعات سیاسی، بررسی منبع یا صحت، "
-        "تشخیص شایعه و اطلاعات نادرست."
-    ),
-    "IND_POL_02": (
-        "عاملیت یا بیگانگی مدنی/سیاسی و باور به اثرگذاری یا بی‌تأثیری "
-        "بر جامعه یا مشارکت جمعی؛ ناتوانی عمومی کافی نیست."
-    ),
-    "IND_ECO_01": (
-        "مدیریت یا سازگاری مالی شامل هزینه، بودجه، درآمد، بدهی "
-        "یا راه‌حل مالی؛ فشار کاری بدون بعد مالی کافی نیست."
-    ),
-    "IND_ECO_02": (
-        "امنیت شغلی یا حرفه‌ای، استخدام، اخراج، مهارت شغلی "
-        "یا سازگاری با بی‌ثباتی شغلی."
-    ),
-    "IND_PHY_01": (
-        "علائم بدنی، خستگی، سطح انرژی یا بازیابی جسمی؛ "
-        "استرس روانی بدون نشانه بدنی کافی نیست."
-    ),
-    "IND_PHY_02": (
-        "خواب، بیداری، اشتها یا ریتم زیستی؛ "
-        "خستگی عمومی بدون اشاره به این موارد کافی نیست."
-    ),
-    "IND_SOC_01": (
-        "حمایت، انسجام، تعارض یا امنیت در خانواده درجه اول."
-    ),
-    "IND_SOC_02": (
-        "دوستان، همسالان، شبکه اجتماعی یا حمایت اجتماعی."
-    ),
-    "IND_SPI_01": (
-        "ایمان، دین، خدا، دعا، معنابخشی به رنج یا مقابله معنوی."
-    ),
-    "IND_SPI_02": (
-        "هویت فرهنگی، ریشه، سنت، میراث یا احساس تعلق فرهنگی."
-    ),
-}
 
 def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput:
     """Collapse duplicate signals for the same node when their polarity agrees.
@@ -146,8 +95,9 @@ def build_extractor_graph_context() -> str:
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node_data.get('name_fa', '')}\n"
-            f"Definition: {node_data.get('description', '')}\n"
-            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}"
+            f"Domain: {node_data.get('domain_fa', '')} "
+            f"({node_data.get('domain', '')})\n"
+            f"Definition: {node_data.get('description', '')}"
         )
 
     return (
@@ -499,15 +449,16 @@ def build_selected_node_context(node_ids: list[str]) -> str:
             continue
 
         node = resilience_graph.nodes[node_id]
+        cues = node.get("cues", {})
 
         blocks.append(
             f"Node ID: {node_id}\n"
             f"Name: {node.get('name_fa', '')}\n"
-            f"Domain: {node.get('domain', '')}\n"
+            f"Domain: {node.get('domain_fa', '')} "
+            f"({node.get('domain', '')})\n"
             f"Definition: {node.get('description', '')}\n"
-            f"Semantic boundary: {EXTRACTOR_NODE_BOUNDARIES.get(node_id, '')}\n"
-            f"Positive cues: {node.get('cues', {}).get('positive_keywords', [])}\n"
-            f"Negative cues: {node.get('cues', {}).get('negative_keywords', [])}"
+            f"Positive cues: {cues.get('positive_keywords', [])}\n"
+            f"Negative cues: {cues.get('negative_keywords', [])}"
         )
 
     return "\n\n".join(blocks)

@@ -26,7 +26,6 @@ from .extractor import (
     build_extractor_candidate_hints,
     build_selected_node_context,
     build_extractor_graph_context,
-    EXTRACTOR_NODE_BOUNDARIES,
 )
 from .assessor import (
     assessor_node,
