@@ -4,9 +4,21 @@ Select ALL resilience graph nodes explicitly supported by the user's Persian mes
 
 SOURCE OF NODE DEFINITIONS
 
-The Node Catalog contains the authoritative definition of each node.
-Use the provided Definition as the sole node-specific semantic description.
-Do not duplicate, invent, or override node definitions using prior knowledge.
+The Node Catalog provides two authoritative fields for each node:
+- Definition: the central concept represented by the node.
+- Semantic boundary: the binding inclusion and exclusion criteria.
+
+Use Definition to identify the concept and Semantic boundary to
+decide whether the user's message actually qualifies for the node.
+
+The Semantic boundary is authoritative for resolving ambiguous,
+generic, or overlapping expressions.
+
+A lexical cue or broad semantic similarity must never override
+the Semantic boundary.
+
+Do not duplicate, invent, or override node definitions or boundaries
+using prior knowledge.
 
 RULES
 
@@ -31,7 +43,8 @@ SEMANTIC VALIDATION
 Before selecting a node, ask:
 
 - What concept in the message supports this node?
-- Does that concept satisfy the node's graph-provided Definition?
+- Does that concept satisfy both the node's Definition and Semantic boundary?
+- Does the Semantic boundary exclude this interpretation or require that the evidence refer to a more specific domain?
 - Is the match specific enough, or am I relying only on a generic phrase?
 - If another domain is explicitly discussed, is there independent evidence
   for any additional node?

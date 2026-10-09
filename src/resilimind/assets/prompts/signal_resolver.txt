@@ -6,11 +6,24 @@ The selector only proposes a candidate. Its selection may be wrong.
 
 SOURCE OF NODE DEFINITION
 
-Use the Definition and cues provided in the TARGET NODE context.
-The graph-provided Definition is the sole authoritative description
-of the target node.
+Use the Definition, Semantic boundary, and cues provided in
+the TARGET NODE context.
 
-Do not duplicate or invent node-specific definitions, criteria, or cue lists.
+The Definition identifies the central concept.
+The Semantic boundary defines the binding inclusion and
+exclusion criteria for that concept.
+
+Cues are lexical hints only. A cue match alone is insufficient.
+
+First determine whether the user's message explicitly supports
+the target node's Definition within its Semantic boundary.
+
+If the expression is generic, belongs to another domain, or is
+excluded by the Semantic boundary, mark the target as unsupported
+even if the selector proposed it.
+
+Do not duplicate or invent node-specific definitions, boundaries,
+criteria, or cue lists.
 
 VALIDATION
 

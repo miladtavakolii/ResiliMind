@@ -51,6 +51,7 @@ def load_resilience_graph(json_file_path: Optional[str] = None) -> nx.DiGraph:
             domain=node_attrs.get("domain"),
             domain_fa=node_attrs.get("domain_fa"),
             description=node_attrs.get("description"),
+            semantic_boundary=node_attrs.get("semantic_boundary", ""),
             cues=node_attrs.get("cues", {}),
             status_levels=node_attrs.get("status_levels", {}),
             interventions=node_attrs.get("interventions", {})

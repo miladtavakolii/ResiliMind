@@ -97,7 +97,8 @@ def build_extractor_graph_context() -> str:
             f"Name: {node_data.get('name_fa', '')}\n"
             f"Domain: {node_data.get('domain_fa', '')} "
             f"({node_data.get('domain', '')})\n"
-            f"Definition: {node_data.get('description', '')}"
+            f"Definition: {node_data.get('description', '')}\n"
+            f"Semantic boundary: {node_data.get('semantic_boundary', '')}"
         )
 
     return (
@@ -457,6 +458,7 @@ def build_selected_node_context(node_ids: list[str]) -> str:
             f"Domain: {node.get('domain_fa', '')} "
             f"({node.get('domain', '')})\n"
             f"Definition: {node.get('description', '')}\n"
+            f"Semantic boundary: {node.get('semantic_boundary', '')}\n"
             f"Positive cues: {cues.get('positive_keywords', [])}\n"
             f"Negative cues: {cues.get('negative_keywords', [])}"
         )

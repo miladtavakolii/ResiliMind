@@ -119,20 +119,25 @@ def audit_rendered_output(
             raise ValueError(
                 f"{case.case_id}: missing assessment profile for {signal.node_id}"
             )
-
+        
+        node = nodes[signal.node_id]
+        semantic_boundary = node.get("semantic_boundary", "")
         target_nodes.append(
             {
                 "node_id": signal.node_id,
                 "polarity": signal.detected_signal,
-                "name_fa": nodes[signal.node_id].get("name_fa", ""),
-                "description": nodes[signal.node_id].get("description", ""),
+                "name_fa": node.get("name_fa", ""),
+                "description": node.get("description", ""),
+                "semantic_boundary": semantic_boundary,
                 "assessment_profile": {
                     "severity": profile.severity,
                     "frequency": profile.frequency,
                     "functional": profile.functional,
                     "coping": profile.coping,
                 },
-                "assessment_requirements": build_assessment_requirements(signal.node_id, profile),
+                "assessment_requirements": build_assessment_requirements(
+                    signal.node_id, profile, semantic_boundary
+                ),
             }
         )
 
@@ -147,6 +152,7 @@ def audit_rendered_output(
                 "node_id": node_id,
                 "name_fa": node.get("name_fa", ""),
                 "description": node.get("description", ""),
+                "semantic_boundary": node.get("semantic_boundary", ""),
             }
         )
 

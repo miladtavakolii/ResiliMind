@@ -6,60 +6,8 @@ from typing import Any
 
 from evaluation.schemas import EvaluationCase
 
-TARGET_SCOPE_GUIDANCE: dict[str, str] = {
-    "IND_PER_01": (
-        "فقط خودکارآمدی و سرسختی فردی را بیان کن: باور به توانایی غلبه بر "
-        "یک چالش، پشتکار یا حفظ کنترل. انجام عادی کارها به‌تنهایی کافی نیست."
-    ),
-    "IND_PER_02": (
-        "فقط تنظیم هیجان و خونسردی را بیان کن: کنترل اضطراب، خشم، ناامیدی "
-        "یا واکنش هیجانی. سردرگمی عمومی به‌تنهایی کافی نیست."
-    ),
-    "IND_PER_03": (
-        "فقط هدف‌مندی و چشم‌انداز آینده را بیان کن: هدف، امید، برنامه "
-        "آینده یا ادامه مسیر توسعه فردی."
-    ),
-    "IND_POL_01": (
-        "فقط ارزیابی اطلاعات سیاسی/خبری، تشخیص شایعه، بررسی منبع و تفکر "
-        "انتقادی درباره اخبار را بیان کن."
-    ),
-    "IND_POL_02": (
-        "فقط عاملیت و بیگانگی سیاسی/مدنی را بیان کن: باور فرد به اثرگذاری "
-        "خود در جامعه، مشارکت مدنی یا احساس بی‌تأثیری سیاسی."
-    ),
-    "IND_ECO_01": (
-        "فقط مدیریت و انطباق مالی را بیان کن: بودجه، هزینه، درآمد، بدهی "
-        "یا مدیریت منابع مالی."
-    ),
-    "IND_ECO_02": (
-        "فقط سرسختی شغلی و امنیت حرفه‌ای را بیان کن: استخدام، اخراج، "
-        "امنیت شغلی، مهارت حرفه‌ای یا برنامه جایگزین شغلی."
-    ),
-    "IND_PHY_01": (
-        "فقط وضعیت بدنی و سطح انرژی را بیان کن: خستگی، بدن‌درد، انرژی، "
-        "بازیابی جسمانی. خواب و تغذیه متعلق به IND_PHY_02 است."
-    ),
-    "IND_PHY_02": (
-        "فقط خواب، بیداری، اشتها و نظم ریتم‌های زیستی را بیان کن. "
-        "افت انرژی عمومی بدون اشاره به خواب/تغذیه کافی نیست."
-    ),
-    "IND_SOC_01": (
-        "فقط خانواده درجه‌یک و حمایت/تنش خانوادگی را بیان کن."
-    ),
-    "IND_SOC_02": (
-        "فقط دوستان، همسالان و شبکه حمایت اجتماعی را بیان کن."
-    ),
-    "IND_SPI_01": (
-        "فقط معنابخشی معنوی/مذهبی، خدا، دعا، توکل یا نگاه معنوی به رنج را بیان کن."
-    ),
-    "IND_SPI_02": (
-        "فقط هویت فرهنگی، ریشه‌ها، سنت‌ها، آیین‌ها، ادبیات و احساس تعلق "
-        "فرهنگی را بیان کن."
-    ),
-}
 
-
-def build_assessment_requirements(node_id: str, profile: Any) -> dict[str, str]:
+def build_assessment_requirements(node_id: str, profile: Any, semantic_boundary: str | None = None,) -> dict[str, str]:
     """Describe the observable first-person evidence required by an assessment profile."""
     values = {
         "severity": profile.severity,
@@ -97,7 +45,7 @@ def build_assessment_requirements(node_id: str, profile: Any) -> dict[str, str]:
             dimension: requirements[dimension][value]
             for dimension, value in values.items()
         },
-        "target_scope": TARGET_SCOPE_GUIDANCE[node_id],
+        "target_scope": semantic_boundary,
     }
 
 
@@ -155,6 +103,7 @@ def build_user_prompt(
             )
 
         cues = node.get("cues", {})
+        semantic_boundary = node.get("semantic_boundary", "").strip()
 
         if signal.detected_signal == "positive":
             polarity_cues = cues.get("positive_keywords", [])
@@ -173,6 +122,7 @@ def build_user_prompt(
                 "name_en": node.get("name_en", ""),
                 "domain_fa": node.get("domain_fa", ""),
                 "description": node.get("description", ""),
+                "semantic_boundary": semantic_boundary,
                 "polarity": signal.detected_signal,
                 "semantic_cues": polarity_cues,
                 "assessment_profile": {
@@ -181,7 +131,7 @@ def build_user_prompt(
                     "functional": profile.functional,
                     "coping": profile.coping,
                 },
-                "assessment_requirements": build_assessment_requirements(signal.node_id, profile),
+                "assessment_requirements": build_assessment_requirements(signal.node_id, profile, semantic_boundary),
             }
         )
 

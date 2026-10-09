@@ -18,6 +18,14 @@ For each target signal:
 
 A target is missing when its intended meaning is not sufficiently represented.
 
+The semantic_boundary field of each target signal is authoritative.
+
+Verify that the generated message expresses the target concept
+within its stated boundary, not merely through a broad or related
+meaning.
+
+Do not accept evidence that the Semantic boundary explicitly excludes.
+
 ## Unintended signals
 
 Identify a non-target node only when the conversation provides clear semantic evidence for that node.
@@ -31,6 +39,13 @@ Do not mark a node as unintended because of:
 - weak associations.
 
 Only strong semantic evidence counts.
+
+Use the semantic_boundary of each candidate_unintended_node to
+determine whether the message truly supports that node.
+
+Do not classify a node as present based only on generic wording,
+a lexical cue, or a weak association that does not satisfy the
+node's semantic boundary.
 
 ## Assessment profile validation
 

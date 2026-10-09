@@ -25,6 +25,18 @@ Prefer natural paraphrases and varied Persian expressions.
 Do not concatenate multiple cues to artificially strengthen a signal.
 Use an exact cue phrase only when it naturally fits the conversation.
 
+The semantic_boundary field of each target signal is the
+authoritative node-specific inclusion and exclusion criterion.
+
+The generated conversation must express the target concept within
+this boundary.
+
+Do not broaden the target concept beyond its boundary, and do not
+use a generic phrase that the boundary explicitly excludes.
+
+When a semantic boundary conflicts with a broad interpretation
+of the node description or a lexical cue, follow the boundary.
+
 ## 2. Strict semantic isolation
 
 Do NOT intentionally express any resilience concept that is not listed under target_signals.
@@ -60,6 +72,13 @@ Do not accidentally express their meaning.
 For example, if the target concerns general self-efficacy, do not introduce a financial-management problem unless financial self-efficacy is itself a target.
 
 Do not create statements that strongly imply a confusable node merely as background context.
+
+Use the semantic_boundary of each confusable node to identify
+expressions that must be avoided.
+
+Do not introduce a confusable concept simply as background context.
+A confusable node must remain semantically absent unless it is
+explicitly listed as a target signal.
 
 ## 3.1 Cross-signal isolation
 
