@@ -29,7 +29,6 @@ from evaluation.generators.renderer import (
     attach_evidence,
     validate_evidence_markup,
     validate_rendered_output,
-    TARGET_SCOPE_GUIDANCE,
     build_assessment_requirements,
     build_user_prompt,
     build_retry_prompt,

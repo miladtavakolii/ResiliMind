@@ -14,7 +14,6 @@ from .evidence import (
     validate_rendered_output,
 )
 from .prompts import (
-    TARGET_SCOPE_GUIDANCE,
     build_assessment_requirements,
     build_user_prompt,
     build_retry_prompt,
