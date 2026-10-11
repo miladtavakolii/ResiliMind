@@ -490,11 +490,12 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
     logger.info("[Extractor] Starting staged extraction...")
     user_msg = state.get("user_message", "")
 
+    candidate_hints = build_extractor_candidate_hints(user_msg)
     selector_prompt = (
         f"{prompts.NODE_SELECTOR_SYSTEM_PROMPT}\n\n"
         f"{build_extractor_graph_context()}\n\n"
         f"=== LEXICAL CANDIDATE HINTS ===\n"
-        f"{build_extractor_candidate_hints(user_msg)}\n\n"
+        f"{candidate_hints}\n\n"
     )
 
     selector = llm_engine.get_node_selector_runner(selector_prompt)
@@ -511,8 +512,10 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             continue
 
         selected_nodes = list(dict.fromkeys(raw["parsed"].node_ids))
+        logger.defug("[Extractor] Selector selected nodes: %s", selected_nodes)
 
         if not selected_nodes:
+            logger.debug("[Extractor] Selector returned no nodes. Lexical hints:\n%s",candidate_hints,)
             return {
                 "active_nodes": [],
                 "active_signals": [],
@@ -588,6 +591,19 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     continue
 
                 signals = raw_resolved["parsed"].signals
+                logger.debug(
+                    "[Extractor] Resolver output for %s: %s",
+                    node_id,
+                    [
+                        {
+                            "node_id": signal.node_id,
+                            "supported": signal.supported,
+                            "polarity": signal.detected_signal,
+                            "evidence_index": signal.evidence_index,
+                        }
+                        for signal in signals
+                    ],
+                )
 
                 if len(signals) != 1:
                     node_last_error = ValueError(
