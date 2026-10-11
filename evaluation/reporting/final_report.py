@@ -22,7 +22,7 @@ class FinalReportGenerator:
         output.parent.mkdir(parents=True, exist_ok=True)
 
         report = {
-            "summary": summary,
+            **summary,
             "error_statistics": {
                 "total_failures": len(failures),
                 "failure_types": self._count_failures(failures),

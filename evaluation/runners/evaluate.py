@@ -32,7 +32,6 @@ from evaluation.runners.common import (
     compute_case_fingerprint,
     load_cases,
     load_predictions,
-    write_json,
 )
 from evaluation.runners.adapters import (
     validate_alignment,
@@ -216,7 +215,6 @@ def main() -> None:
     failures = ErrorAnalyzer().analyze(results)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    write_json(summary, args.output_dir / "summary.json")
     FailureCSVWriter().write(failures, args.output_dir / "failures.csv")
     FinalReportGenerator().generate(summary, failures, args.output_dir / "evaluation_report.json")
 
@@ -233,7 +231,6 @@ def main() -> None:
     print(f"Successful:  {successful_cases}")
     print(f"Failed:      {failed_cases}")
     print(f"Results:     {args.output_dir / 'case_results.jsonl'}")
-    print(f"Summary:     {args.output_dir / 'summary.json'}")
     print(f"Failures:    {args.output_dir / 'failures.csv'}")
     print(f"Report:      {args.output_dir / 'evaluation_report.json'}")
     print("=" * 60)
@@ -252,7 +249,6 @@ __all__ = [
     "get_turn_gold",
     "build_turn_prediction",
     "evaluate_dataset",
-    "write_json",
     "build_execution_summary",
     "build_final_summary",
     "parse_args",
