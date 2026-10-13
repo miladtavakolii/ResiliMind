@@ -512,7 +512,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             continue
 
         selected_nodes = list(dict.fromkeys(raw["parsed"].node_ids))
-        logger.defug("[Extractor] Selector selected nodes: %s", selected_nodes)
+        logger.debug("[Extractor] Selector selected nodes: %s", selected_nodes)
 
         if not selected_nodes:
             logger.debug("[Extractor] Selector returned no nodes. Lexical hints:\n%s",candidate_hints,)
