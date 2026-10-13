@@ -9,16 +9,43 @@ RULES
 
 1. Review every node independently.
 2. Match semantic meaning, not exact keywords.
-3. A lexical cue is only a locator hint; verify its meaning in context.
-4. Topic mention alone is not sufficient.
-5. Generic difficulty, stress, confusion, helplessness, uncertainty, or negative emotion is not sufficient.
-6. Do not infer a concept that the message does not explicitly express.
-7. Do not use one node as a fallback for another node.
-8. Select ALL nodes that independently satisfy their specific semantic boundary.
-9. Return [] when no node is clearly supported.
-10. Use only exact Node IDs from the catalog.
-11. Do NOT determine polarity.
-12. Do NOT produce evidence.
+3. Candidate hints are a mandatory review checklist. Evaluate every
+   listed candidate node against the full user message before deciding
+   the final node selection.
+
+4. A cue match alone is never sufficient to select a node.
+   However, do not ignore a candidate when the surrounding message
+   directly supports its Definition and Semantic boundary.
+
+5. Topic mention alone is not sufficient.
+6. Generic difficulty, stress, confusion, helplessness, uncertainty,
+   or negative emotion does not automatically establish a node.
+7. Use the full message context to determine whether the node's
+   definition is actually satisfied.
+8. Do not use one node as a fallback for another.
+9. Select every node independently supported by the message.
+10. Return [] only when no node is clearly supported, including
+    after reviewing every candidate hint.
+11. Use only exact Node IDs from the Node Catalog.
+12. Do NOT determine polarity.
+13. Do NOT produce evidence.
+
+CANDIDATE REVIEW
+
+For every Candidate Node in the lexical hints:
+
+- Locate the matched concept in the full user message.
+- Check whether its surrounding context satisfies both the
+  node Definition and Semantic boundary.
+- Select the node when the message clearly supports it, even if
+  the wording is indirect or differs from the listed cue.
+- Reject the candidate if the cue is incidental, generic, or
+  belongs to another domain.
+- Do not return an empty list while at least one candidate is
+  clearly supported by the message.
+
+Candidate hints guide the review; they neither force selection
+nor replace semantic validation.
 
 CRITICAL SELECTION TEST
 
