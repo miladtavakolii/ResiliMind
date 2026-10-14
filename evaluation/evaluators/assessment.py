@@ -38,13 +38,33 @@ class AssessmentEvaluator(BaseEvaluator):
                 per dimension and overall, along with the count of matched nodes.
         """
         gold_assessments = {
-            item.node_id: item.rubric for item in gold.assessment.assessments
+            item.node_id: item.rubric
+            for item in gold.assessment.assessments
         }
-        predicted_assessments = {
-            item.get("node_id"): item.get("scores", {})
-            for item in prediction.get("assessment", {}).get("assessments", [])
-            if item.get("node_id")
+        gold_turn_by_node = {
+            signal.node_id: signal.evidence_message_index
+            for signal in gold.extraction.active_signals
         }
+
+        predicted_assessments = {}
+        prediction_items = {}
+
+        for item in prediction.get("assessment", {}).get("assessments", []):
+            node_id = item.get("node_id")
+            if not node_id:
+                continue
+
+            expected_turn = gold_turn_by_node.get(node_id)
+            item_turn = item.get(
+                "turn_index",
+                expected_turn if expected_turn is not None else 0,
+            )
+
+            if expected_turn is not None and item_turn != expected_turn:
+                continue
+
+            predicted_assessments[node_id] = item.get("scores", {})
+            prediction_items[node_id] = item
 
         gold_nodes = set(gold_assessments)
         predicted_nodes = set(predicted_assessments)
@@ -74,10 +94,6 @@ class AssessmentEvaluator(BaseEvaluator):
 
         status_correct = 0
         status_total = len(matched_nodes)
-        prediction_items = {
-            item.get("node_id"): item
-            for item in prediction.get("assessment", {}).get("assessments", [])
-        }
 
         for node_id in matched_nodes:
             gold_status = gold_assessments[node_id].status

@@ -33,9 +33,17 @@ class ExtractionEvaluator(BaseEvaluator):
         gold_signals = gold.extraction.active_signals
         predicted_signals = prediction.get("extraction", {}).get("signals", [])
 
-        gold_nodes = {signal.node_id for signal in gold_signals}
+        gold_nodes = {
+            (
+                signal.node_id,
+                signal.evidence_message_index
+                if signal.evidence_message_index is not None
+                else 0,
+            )
+            for signal in gold_signals
+        }
         predicted_nodes = {
-            signal.get("node_id")
+            (signal.get("node_id"), signal.get("turn_index", 0))
             for signal in predicted_signals
             if signal.get("node_id")
         }
@@ -85,9 +93,18 @@ class ExtractionEvaluator(BaseEvaluator):
             dict[str, float | int]: Polarity evaluation metrics containing accuracy
                 and the count of matched nodes.
         """
-        gold_map = {signal.node_id: signal.detected_signal for signal in gold_signals}
+        gold_map = {
+            (
+                signal.node_id,
+                signal.evidence_message_index
+                if signal.evidence_message_index is not None
+                else 0,
+            ): signal.detected_signal
+            for signal in gold_signals
+        }
         pred_map = {
-            signal.get("node_id"): signal.get("detected_signal")
+            (signal.get("node_id"), signal.get("turn_index", 0)):
+                signal.get("detected_signal")
             for signal in predicted_signals
             if signal.get("node_id")
         }
@@ -123,9 +140,18 @@ class ExtractionEvaluator(BaseEvaluator):
             dict[str, float | int]: Dictionary containing exact match, substring match,
                 token F1 scores, and matched node counts.
         """
-        gold_map = {signal.node_id: signal.evidence or "" for signal in gold_signals}
+        gold_map = {
+            (
+                signal.node_id,
+                signal.evidence_message_index
+                if signal.evidence_message_index is not None
+                else 0,
+            ): signal.detected_signal
+            for signal in gold_signals
+        }
         predicted_map = {
-            signal.get("node_id"): signal.get("evidence", "")
+            (signal.get("node_id"), signal.get("turn_index", 0)):
+                signal.get("detected_signal")
             for signal in predicted_signals
             if signal.get("node_id")
         }

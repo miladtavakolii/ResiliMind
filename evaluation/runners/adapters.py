@@ -166,7 +166,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
         }
 
     all_signals = [
-        signal
+        {**signal, "turn_index": turn.turn_index}
         for turn in prediction.turns
         for signal in turn.active_signals
     ]
@@ -177,13 +177,11 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
         for node_id in turn.active_nodes
     ))
 
-    latest_assessments: dict[str, dict[str, Any]] = {}
-
-    for turn in prediction.turns:
-        for assessment in normalize_assessments(turn.assessments):
-            node_id = assessment.get("node_id")
-            if node_id:
-                latest_assessments[node_id] = assessment
+    all_assessments = [
+        {**assessment, "turn_index": turn.turn_index}
+        for turn in prediction.turns
+        for assessment in normalize_assessments(turn.assessments)
+    ]
 
     final_turn = prediction.turns[-1]
 
@@ -203,7 +201,7 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
             "active_nodes": all_nodes,
         },
         "assessment": {
-            "assessments": list(latest_assessments.values()),
+            "assessments": all_assessments,
         },
         "routing": {
             "route": final_turn.route,
