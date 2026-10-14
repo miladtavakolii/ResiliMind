@@ -146,12 +146,15 @@ class ExtractionEvaluator(BaseEvaluator):
                 signal.evidence_message_index
                 if signal.evidence_message_index is not None
                 else 0,
-            ): signal.detected_signal
+            ): signal.evidence
             for signal in gold_signals
         }
+
         predicted_map = {
-            (signal.get("node_id"), signal.get("turn_index", 0)):
-                signal.get("detected_signal")
+            (
+                signal.get("node_id"),
+                signal.get("turn_index", 0),
+            ): signal.get("evidence")
             for signal in predicted_signals
             if signal.get("node_id")
         }
@@ -170,8 +173,18 @@ class ExtractionEvaluator(BaseEvaluator):
         token_f1_scores: list[float] = []
 
         for node_id in matched_nodes:
-            gold_evidence = self._normalize_evidence(gold_map[node_id])
-            predicted_evidence = self._normalize_evidence(predicted_map[node_id])
+            raw_gold = gold_map[node_id]
+            raw_prediction = predicted_map[node_id]
+
+            if not raw_gold or not raw_gold.strip():
+                raise ValueError(
+                    f"Missing gold evidence for matched signal: {node_id}"
+                )
+
+            gold_evidence = self._normalize_evidence(raw_gold)
+            predicted_evidence = self._normalize_evidence(
+                raw_prediction or ""
+            )
 
             if not gold_evidence:
                 continue
@@ -179,7 +192,8 @@ class ExtractionEvaluator(BaseEvaluator):
             if gold_evidence == predicted_evidence:
                 exact_matches += 1
 
-            if gold_evidence and (gold_evidence in predicted_evidence or predicted_evidence in gold_evidence):
+
+            if predicted_evidence and (gold_evidence in predicted_evidence or predicted_evidence in gold_evidence):
                 substring_matches += 1
 
             token_f1_scores.append(
