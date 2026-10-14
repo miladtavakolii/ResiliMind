@@ -365,13 +365,14 @@ def build_extractor_candidate_hints(user_message: str) -> str:
 
     for node_id, node_data in resilience_graph.nodes(data=True):
         cues = node_data.get("cues", {})
-
-        for cue in (
+        all_cues = (
             cues.get("positive_keywords", [])
             + cues.get("negative_keywords", [])
-        ):
-            normalized_cue = normalize_persian_text(cue)
+            + node_data.get("candidate_keywords", [])
+        )
 
+        for cue in all_cues:
+            normalized_cue = normalize_persian_text(cue)
             if normalized_cue:
                 cue_owners.setdefault(normalized_cue, []).append(node_id)
 
@@ -385,8 +386,12 @@ def build_extractor_candidate_hints(user_message: str) -> str:
             user_message,
             cues.get("negative_keywords", []),
         )
+        context_hits = _find_polarity_cues(
+            user_message,
+            node_data.get("candidate_keywords", []),
+        )
 
-        if not positive_hits and not negative_hits:
+        if not positive_hits and not negative_hits and not context_hits:
             continue
 
         positive_text = ", ".join(positive_hits) if positive_hits else "none"
@@ -411,6 +416,7 @@ def build_extractor_candidate_hints(user_message: str) -> str:
             f"Candidate Node: {node_id}\n"
             f"Positive cue matches: {positive_text}\n"
             f"Negative cue matches: {negative_text}\n"
+            f"Context cue matches: {', '.join(context_hits) if context_hits else 'none'}\n"
             f"Shared cue warning: {shared_text}"
         )
 
