@@ -50,16 +50,21 @@ class ExtractionEvaluator(BaseEvaluator):
 
         intersection = gold_nodes & predicted_nodes
 
+        # Policy note: When both gold and predicted nodes are empty, precision/recall/f1
+        # are set to 1.0 (perfect agreement on absence of active signals). The aggregator
+        # explicitly tracks empty cases and reports micro metrics alongside macro_case_f1.
         if not gold_nodes and not predicted_nodes:
             precision = 1.0
             recall = 1.0
             f1 = 1.0
             jaccard = 1.0
+            empty_case = True
         else:
             precision = self._safe_div(len(intersection), len(predicted_nodes))
             recall = self._safe_div(len(intersection), len(gold_nodes))
             f1 = self._safe_div(2 * precision * recall, precision + recall)
             jaccard = self._safe_div(len(intersection), len(gold_nodes | predicted_nodes))
+            empty_case = False
 
         polarity = self._evaluate_polarity(gold_signals, predicted_signals)
         evidence = self._evaluate_evidence(gold_signals, predicted_signals)
@@ -73,6 +78,7 @@ class ExtractionEvaluator(BaseEvaluator):
                 "recall": recall,
                 "f1": f1,
                 "jaccard": jaccard,
+                "empty_case": empty_case,
             },
             "polarity": polarity,
             "evidence": evidence,

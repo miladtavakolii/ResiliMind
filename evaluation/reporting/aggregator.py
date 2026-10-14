@@ -32,19 +32,48 @@ class EvaluationAggregator:
     def _aggregate_extraction(self, results: list[CaseEvaluationResult]) -> dict[str, Any]:
         """Aggregate extraction metrics across all cases.
 
+        Evaluation Policy:
+            Cases where both gold and predicted node sets are empty are assigned
+            precision=1.0, recall=1.0, and f1=1.0 at the individual case level.
+            In dataset aggregation, these cases are explicitly counted under
+            'empty_gold_and_prediction_cases', and both macro case-averaged F1
+            ('macro_case_f1') and pooled instance-level micro metrics ('micro')
+            are reported to provide an unbiased comparison.
+
         Args:
             results: List of per-case evaluation results.
 
         Returns:
-            dict[str, Any]: Dictionary containing mean precision, recall, f1,
-                and jaccard scores for node detection.
+            dict[str, Any]: Dictionary containing macro case-averaged metrics,
+                micro pooled metrics, and empty case counts.
         """
         metrics = [
             m for result in results if (m := result.metrics.get("extraction"))
         ]
 
         if not metrics:
-            return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "jaccard": 0.0}
+            return {
+                "node_detection": {
+                    "macro_case_f1": 0.0,
+                    "macro_case_f1_non_empty": 0.0,
+                    "macro_case_precision": 0.0,
+                    "macro_case_recall": 0.0,
+                    "macro_case_jaccard": 0.0,
+                    "f1": 0.0,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "jaccard": 0.0,
+                    "micro": {"precision": 0.0, "recall": 0.0, "f1": 0.0},
+                    "empty_gold_and_prediction_cases": 0,
+                },
+                "polarity_accuracy": 0.0,
+                "evidence": {
+                    "exact_match": 0.0,
+                    "substring_match": 0.0,
+                    "token_f1": 0.0,
+                },
+                "micro": {"precision": 0.0, "recall": 0.0, "f1": 0.0},
+            }
 
         polarity_metrics = [m["polarity"] for m in metrics if m.get("polarity", {}).get("matched_nodes", 0) > 0]
         polarity_correct = sum(m["correct"] for m in polarity_metrics)
@@ -75,18 +104,44 @@ class EvaluationAggregator:
             else 0.0
         )
 
+        macro_case_precision = mean(n["precision"] for n in nodes)
+        macro_case_recall = mean(n["recall"] for n in nodes)
+        macro_case_f1 = mean(n["f1"] for n in nodes)
+        macro_case_jaccard = mean(n["jaccard"] for n in nodes)
+
+        empty_cases = sum(
+            1 for n in nodes if n.get("gold_count", 0) == 0 and n.get("prediction_count", 0) == 0
+        )
+        non_empty_nodes = [
+            n for n in nodes if not (n.get("gold_count", 0) == 0 and n.get("prediction_count", 0) == 0)
+        ]
+        macro_case_f1_non_empty = (
+            mean(n["f1"] for n in non_empty_nodes) if non_empty_nodes else 0.0
+        )
+
         return {
             "node_detection": {
-                "precision": mean(n["precision"] for n in nodes),
-                "recall": mean(n["recall"] for n in nodes),
-                "f1": mean(n["f1"] for n in nodes),
-                "jaccard": mean(n["jaccard"] for n in nodes),
+                "macro_case_f1": macro_case_f1,
+                "macro_case_f1_non_empty": macro_case_f1_non_empty,
+                "macro_case_precision": macro_case_precision,
+                "macro_case_recall": macro_case_recall,
+                "macro_case_jaccard": macro_case_jaccard,
+                "f1": macro_case_f1,
+                "precision": macro_case_precision,
+                "recall": macro_case_recall,
+                "jaccard": macro_case_jaccard,
+                "micro": {
+                    "precision": micro_precision,
+                    "recall": micro_recall,
+                    "f1": micro_f1,
+                },
+                "empty_gold_and_prediction_cases": empty_cases,
             },
             "polarity_accuracy": polarity_accuracy,
             "evidence": {
-                "exact_match": mean(e["exact_match"] for e in evidence),
-                "substring_match": mean(e["substring_match"] for e in evidence),
-                "token_f1": mean(e["token_f1"] for e in evidence),
+                "exact_match": mean(e["exact_match"] for e in evidence) if evidence else 0.0,
+                "substring_match": mean(e["substring_match"] for e in evidence) if evidence else 0.0,
+                "token_f1": mean(e["token_f1"] for e in evidence) if evidence else 0.0,
             },
             "micro": {
                 "precision": micro_precision,
