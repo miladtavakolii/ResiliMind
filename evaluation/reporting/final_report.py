@@ -21,10 +21,20 @@ class FinalReportGenerator:
         """
         output.parent.mkdir(parents=True, exist_ok=True)
 
+        failure_events = len(failures)
+        unique_cases = {
+            getattr(f, "case_id", f.get("case_id") if isinstance(f, dict) else None)
+            for f in failures
+        }
+        unique_cases.discard(None)
+        unique_failed_cases = len(unique_cases)
+
         report = {
             **summary,
             "error_statistics": {
-                "total_failures": len(failures),
+                "failure_events": failure_events,
+                "unique_failed_cases": unique_failed_cases,
+                "total_failures": failure_events,
                 "failure_types": self._count_failures(failures),
             },
         }

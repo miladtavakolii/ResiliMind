@@ -118,6 +118,18 @@ class ErrorAnalyzer:
                     )
                 )
 
+            polarity = extraction.get("polarity", {})
+            polarity_matched = polarity.get("matched_nodes", 0)
+            polarity_correct = polarity.get("correct", 0)
+            if polarity_matched > 0 and polarity_correct < polarity_matched:
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="extraction_polarity_failure",
+                        details=extraction,
+                    )
+                )
+
         if (routing := metrics.get("routing")) and routing.get("correct", 1) == 0:
             failures.append(
                 FailureCase(
