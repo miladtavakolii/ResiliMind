@@ -84,6 +84,16 @@ class ErrorAnalyzer:
                     )
                 )
 
+            category = safety.get("category", {})
+            if category and not category.get("correct", False):
+                failures.append(
+                    FailureCase(
+                        case_id=result.case_id,
+                        category="safety_category_failure",
+                        details=safety,
+                    )
+                )
+
         if extraction := metrics.get("extraction"):
             node_metrics = extraction.get("node_detection", {})
             gold_count = node_metrics.get("gold_count", 0)

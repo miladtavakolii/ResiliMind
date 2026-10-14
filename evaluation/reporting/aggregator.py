@@ -95,16 +95,18 @@ class EvaluationAggregator:
             }
         }
 
-    def _aggregate_safety(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
+    def _aggregate_safety(self, results: list[CaseEvaluationResult]) -> dict[str, Any]:
         """Calculate aggregate safety metrics across evaluation results.
 
         Args:
             results: List of per-case evaluation results.
 
         Returns:
-            dict[str, float]: Dictionary containing mean safety classification accuracy.
+            dict[str, Any]: Dictionary containing binary safety metrics and multiclass
+                risk category classification metrics.
         """
         tp, tn, fp, fn = 0, 0, 0, 0
+        pairs = []
 
         for result in results:
             if not (metric := result.metrics.get("safety")):
@@ -116,6 +118,12 @@ class EvaluationAggregator:
             fp += int(matrix.get("fp", 0))
             fn += int(matrix.get("fn", 0))
 
+            if category := metric.get("category"):
+                expected = category.get("expected")
+                predicted = category.get("predicted") or "SAFE"
+                if expected:
+                    pairs.append((str(expected), str(predicted)))
+
         total = tp + tn + fp + fn
         accuracy = (tp + tn) / total if total else 0.0
         precision = tp / (tp + fp) if (tp + fp) else 0.0
@@ -126,12 +134,36 @@ class EvaluationAggregator:
             else 0.0
         )
 
+        base_labels = ["SAFE", "SELF_HARM", "VIOLENCE", "SEVERE_ABUSE"]
+        extra_labels = sorted({
+            label for pair in pairs for label in pair if label not in base_labels
+        })
+        category_labels = base_labels + extra_labels
+        category_matrix = {
+            actual: {pred: 0 for pred in category_labels}
+            for actual in category_labels
+        }
+        for expected, predicted in pairs:
+            if expected in category_matrix and predicted in category_matrix[expected]:
+                category_matrix[expected][predicted] += 1
+
+        classification = classification_report(pairs)
+        category_total = len(pairs)
+        category_correct = sum(1 for exp, pred in pairs if exp == pred)
+
         return {
             "confusion_matrix": {"tp": tp, "tn": tn, "fp": fp, "fn": fn},
             "accuracy": accuracy,
             "precision": precision,
             "recall": recall,
             "f1": f1,
+            "risk_category": {
+                "accuracy": classification["accuracy"],
+                "macro_f1": classification["macro"]["f1"],
+                "confusion_matrix": category_matrix,
+                "correct": category_correct,
+                "total": category_total,
+            },
         }
 
     def _aggregate_assessment(self, results: list[CaseEvaluationResult]) -> dict[str, float]:

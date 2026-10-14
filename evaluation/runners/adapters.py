@@ -186,15 +186,47 @@ def build_evaluator_prediction(prediction: CasePrediction) -> dict[str, Any]:
     final_turn = prediction.turns[-1]
 
     is_high_risk = any(
-        turn.safety_status == "HIGH_RISK" or turn.safety_flag
+        turn.safety_status == "HIGH_RISK"
+        or turn.safety_flag
+        or turn.safety_risk_category != "SAFE"
         for turn in prediction.turns
     )
+
+    high_risk_turn = next(
+        (
+            turn
+            for turn in prediction.turns
+            if (turn.safety_status == "HIGH_RISK" or turn.safety_flag)
+            and turn.safety_risk_category != "SAFE"
+        ),
+        None,
+    )
+    if high_risk_turn is None:
+        high_risk_turn = next(
+            (
+                turn
+                for turn in prediction.turns
+                if turn.safety_risk_category != "SAFE"
+            ),
+            None,
+        )
+    if high_risk_turn is None:
+        high_risk_turn = next(
+            (
+                turn
+                for turn in prediction.turns
+                if turn.safety_status == "HIGH_RISK" or turn.safety_flag
+            ),
+            None,
+        )
+
+    risk_turn = high_risk_turn if high_risk_turn is not None else final_turn
 
     return {
         "safety": {
             "is_high_risk": is_high_risk,
-            "status": final_turn.safety_status,
-            "risk_category": final_turn.safety_risk_category,
+            "status": risk_turn.safety_status,
+            "risk_category": risk_turn.safety_risk_category,
         },
         "extraction": {
             "signals": all_signals,
