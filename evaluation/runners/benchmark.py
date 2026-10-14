@@ -18,7 +18,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import ValidationError
 
-from evaluation.schemas import EvaluationCase, CasePrediction, TurnPrediction
+from evaluation.schemas import EvaluationCase, CasePrediction, TurnPrediction, BenchmarkRunManifest
 from evaluation.runners.common import (
     PROJECT_ROOT,
     DEFAULT_DATASET_PATH,
@@ -27,6 +27,9 @@ from evaluation.runners.common import (
     compute_case_fingerprint,
     load_cases,
     write_predictions,
+    write_json,
+    build_run_manifest,
+    is_manifest_compatible,
 )
 
 logger = logging.getLogger(__name__)
@@ -269,6 +272,7 @@ def main() -> None:
     """Execute the end-to-end evaluation pipeline from CLI arguments."""
     args = parse_args()
     run_id = create_run_id()
+    manifest_path = args.output.parent / "run_manifest.json"
     logger.info("Starting evaluation run: %s", run_id)
 
     if args.limit is not None and args.limit <= 0:
@@ -281,6 +285,8 @@ def main() -> None:
 
     from resilimind.core.workflow import build_workflow
 
+    current_manifest = build_run_manifest(run_id, dataset_path=args.dataset)
+
     cases = load_cases(args.dataset)
     if args.limit:
         cases = cases[:args.limit]
@@ -289,21 +295,51 @@ def main() -> None:
     successful = 0
     failed = 0
 
+    can_resume = False
     if args.output.exists():
-        logger.info("Found existing results. Resuming from %s", args.output)
-        with args.output.open("r", encoding="utf-8") as file:
-            for line in file:
-                line = line.strip()
-                if line:
-                    try:
-                        data = json.loads(line)
-                        processed_case_ids.add(data["case_id"])
-                        if data.get("successful"):
-                            successful += 1
-                        else:
-                            failed += 1
-                    except json.JSONDecodeError:
-                        pass
+        if manifest_path.exists():
+            try:
+                prev_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                compatible, reason = is_manifest_compatible(prev_manifest, current_manifest)
+                if compatible:
+                    can_resume = True
+                    logger.info("Found existing results with compatible manifest. Resuming from %s", args.output)
+                else:
+                    logger.warning(
+                        "Cannot resume existing results from %s: %s. Starting fresh run.",
+                        args.output,
+                        reason,
+                    )
+            except Exception as exc:
+                logger.warning("Error reading manifest %s: %s. Starting fresh run.", manifest_path, exc)
+        else:
+            logger.warning("No run_manifest.json found alongside existing %s. Starting fresh run.", args.output)
+
+        if can_resume:
+            with args.output.open("r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            processed_case_ids.add(data["case_id"])
+                            if data.get("successful"):
+                                successful += 1
+                            else:
+                                failed += 1
+                        except json.JSONDecodeError:
+                            pass
+        else:
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            backup_path = args.output.with_suffix(f".backup_{timestamp}.jsonl")
+            try:
+                args.output.rename(backup_path)
+                logger.info("Backed up incompatible previous results to %s", backup_path)
+            except Exception as e:
+                logger.warning("Could not backup %s: %s", args.output, e)
+
+    # Persist the current benchmark run manifest
+    write_json(current_manifest.model_dump(), manifest_path)
 
     cases_to_run = [c for c in cases if c.case_id not in processed_case_ids]
 

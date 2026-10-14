@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
+import subprocess
 from typing import Any
+import urllib.request
 from collections.abc import Sequence
 
 from pydantic import ValidationError
 
-from evaluation.schemas import EvaluationCase, CasePrediction
+from evaluation.schemas import EvaluationCase, CasePrediction, BenchmarkRunManifest
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +150,140 @@ def write_json(data: Any, output_path: Path) -> None:
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def get_git_commit() -> str:
+    """Retrieve the current Git commit hash."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout.strip()
+    except Exception:
+        return os.environ.get("GIT_COMMIT", "unknown")
+
+
+def compute_file_sha256(path: Path) -> str:
+    """Compute SHA-256 hash of a file."""
+    if not path.exists():
+        return ""
+    hasher = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(65536):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def get_prompt_hashes() -> dict[str, str]:
+    """Compute SHA-256 hashes of all system and evaluation prompt files."""
+    hashes: dict[str, str] = {}
+    prompt_dirs = [
+        PROJECT_ROOT / "src" / "resilimind" / "assets" / "prompts",
+        PROJECT_ROOT / "evaluation" / "prompts",
+    ]
+    for p_dir in prompt_dirs:
+        if p_dir.exists():
+            for p_file in sorted(p_dir.glob("*.txt")):
+                hashes[p_file.name] = compute_file_sha256(p_file)
+    return hashes
+
+
+def get_model_digest(model_name: str, base_url: str = "http://localhost:11434") -> str:
+    """Query Ollama API to retrieve exact model digest hash."""
+    try:
+        req = urllib.request.Request(f"{base_url.rstrip('/')}/api/tags")
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for m in data.get("models", []):
+                name = m.get("name", "")
+                if name == model_name or name.startswith(f"{model_name}:") or model_name.startswith(f"{name}:"):
+                    return m.get("digest", "")
+                if m.get("model") == model_name:
+                    return m.get("digest", "")
+    except Exception:
+        pass
+    return ""
+
+
+def build_run_manifest(
+    run_id: str,
+    *,
+    dataset_path: Path,
+    judge_model: str = "gemini-3.5-flash-lite",
+) -> BenchmarkRunManifest:
+    """Construct a BenchmarkRunManifest from the real active environment.
+
+    Args:
+        run_id: Unique benchmark run identifier.
+        dataset_path: Path to evaluation dataset.
+        judge_model: Identifier of the judge LLM model.
+
+    Returns:
+        BenchmarkRunManifest: Populated manifest capturing code, model, dataset, and prompt hashes.
+    """
+    from resilimind.core.config import settings
+
+    git_hash = get_git_commit()
+    graph_path = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
+
+    model_name = settings.RESILIMIND_LLM_MODEL
+    model_digest = get_model_digest(model_name, settings.OLLAMA_BASE_URL)
+
+    generation_config = {
+        "temperature": settings.RESILIMIND_LLM_TEMPERATURE,
+        "ollama_base_url": settings.OLLAMA_BASE_URL,
+        "routing_confidence_threshold": settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD,
+    }
+
+    return BenchmarkRunManifest(
+        run_id=run_id,
+        git_commit=git_hash,
+        dataset_sha256=compute_file_sha256(dataset_path),
+        graph_sha256=compute_file_sha256(graph_path),
+        model_name=model_name,
+        model_digest=model_digest,
+        generation_config=generation_config,
+        prompt_hashes=get_prompt_hashes(),
+        evaluation_code_commit=git_hash,
+        judge_model=judge_model,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def is_manifest_compatible(
+    previous: dict[str, Any] | BenchmarkRunManifest,
+    current: BenchmarkRunManifest,
+) -> tuple[bool, str]:
+    """Check if previous benchmark run manifest is compatible with current configuration.
+
+    Args:
+        previous: Previous manifest dictionary or BenchmarkRunManifest instance.
+        current: Current BenchmarkRunManifest instance.
+
+    Returns:
+        tuple[bool, str]: Tuple of (is_compatible, reason_description).
+    """
+    prev_dict = previous.model_dump() if isinstance(previous, BenchmarkRunManifest) else previous
+
+    if prev_dict.get("model_name") != current.model_name:
+        return False, f"Model name changed: {prev_dict.get('model_name')} != {current.model_name}"
+
+    if current.model_digest and prev_dict.get("model_digest") and prev_dict.get("model_digest") != current.model_digest:
+        return False, f"Model digest changed: {prev_dict.get('model_digest')} != {current.model_digest}"
+
+    if prev_dict.get("dataset_sha256") != current.dataset_sha256:
+        return False, "Dataset file changed (SHA-256 mismatch)"
+
+    if prev_dict.get("graph_sha256") != current.graph_sha256:
+        return False, "Knowledge graph file changed (SHA-256 mismatch)"
+
+    prev_prompts = prev_dict.get("prompt_hashes", {})
+    for prompt_name, curr_hash in current.prompt_hashes.items():
+        if prompt_name in prev_prompts and prev_prompts[prompt_name] != curr_hash:
+            return False, f"Prompt '{prompt_name}' content changed (hash mismatch)"
+
+    return True, "Compatible"

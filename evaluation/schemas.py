@@ -348,6 +348,24 @@ class CasePrediction(BaseModel):
     error: str | None = None
 
 
+class BenchmarkRunManifest(BaseModel):
+    """Execution manifest capturing benchmark environment, models, and code state."""
+
+    model_config = ConfigDict(extra="allow")
+
+    run_id: str
+    git_commit: str
+    dataset_sha256: str
+    graph_sha256: str
+    model_name: str
+    model_digest: str
+    generation_config: dict[str, Any] = Field(default_factory=dict)
+    prompt_hashes: dict[str, str] = Field(default_factory=dict)
+    evaluation_code_commit: str
+    judge_model: str
+    created_at: str = ""
+
+
 class CaseEvaluationResult(BaseModel):
     """
     Stores evaluation results for a single benchmark case.
