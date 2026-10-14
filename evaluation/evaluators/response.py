@@ -50,8 +50,19 @@ class ResponseEvaluator(BaseEvaluator):
             return {"error": "missing response"}
         signals = prediction.get("extraction", {}).get("signals", [])
 
-        prompt = self._build_prompt(user_context=user_context, signals=signals, assessment=gold.assessment.model_dump(),
-                                    response=response, response_criteria=gold.response_criteria.model_dump())
+        predicted_assessment = prediction.get("assessment", {}).get("assessments", [])
+        assessment_context = {
+            "predicted_assessment": predicted_assessment,
+            "reference_assessment": gold.assessment.model_dump(),
+        }
+
+        prompt = self._build_prompt(
+            user_context=user_context,
+            signals=signals,
+            assessment=assessment_context,
+            response=response,
+            response_criteria=gold.response_criteria.model_dump(),
+        )
         return self.judge.evaluate(prompt)
 
     def _build_prompt(
@@ -75,11 +86,19 @@ class ResponseEvaluator(BaseEvaluator):
         Returns:
             str: Formatted prompt string ready for LLM judge evaluation.
         """
+        if isinstance(assessment, dict) and "predicted_assessment" in assessment:
+            predicted_assessment = assessment["predicted_assessment"]
+            reference_assessment = assessment.get("reference_assessment", {})
+        else:
+            predicted_assessment = assessment
+            reference_assessment = assessment
+
         return (
             f"{self.prompt_template}\n\n"
             f"=== USER CONTEXT ===\n{user_context}\n\n"
             f"=== EXTRACTED SIGNALS ===\n{signals}\n\n"
-            f"=== ASSESSMENT ===\n{assessment}\n\n"
+            f"=== SYSTEM-PREDICTED ASSESSMENT ===\n{predicted_assessment}\n\n"
+            f"=== REFERENCE ASSESSMENT ===\n{reference_assessment}\n\n"
             f"=== REQUIRED ELEMENTS ===\n"
             f"{response_criteria.get('required_elements', [])}\n\n"
             f"=== FORBIDDEN ELEMENTS ===\n"
