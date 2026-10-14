@@ -94,6 +94,12 @@ class AssessmentEvaluator(BaseEvaluator):
 
         status_correct = 0
         status_total = len(matched_nodes)
+        status_labels = ("GREEN", "YELLOW", "RED")
+        status_matrix = {
+            actual: {pred: 0 for pred in status_labels}
+            for actual in status_labels
+        }
+        status_pairs = []
 
         for node_id in matched_nodes:
             gold_status = gold_assessments[node_id].status
@@ -115,6 +121,10 @@ class AssessmentEvaluator(BaseEvaluator):
                 if predicted_score >= 40
                 else "RED"
             )
+
+            if gold_status in status_matrix and predicted_status in status_matrix[gold_status]:
+                status_matrix[gold_status][predicted_status] += 1
+            status_pairs.append((gold_status, predicted_status))
 
             if predicted_status == gold_status:
                 status_correct += 1
@@ -147,9 +157,12 @@ class AssessmentEvaluator(BaseEvaluator):
         metrics["unexpected_nodes"] = unexpected_nodes
         metrics["coverage"] = len(matched_nodes) / len(gold_nodes) if gold_nodes else 1.0
         metrics["status"] = {
-            "accuracy": status_correct / status_total if status_total else 1.0,
+            "accuracy": status_correct / status_total if status_total > 0 else None,
             "correct": status_correct,
             "total": status_total,
+            "confusion_matrix": status_matrix,
+            "pairs": status_pairs,
+            "evaluable": status_total > 0,
         }
         metrics["missing_dimensions"] = missing_dimensions
         metrics["gold_nodes"] = len(gold_nodes)

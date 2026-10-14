@@ -166,26 +166,42 @@ class EvaluationAggregator:
             },
         }
 
-    def _aggregate_assessment(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
-        """Calculate aggregate assessment regression metrics across evaluation results.
+    def _aggregate_assessment(self, results: list[CaseEvaluationResult]) -> dict[str, Any]:
+        """Calculate aggregate assessment regression and status classification metrics across evaluation results.
 
         Args:
             results: List of per-case evaluation results.
 
         Returns:
-            dict[str, float]: Dictionary containing mean MAE across assessment dimensions.
+            dict[str, Any]: Dictionary containing MAE/RMSE on evaluated nodes,
+                coverage against gold nodes, and status classification metrics.
         """
         metrics = [
             m for result in results if (m := result.metrics.get("assessment"))
         ]
 
+        status_labels = ("GREEN", "YELLOW", "RED")
+
         if not metrics:
             return {
                 "mean_mae": 0.0,
+                "evaluated_nodes_mae": 0.0,
                 "mean_rmse": 0.0,
                 "matched_nodes": 0,
                 "gold_nodes": 0,
                 "coverage": 0.0,
+                "status_accuracy": 0.0,
+                "status_macro_f1": 0.0,
+                "status": {
+                    "accuracy": 0.0,
+                    "macro_f1": 0.0,
+                    "confusion_matrix": {
+                        actual: {pred: 0 for pred in status_labels}
+                        for actual in status_labels
+                    },
+                    "correct": 0,
+                    "total": 0,
+                },
             }
 
         absolute_error_sum = sum(m.get("absolute_error_sum", 0.0) for m in metrics)
@@ -200,13 +216,58 @@ class EvaluationAggregator:
             if observation_count
             else 0.0
         )
+        coverage = matched_nodes / gold_nodes if gold_nodes else 1.0
+
+        total_status_matrix = {
+            actual: {pred: 0 for pred in status_labels}
+            for actual in status_labels
+        }
+        status_pairs = []
+
+        for m in metrics:
+            status = m.get("status", {})
+            matrix = status.get("confusion_matrix")
+            if matrix:
+                for actual in status_labels:
+                    for pred in status_labels:
+                        total_status_matrix[actual][pred] += matrix.get(actual, {}).get(pred, 0)
+
+            pairs = status.get("pairs")
+            if pairs:
+                status_pairs.extend(pairs)
+            elif matrix:
+                for actual in status_labels:
+                    for pred in status_labels:
+                        count = matrix.get(actual, {}).get(pred, 0)
+                        if count > 0:
+                            status_pairs.extend([(actual, pred)] * count)
+
+        classification = classification_report(status_pairs)
+        status_total = len(status_pairs)
+        status_correct = sum(
+            total_status_matrix[label][label] for label in status_labels
+        )
+        status_accuracy = (
+            status_correct / status_total if status_total else 0.0
+        )
+        status_macro_f1 = classification["macro"]["f1"]
 
         return {
             "mean_mae": mae,
+            "evaluated_nodes_mae": mae,
             "mean_rmse": rmse,
             "matched_nodes": matched_nodes,
             "gold_nodes": gold_nodes,
-            "coverage": matched_nodes / gold_nodes if gold_nodes else 1.0,
+            "coverage": coverage,
+            "status_accuracy": status_accuracy,
+            "status_macro_f1": status_macro_f1,
+            "status": {
+                "accuracy": status_accuracy,
+                "macro_f1": status_macro_f1,
+                "confusion_matrix": total_status_matrix,
+                "correct": status_correct,
+                "total": status_total,
+            },
         }
 
     def _aggregate_routing(self, results: list[CaseEvaluationResult]) -> dict[str, float]:
