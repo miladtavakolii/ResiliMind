@@ -252,45 +252,118 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
     return aligned
 
 
-def build_evidence_candidates(user_message: str) -> list[tuple[int, int, str]]:
-    """Segment raw user text into candidate evidence clauses with character offsets.
+def build_evidence_candidates(
+    user_message: str, max_candidates: int = 72
+) -> list[tuple[int, int, str]]:
+    """Segment raw user text into candidate evidence spans with exact character offsets.
 
-    Splits the message using Persian and English clause terminators and punctuation
-    marks (commas, semicolons, full stops, question marks, exclamation marks, and
-    newlines). Trims leading and trailing whitespace while adjusting exact start and
-    end slice indices to guarantee precise substring alignment with the original text.
+    Extracts both natural linguistic units (sentences, punctuation-delimited clauses)
+    and short contiguous sliding windows (5, 7, 9, 11, and 13 words) with balanced strides.
+    Trims leading and trailing boundary punctuation and whitespace while adjusting exact
+    character offsets to guarantee precise substring alignment with `user_message`.
+    Deduplicates identical spans and caps total candidates at `max_candidates` (default 72)
+    using uniform sampling if the candidate count exceeds the quota.
 
     Args:
         user_message: Raw user message string to segment.
+        max_candidates: Maximum number of candidate spans to produce (default: 72).
 
     Returns:
         list[tuple[int, int, str]]: Triples of `(start_index, end_index, clause_text)`
             representing trimmed contiguous candidate spans within `user_message`.
     """
-    candidates: list[tuple[int, int, str]] = []
+    if not user_message or not user_message.strip():
+        return []
 
-    for match in re.finditer(
-        r"[^،,؛;.!?؟\n]+",
-        user_message,
-    ):
-        start, end = match.span()
-        raw_segment = user_message[start:end]
+    seen_spans: set[tuple[int, int]] = set()
+    structural_candidates: list[tuple[int, int, str]] = []
 
-        text = raw_segment.strip()
-        if not text:
+    # 1. Sentences and sub-clauses delimited by punctuation
+    for pattern in (r"[^.!?؟\n]+", r"[^،,؛;.!?؟\n]+"):
+        for match in re.finditer(pattern, user_message):
+            start, end = match.span()
+            raw_segment = user_message[start:end]
+            text = raw_segment.strip()
+            if not text:
+                continue
+
+            leading_ws = len(raw_segment) - len(raw_segment.lstrip())
+            trailing_ws = len(raw_segment) - len(raw_segment.rstrip())
+            s = start + leading_ws
+            e = end - trailing_ws
+
+            if s < e and (s, e) not in seen_spans:
+                seen_spans.add((s, e))
+                structural_candidates.append((s, e, user_message[s:e]))
+
+    # 2. Token spans and sliding windows (5, 7, 9, 11, 13 words)
+    word_matches = list(re.finditer(r"\S+", user_message))
+    num_words = len(word_matches)
+    window_candidates: list[tuple[int, int, str]] = []
+
+    window_configs = [
+        (5, 2),   # (window_size, stride)
+        (7, 2),
+        (9, 3),
+        (11, 3),
+        (13, 4),
+    ]
+
+    # Handle short messages where total words are fewer than the smallest window size
+    if 0 < num_words < 5:
+        s = word_matches[0].start()
+        e = word_matches[-1].end()
+        raw = user_message[s:e]
+        trimmed_s = s + (len(raw) - len(raw.lstrip(" \t\n\r،,؛;.!?؟:\"'«»()[]{}")))
+        trimmed_e = e - (len(raw) - len(raw.rstrip(" \t\n\r،,؛;.!?؟:\"'«»()[]{}")))
+        if trimmed_s < trimmed_e and (trimmed_s, trimmed_e) not in seen_spans:
+            seen_spans.add((trimmed_s, trimmed_e))
+            window_candidates.append((trimmed_s, trimmed_e, user_message[trimmed_s:trimmed_e]))
+
+    for w_size, stride in window_configs:
+        if num_words < w_size:
             continue
+        for i in range(0, num_words - w_size + 1, stride):
+            s = word_matches[i].start()
+            e = word_matches[i + w_size - 1].end()
+            raw = user_message[s:e]
 
-        leading_ws = len(raw_segment) - len(raw_segment.lstrip())
-        trailing_ws = len(raw_segment) - len(raw_segment.rstrip())
+            l_strip = len(raw) - len(raw.lstrip(" \t\n\r،,؛;.!?؟:\"'«»()[]{}"))
+            r_strip = len(raw) - len(raw.rstrip(" \t\n\r،,؛;.!?؟:\"'«»()[]{}"))
+            trimmed_s = s + l_strip
+            trimmed_e = e - r_strip
 
-        start += leading_ws
-        end -= trailing_ws
+            if trimmed_s < trimmed_e and (trimmed_s, trimmed_e) not in seen_spans:
+                seen_spans.add((trimmed_s, trimmed_e))
+                window_candidates.append((trimmed_s, trimmed_e, user_message[trimmed_s:trimmed_e]))
 
-        candidates.append(
-            (start, end, user_message[start:end])
-        )
+    # 3. Cap candidates at max_candidates (72)
+    total_found = len(structural_candidates) + len(window_candidates)
+    if total_found <= max_candidates:
+        selected = structural_candidates + window_candidates
+    else:
+        if len(structural_candidates) >= max_candidates:
+            step = (len(structural_candidates) - 1) / (max_candidates - 1)
+            selected = [
+                structural_candidates[round(i * step)]
+                for i in range(max_candidates)
+            ]
+        else:
+            remaining_quota = max_candidates - len(structural_candidates)
+            step = (
+                (len(window_candidates) - 1) / (remaining_quota - 1)
+                if remaining_quota > 1
+                else 0
+            )
+            sampled_windows = [
+                window_candidates[round(i * step)]
+                for i in range(remaining_quota)
+            ]
+            selected = structural_candidates + sampled_windows
 
-    return candidates
+    # Sort deterministically by start offset then end offset
+    selected.sort(key=lambda item: (item[0], item[1]))
+    return selected
 
 
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
