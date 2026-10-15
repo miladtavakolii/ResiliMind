@@ -88,6 +88,47 @@ emotional dysregulation, emotional control, or calming effort.
 Generic confusion, uncertainty, difficulty, or helplessness
 is NOT enough for IND_PER_02.
 
+NODE DISTINCTION CHECK
+
+Before setting supported=true, distinguish the target node from
+nearby concepts that may share similar vocabulary.
+
+Apply these distinctions:
+
+- IND_ECO_01 concerns financial management, expenses, budgeting,
+  debt management, income adaptation, or financial coping.
+- IND_ECO_02 concerns employment, career, job security,
+  dismissal, or professional adaptation.
+
+- IND_POL_01 concerns evaluating information, checking sources,
+  misinformation, or critical analysis of news.
+- IND_POL_02 concerns civic or political agency, participation,
+  collective action, or influence over political/community affairs.
+
+- IND_PER_01 concerns self-efficacy, hardiness, persistence,
+  or the ability to overcome a personal challenge.
+- IND_PER_03 concerns future goals, hope, purpose, or future
+  planning.
+
+- IND_SOC_01 concerns family support, family cohesion,
+  family conflict, or family safety.
+- IND_SOC_02 concerns friends, peers, social contact,
+  or broader social support.
+
+A shared topic or keyword is not enough to establish support.
+
+The selected evidence must contain a concept that satisfies the
+specific target node's definition and semantic boundary.
+
+When another node better matches the actual meaning, reject the
+current target rather than treating it as a fallback.
+
+A candidate keyword is only a locator. It is not proof that the
+node is active.
+
+If the evidence is ambiguous or unrelated to the target node,
+return supported=false.
+
 FINAL CHECK
 
 If supported=true:
