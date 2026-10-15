@@ -67,6 +67,7 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
         Literal["questioner", "advisor"]: Target agent node identifier.
     """
     assessments: List[Dict[str, Any]] = state.get("assessments", [])
+    threshold = settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD
 
     if state.get("requires_disambiguation", False):
         logger.info("[Workflow] Assessor requested disambiguation. Routing to Questioner...")
@@ -76,18 +77,32 @@ def route_after_assessment(state: AgentState) -> Literal["questioner", "advisor"
         logger.info("[Workflow] No assessments generated. Routing to Questioner...")
         return "questioner"
 
-    threshold = settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD
+    low_confidence_items = [
+        item
+        for item in assessments
+        if float(item.get("confidence", 0.0)) < threshold
+    ]
 
-    for item in assessments:
-        confidence = float(item.get("confidence", 0.0))
+    if low_confidence_items:
+        logger.info(
+            "[Routing] decision=questioner reason=low_confidence threshold=%s nodes=%s",
+            threshold,
+            [
+                (
+                    item.get("node_id"),
+                    float(item.get("confidence", 0.0)),
+                )
+                for item in low_confidence_items
+            ],
+        )
+        return "questioner"
 
-        if confidence < threshold:
-            logger.info("[Workflow] Confidence %s below threshold %s for node %s. Routing to Questioner...", confidence, threshold, item.get("node_id"))
-            return "questioner"
-
-    logger.info("[Workflow] All assessment confidences are >= %s. Routing to Advisor...", threshold)
+    logger.info(
+        "[Routing] decision=advisor reason=all_confidences_acceptable threshold=%s node_count=%d",
+        threshold,
+        len(assessments),
+    )
     return "advisor"
-
 
 def build_workflow() -> Any:
     """
