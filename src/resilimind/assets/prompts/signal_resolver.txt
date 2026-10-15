@@ -40,6 +40,34 @@ EVIDENCE
 - Select exactly one candidate by index when supported=true.
 - The selected candidate must directly support the target node.
 
+POLARITY ASSIGNMENT
+
+Determine detected_signal from the meaning of the target node in
+the selected evidence and its local context.
+
+- positive: the target concept is expressed in a favorable,
+  effective, adaptive, or supportive way.
+- negative: the target concept is expressed as a difficulty,
+  impairment, loss, failure, or lack of effective capacity.
+- mixed: both positive and negative aspects are explicitly
+  expressed for the SAME target node.
+
+Do NOT infer polarity from the overall emotional tone of the
+entire message.
+
+Do NOT assign mixed merely because the message contains positive
+and negative statements about different topics.
+
+Respect negation and the actual meaning of the sentence.
+For example, a positive-looking keyword inside a negated statement
+does not automatically indicate positive polarity.
+
+Use the full message only to clarify the meaning of the selected
+evidence. Do not use unrelated sentences to determine its polarity.
+
+Before returning, verify that the selected evidence supports both
+the target node and the assigned polarity.
+
 IMPORTANT
 
 IND_PER_01 requires explicit self-efficacy, persistence, hardiness,
