@@ -66,10 +66,22 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
         if merged_polarity != existing_polarity:
             logger.warning("[Extractor] Merging duplicate node %s polarities: %s + %s -> mixed.", signal.node_id, existing_polarity, new_polarity)
 
+        merged_polarity_evidence = {}
+
+        for source_signal in (existing, signal):
+            for polarity, span in source_signal.polarity_evidence.items():
+                merged_polarity_evidence.setdefault(polarity, span)
+
+        if merged_polarity != "mixed":
+            merged_polarity_evidence = {
+                merged_polarity: merged_polarity_evidence[merged_polarity]
+            } if merged_polarity in merged_polarity_evidence else {}
+
         unique_signals[signal.node_id] = existing.model_copy(
             update={
                 "detected_signal": merged_polarity,
                 "evidence": selected_evidence,
+                "polarity_evidence": merged_polarity_evidence,
             }
         )
 
