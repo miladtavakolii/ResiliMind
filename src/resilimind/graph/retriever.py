@@ -39,6 +39,8 @@ def retrieve_subgraph_context(graph: nx.DiGraph, active_node_ids: List[str]) -> 
             f"Domain: {node_data.get('domain', '')}\n"
             f"Domain (FA): {node_data.get('domain_fa', '')}\n"
             f"Description: {node_data.get('description', '')}\n"
+            f"Semantic boundary: {node_data.get('semantic_boundary', '')}\n"
+            f"Explicit exclusions: {node_data.get('exclusions', [])}\n"
             f"Positive cues: {cues.get('positive_keywords', [])}\n"
             f"Negative cues: {cues.get('negative_keywords', [])}\n"
             f"Status GREEN: {status_levels.get('green', {})}\n"
