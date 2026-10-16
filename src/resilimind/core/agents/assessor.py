@@ -42,6 +42,7 @@ def calculate_composite_confidence(
     node_id: str,
     user_message: str,
     assessment_score: int,
+    polarity_evidence: dict[str, str] | None = None,
 ) -> float:
     """Compute a deterministic heuristic confidence score for routing.
 
@@ -67,30 +68,89 @@ def calculate_composite_confidence(
 
     node_data = resilience_graph.nodes.get(node_id, {})
     cues = node_data.get("cues", {})
-
-    positive_hits = _find_polarity_cues(
-        evidence_text,
-        cues.get("positive_keywords", []),
-    )
-    negative_hits = _find_polarity_cues(
-        evidence_text,
-        cues.get("negative_keywords", []),
-    )
-
+    positive_cues = cues.get("positive_keywords", [])
+    negative_cues = cues.get("negative_keywords", [])
+    polarity_evidence = polarity_evidence or {}
     polarity_lower = signal_polarity.lower()
 
-    if positive_hits and negative_hits:
-        polarity_consistency = (
-            1.0 if polarity_lower == "mixed" else 0.0
+    if polarity_lower == "positive":
+        target_evidence = polarity_evidence.get(
+            "positive",
+            evidence_text,
         )
-    elif positive_hits:
-        polarity_consistency = (
-            1.0 if polarity_lower == "positive" else 0.0
+        positive_hits = _find_polarity_cues(
+            target_evidence,
+            positive_cues,
         )
-    elif negative_hits:
-        polarity_consistency = (
-            1.0 if polarity_lower == "negative" else 0.0
+        negative_hits = _find_polarity_cues(
+            target_evidence,
+            negative_cues,
         )
+
+        if positive_hits and not negative_hits:
+            polarity_consistency = 1.0
+        elif negative_hits and not positive_hits:
+            polarity_consistency = 0.0
+        else:
+            polarity_consistency = 0.5
+
+    elif polarity_lower == "negative":
+        target_evidence = polarity_evidence.get(
+            "negative",
+            evidence_text,
+        )
+        positive_hits = _find_polarity_cues(
+            target_evidence,
+            positive_cues,
+        )
+        negative_hits = _find_polarity_cues(
+            target_evidence,
+            negative_cues,
+        )
+
+        if negative_hits and not positive_hits:
+            polarity_consistency = 1.0
+        elif positive_hits and not negative_hits:
+            polarity_consistency = 0.0
+        else:
+            polarity_consistency = 0.5
+
+    elif polarity_lower == "mixed":
+        positive_text = polarity_evidence.get("positive", "")
+        negative_text = polarity_evidence.get("negative", "")
+
+        positive_hits = _find_polarity_cues(
+            positive_text,
+            positive_cues,
+        )
+        negative_hits = _find_polarity_cues(
+            negative_text,
+            negative_cues,
+        )
+        negative_conflicts = _find_polarity_cues(
+            positive_text,
+            negative_cues,
+        )
+        positive_conflicts = _find_polarity_cues(
+            negative_text,
+            positive_cues,
+        )
+
+        if (
+            positive_hits
+            and negative_hits
+            and not negative_conflicts
+            and not positive_conflicts
+        ):
+            polarity_consistency = 1.0
+        elif (
+            (negative_conflicts and not positive_hits)
+            or (positive_conflicts and not negative_hits)
+        ):
+            polarity_consistency = 0.0
+        else:
+            polarity_consistency = 0.5
+
     else:
         polarity_consistency = 0.5
 
@@ -315,6 +375,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
                     node_id=node_id,
                     user_message=user_msg,
                     assessment_score=assessment_dict["score"],
+                    polarity_evidence=signal.get("polarity_evidence", {}),
                 )
 
                 assessment_dict["confidence"] = routing_confidence
