@@ -71,6 +71,7 @@ class EvaluationAggregator:
                     "exact_match": 0.0,
                     "substring_match": 0.0,
                     "token_f1": 0.0,
+                    "span_exact_match": 0.0,
                 },
                 "micro": {"precision": 0.0, "recall": 0.0, "f1": 0.0},
             }
@@ -142,6 +143,7 @@ class EvaluationAggregator:
                 "exact_match": mean(e["exact_match"] for e in evidence) if evidence else 0.0,
                 "substring_match": mean(e["substring_match"] for e in evidence) if evidence else 0.0,
                 "token_f1": mean(e["token_f1"] for e in evidence) if evidence else 0.0,
+                "span_exact_match": mean(e.get("span_exact_match", 0.0) for e in evidence) if evidence else 0.0,
             },
             "micro": {
                 "precision": micro_precision,

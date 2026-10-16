@@ -14,7 +14,7 @@ class ExtractionEvaluator(BaseEvaluator):
     Evaluation levels:
         1. Node extraction: Precision, Recall, F1, Jaccard
         2. Signal polarity: Accuracy
-        3. Evidence alignment: Exact Match, Substring Match, Token F1
+        3. Evidence alignment: Exact Match, Substring Match, Token F1, Span Exact Match
     """
 
     name: str = "extraction"
@@ -152,7 +152,7 @@ class ExtractionEvaluator(BaseEvaluator):
                 signal.evidence_message_index
                 if signal.evidence_message_index is not None
                 else 0,
-            ): signal.evidence
+            ): signal
             for signal in gold_signals
         }
 
@@ -160,7 +160,7 @@ class ExtractionEvaluator(BaseEvaluator):
             (
                 signal.get("node_id"),
                 signal.get("turn_index", 0),
-            ): signal.get("evidence")
+            ): signal
             for signal in predicted_signals
             if signal.get("node_id")
         }
@@ -171,16 +171,21 @@ class ExtractionEvaluator(BaseEvaluator):
                 "exact_match": 0.0,
                 "substring_match": 0.0,
                 "token_f1": 0.0,
+                "span_exact_match": 0.0,
                 "matched_nodes": 0,
             }
 
         exact_matches = 0
         substring_matches = 0
+        span_exact_matches = 0
         token_f1_scores: list[float] = []
 
         for node_id in matched_nodes:
-            raw_gold = gold_map[node_id]
-            raw_prediction = predicted_map[node_id]
+            gold_signal = gold_map[node_id]
+            pred_signal = predicted_map[node_id]
+
+            raw_gold = gold_signal.evidence
+            raw_prediction = pred_signal.get("evidence")
 
             if not raw_gold or not raw_gold.strip():
                 raise ValueError(
@@ -198,9 +203,23 @@ class ExtractionEvaluator(BaseEvaluator):
             if gold_evidence == predicted_evidence:
                 exact_matches += 1
 
-
             if predicted_evidence and (gold_evidence in predicted_evidence or predicted_evidence in gold_evidence):
                 substring_matches += 1
+
+            gold_start = getattr(gold_signal, "evidence_start", None)
+            gold_end = getattr(gold_signal, "evidence_end", None)
+            pred_start = pred_signal.get("evidence_start")
+            pred_end = pred_signal.get("evidence_end")
+
+            if (
+                gold_start is not None
+                and gold_end is not None
+                and pred_start is not None
+                and pred_end is not None
+                and gold_start == pred_start
+                and gold_end == pred_end
+            ):
+                span_exact_matches += 1
 
             token_f1_scores.append(
                 self._token_f1(gold_evidence, predicted_evidence)
@@ -212,6 +231,7 @@ class ExtractionEvaluator(BaseEvaluator):
                 "exact_match": 0.0,
                 "substring_match": 0.0,
                 "token_f1": 0.0,
+                "span_exact_match": 0.0,
                 "matched_nodes": len(matched_nodes),
             }
 
@@ -219,6 +239,7 @@ class ExtractionEvaluator(BaseEvaluator):
             "exact_match": exact_matches / evaluated,
             "substring_match": substring_matches / evaluated,
             "token_f1": sum(token_f1_scores) / evaluated,
+            "span_exact_match": span_exact_matches / evaluated,
             "matched_nodes": len(matched_nodes),
         }
 

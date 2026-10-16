@@ -180,6 +180,8 @@ class ActiveSignal(BaseModel):
         ...,
         description="Exact substring supporting the target node."
     )
+    evidence_start: int | None = Field(default=None, ge=0)
+    evidence_end: int | None = Field(default=None, ge=0)
     polarity_evidence: Dict[str, str] = Field(
         default_factory=dict,
         description=(

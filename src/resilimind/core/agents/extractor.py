@@ -64,14 +64,21 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
 
         if new_evidence and new_evidence in existing_evidence:
             selected_evidence = existing.evidence
+            selected_start = existing.evidence_start
+            selected_end = existing.evidence_end
         elif existing_evidence and existing_evidence in new_evidence:
             selected_evidence = signal.evidence
+            selected_start = signal.evidence_start
+            selected_end = signal.evidence_end
         else:
-            selected_evidence = (
-                signal.evidence
-                if len(signal.evidence) > len(existing.evidence)
-                else existing.evidence
-            )
+            if len(signal.evidence) > len(existing.evidence):
+                selected_evidence = signal.evidence
+                selected_start = signal.evidence_start
+                selected_end = signal.evidence_end
+            else:
+                selected_evidence = existing.evidence
+                selected_start = existing.evidence_start
+                selected_end = existing.evidence_end
 
         if merged_polarity != existing_polarity:
             logger.warning("[Extractor] Merging duplicate node %s polarities: %s + %s -> mixed.", signal.node_id, existing_polarity, new_polarity)
@@ -91,6 +98,8 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
             update={
                 "detected_signal": merged_polarity,
                 "evidence": selected_evidence,
+                "evidence_start": selected_start,
+                "evidence_end": selected_end,
                 "polarity_evidence": merged_polarity_evidence,
             }
         )
@@ -524,6 +533,17 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
                 f"Extractor evidence cannot be aligned to user message for "
                 f"{signal.node_id}: {signal.evidence!r}"
             )
+
+        if signal.evidence_start is not None or signal.evidence_end is not None:
+            if (
+                signal.evidence_start is None
+                or signal.evidence_end is None
+                or signal.evidence_end > len(user_message)
+                or user_message[signal.evidence_start:signal.evidence_end] != evidence
+            ):
+                raise ValueError(
+                    f"Evidence offsets do not match source text for {signal.node_id}"
+                )
 
         polarity_evidence = dict(signal.polarity_evidence or {})
 
@@ -1084,7 +1104,9 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     for polarity, index in polarity_indices.items()
                     if index is not None
                 }
-                evidence = evidence_candidates[resolved_evidence_index][2]
+                evidence_start, evidence_end, evidence = evidence_candidates[
+                    resolved_evidence_index
+                ]
 
                 logger.info(
                     "[Extractor] Resolved %s -> evidence_index=%d, evidence=%r",
@@ -1097,6 +1119,8 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     "node_id": signal.node_id,
                     "detected_signal": resolved_polarity,
                     "evidence": evidence,
+                    "evidence_start": evidence_start,
+                    "evidence_end": evidence_end,
                     "polarity_evidence": polarity_evidence,
                 }
                 break
