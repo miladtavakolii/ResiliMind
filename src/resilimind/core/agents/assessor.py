@@ -282,6 +282,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
         node_id = signal["node_id"]
         evidence = signal.get("evidence", "")
         polarity = signal.get("detected_signal", "mixed")
+        polarity_evidence = signal.get("polarity_evidence", {})
 
         target_context = retrieve_subgraph_context(
             resilience_graph,
@@ -294,6 +295,9 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
             "=== TARGET SIGNAL ===\n"
             f"Polarity: {polarity.upper()}\n"
             f"Exact Evidence: \"{evidence}\"\n\n"
+            "=== POLARITY-SPECIFIC EVIDENCE ===\n"
+            f"Positive evidence: {polarity_evidence.get('positive') or 'Not provided'}\n"
+            f"Negative evidence: {polarity_evidence.get('negative') or 'Not provided'}\n\n"
             "=== FULL USER MESSAGE ===\n"
             f"{user_msg}\n\n"
             "RULES:\n"
@@ -375,7 +379,7 @@ def assessor_node(state: AgentState) -> Dict[str, Any]:
                     node_id=node_id,
                     user_message=user_msg,
                     assessment_score=assessment_dict["score"],
-                    polarity_evidence=signal.get("polarity_evidence", {}),
+                    polarity_evidence=polarity_evidence,
                 )
 
                 assessment_dict["confidence"] = routing_confidence
