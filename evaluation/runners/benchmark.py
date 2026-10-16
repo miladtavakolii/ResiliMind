@@ -294,8 +294,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runtime-dir",
         type=Path,
-        default=DEFAULT_RUNTIME_DIR,
-        help="Directory for isolated benchmark database and runtime files.",
+        default=None,
+        help="Directory for isolated benchmark database and runtime files (default: <run_dir>/runtime).",
     )
     parser.add_argument(
         "--limit",
@@ -326,6 +326,7 @@ def main() -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
         output_path = run_dir / "predictions.jsonl"
 
+    runtime_dir = args.runtime_dir if args.runtime_dir is not None else (run_dir / "runtime")
     manifest_path = run_dir / "run_manifest.json"
     log_path = run_dir / "benchmark.log"
 
@@ -339,11 +340,12 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Starting ResiliMind Benchmark Run: %s", run_id)
     logger.info("Run directory: %s", run_dir)
+    logger.info("Runtime dir:   %s", runtime_dir)
     logger.info("Git commit:    %s", git_hash)
     logger.info("Log file:      %s", log_path)
     logger.info("=" * 60)
 
-    configure_evaluation_environment(args.runtime_dir)
+    configure_evaluation_environment(runtime_dir)
 
     from resilimind.core.database import init_db
     init_db()
@@ -434,6 +436,7 @@ def main() -> None:
     print(f"Run ID:      {run_id}")
     print(f"Git Commit:  {git_hash}")
     print(f"Run Dir:     {run_dir}")
+    print(f"Runtime Dir: {runtime_dir}")
     print(f"Executed:    {total_executed}")
     print(f"Successful:  {successful}")
     print(f"Failed:      {failed}")
