@@ -18,7 +18,8 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
     """Collapse duplicate signals for the same node when their polarity agrees.
 
     Deduplicates multiple extraction detections referencing the identical graph node.
-    If polarities conflict, they are merged as "mixed". If evidence spans subsume one another,
+    Contradictory polarities for the same node raise a ValueError, as mixed signals
+    must be explicitly resolved with evidence. If evidence spans subsume one another,
     retains the longer span; otherwise, retains the earlier detection while logging
     the deduplication event.
 
@@ -225,6 +226,15 @@ def align_evidence_to_user_message(evidence: str, user_message: str) -> str | No
         return evidence
 
     def compact_with_map(text: str) -> tuple[str, list[int]]:
+        """Normalize Persian characters, strip whitespace/format controls, and track character indices.
+
+        Args:
+            text: Input string to normalize and compact.
+
+        Returns:
+            tuple[str, list[int]]: Compacted string without spaces/ZWNJ and mapping of each
+                character position back to its index in the normalized source string.
+        """
         normalized = unicodedata.normalize("NFKC", text).translate(
             str.maketrans({
                 "ي": "ی",
@@ -391,6 +401,83 @@ def build_evidence_candidates(
     # Sort deterministically by start offset then end offset
     selected.sort(key=lambda item: (item[0], item[1]))
     return selected
+
+
+def resolve_polarity_evidence_index(
+    node_id: str,
+    polarity: str,
+    user_message: str,
+    evidence_candidates: list[tuple[int, int, str]],
+    excluded_index: int | None = None,
+) -> int | None:
+    """Select a candidate evidence index explicitly supporting a single polarity direction.
+
+    Invokes the targeted polarity evidence resolver LLM runner with the user message,
+    node semantic context, requested polarity ('positive' or 'negative'), an optional
+    candidate index to exclude, and indexed candidate evidence snippets. Validates
+    that the returned index is within candidate bounds and does not match the excluded index.
+
+    Args:
+        node_id: Knowledge graph identifier of the target node being verified.
+        polarity: Requested polarity direction to resolve ('positive' or 'negative').
+        user_message: Raw user message string.
+        evidence_candidates: List of candidate evidence triples `(start, end, text)`.
+        excluded_index: Optional candidate index to exclude from selection (e.g., to prevent
+            selecting the same evidence candidate for both positive and negative directions).
+
+    Returns:
+        int | None: The 0-based candidate index explicitly supporting the requested polarity,
+            or None if no candidate supports it or if resolution fails.
+    """
+    runner = llm_engine.get_polarity_evidence_runner(
+        prompts.POLARITY_EVIDENCE_RESOLVER_SYSTEM_PROMPT
+    )
+    try:
+        raw = runner.invoke({
+            "user_message": user_message,
+            "selected_nodes": build_selected_node_context([node_id]),
+            "polarity": polarity,
+            "excluded_index": (
+                str(excluded_index) if excluded_index is not None else "none"
+            ),
+            "evidence_candidates": "\n".join(
+                f"[{i}] {candidate[2]}" for i, candidate in enumerate(evidence_candidates)
+            ),
+        })
+    except Exception:
+        logger.exception(
+            "[Extractor] Polarity evidence selection failed for %s (%s)",
+            node_id,
+            polarity,
+        )
+        return None
+
+    parsed = raw.get("parsed")
+    if parsed is None:
+        logger.warning(
+            "[Extractor] Invalid polarity evidence output for %s (%s)",
+            node_id,
+            polarity,
+        )
+        return None
+
+    evidence_idx = parsed.evidence_index
+    if evidence_idx is not None and not (0 <= evidence_idx < len(evidence_candidates)):
+        logger.warning(
+            "[Extractor] Polarity evidence index %s out of range for %s",
+            evidence_idx,
+            node_id,
+        )
+        return None
+    if excluded_index is not None and evidence_idx == excluded_index:
+        logger.warning(
+            "[Extractor] Polarity evidence selected excluded index %s for %s",
+            evidence_idx,
+            node_id,
+        )
+        return None
+
+    return evidence_idx
 
 
 def validate_extraction_result(result: ExtractionOutput, user_message: str) -> ExtractionOutput:
@@ -870,6 +957,9 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
+                resolved_polarity = signal.detected_signal
+                resolved_evidence_index = signal.evidence_index
+
                 polarity_indices = {
                     "positive": signal.positive_evidence_index,
                     "negative": signal.negative_evidence_index,
@@ -893,20 +983,69 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     if polarity_indices["negative"] is None:
                         polarity_indices["negative"] = signal.evidence_index
 
-                elif (
-                    polarity_indices["positive"] is None
-                    or polarity_indices["negative"] is None
-                ):
-                    node_last_error = ValueError(
-                        "Mixed polarity requires both polarity evidence indices"
+                else:
+                    positive_index = polarity_indices.get("positive")
+                    negative_index = polarity_indices.get("negative")
+                    if (
+                        positive_index is None
+                        or not 0 <= positive_index < len(evidence_candidates)
+                    ):
+                        positive_index = resolve_polarity_evidence_index(
+                            node_id=node_id,
+                            polarity="positive",
+                            user_message=user_msg,
+                            evidence_candidates=evidence_candidates,
+                        )
+                    if (
+                        negative_index is None
+                        or not 0 <= negative_index < len(evidence_candidates)
+                        or negative_index == positive_index
+                    ):
+                        negative_index = resolve_polarity_evidence_index(
+                            node_id=node_id,
+                            polarity="negative",
+                            user_message=user_msg,
+                            evidence_candidates=evidence_candidates,
+                            excluded_index=positive_index,
+                        )
+
+                    positive_valid = (
+                        positive_index is not None
+                        and 0 <= positive_index < len(evidence_candidates)
                     )
-                    logger.warning(
-                        "[Extractor] Incomplete mixed-polarity evidence for %s "
-                        "(attempt %d/3)",
-                        node_id,
-                        resolver_attempt + 1,
+                    negative_valid = (
+                        negative_index is not None
+                        and 0 <= negative_index < len(evidence_candidates)
                     )
-                    continue
+
+                    if positive_valid and negative_valid and positive_index != negative_index:
+                        polarity_indices = {
+                            "positive": positive_index,
+                            "negative": negative_index,
+                        }
+                    elif positive_valid:
+                        resolved_polarity = "positive"
+                        resolved_evidence_index = positive_index
+                        polarity_indices = {
+                            "positive": positive_index,
+                            "negative": None,
+                        }
+                    elif negative_valid:
+                        resolved_polarity = "negative"
+                        resolved_evidence_index = negative_index
+                        polarity_indices = {
+                            "positive": None,
+                            "negative": negative_index,
+                        }
+                    else:
+                        node_last_error = ValueError(
+                            "Mixed polarity has no independently supported direction"
+                        )
+                        logger.warning(
+                            "[Extractor] No valid polarity evidence for %s",
+                            node_id,
+                        )
+                        continue
 
                 invalid_indices = [
                     index
@@ -932,18 +1071,18 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     for polarity, index in polarity_indices.items()
                     if index is not None
                 }
-                evidence = evidence_candidates[signal.evidence_index][2]
+                evidence = evidence_candidates[resolved_evidence_index][2]
 
                 logger.info(
                     "[Extractor] Resolved %s -> evidence_index=%d, evidence=%r",
                     node_id,
-                    signal.evidence_index,
+                    resolved_evidence_index,
                     evidence,
                 )
 
                 node_resolved = {
                     "node_id": signal.node_id,
-                    "detected_signal": signal.detected_signal,
+                    "detected_signal": resolved_polarity,
                     "evidence": evidence,
                     "polarity_evidence": polarity_evidence,
                 }

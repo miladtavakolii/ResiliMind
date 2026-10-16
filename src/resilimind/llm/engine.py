@@ -5,7 +5,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableSerializable
 
-from ..schemas.models import ExtractionOutput, AssessmentOutput, SafetyOutput, NodeSelectionOutput, SignalResolutionOutput
+from ..schemas.models import (
+    ExtractionOutput,
+    AssessmentOutput,
+    SafetyOutput,
+    NodeSelectionOutput,
+    SignalResolutionOutput,
+    PolarityEvidenceIndexOutput,
+)
 from ..core.config import settings
 
 # Initialize module logger
@@ -64,6 +71,7 @@ class LLMEngine:
             self._conversational_llm: Optional[ChatOllama] = None
             self._node_selector_llm: Optional[Any] = None
             self._signal_resolver_llm: Optional[Any] = None
+            self._polarity_evidence_llm: Optional[Any] = None
             self.is_initialized: bool = True
             logger.info("[LLMEngine] Initialized engine with model '%s' at URL '%s'.", self.model_name, self.base_url)
 
@@ -137,6 +145,38 @@ class LLMEngine:
             ),
         ])
         return prompt | self._signal_resolver_llm
+
+    def get_polarity_evidence_runner(
+        self,
+        system_prompt: str,
+    ) -> RunnableSerializable[dict[str, Any], Any]:
+        if self._polarity_evidence_llm is None:
+            self._polarity_evidence_llm = ChatOllama(
+                model=self.model_name,
+                base_url=self.base_url,
+                temperature=0.0,
+                reasoning=False,
+                num_ctx=8192,
+                num_predict=256,
+            ).with_structured_output(
+                PolarityEvidenceIndexOutput,
+                method="json_schema",
+                include_raw=True,
+            )
+
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_prompt),
+            (
+                "human",
+                "=== USER MESSAGE ===\n{user_message}\n\n"
+                "=== TARGET NODE ===\n{selected_nodes}\n\n"
+                "=== REQUESTED POLARITY ===\n{polarity}\n\n"
+                "=== EXCLUDED INDEX ===\n{excluded_index}\n\n"
+                "=== EVIDENCE CANDIDATES ===\n{evidence_candidates}",
+            ),
+        ])
+
+        return prompt | self._polarity_evidence_llm
 
     def get_safety_runner(self, system_prompt: str) -> Any:
         """

@@ -28,6 +28,7 @@ def load_prompt_text(filename: str) -> str:
 # System Prompt Strings loaded from files
 NODE_SELECTOR_SYSTEM_PROMPT: str = load_prompt_text("node_selector.txt")
 SIGNAL_RESOLVER_SYSTEM_PROMPT: str = load_prompt_text("signal_resolver.txt")
+POLARITY_EVIDENCE_RESOLVER_SYSTEM_PROMPT: str = load_prompt_text("polarity_evidence_resolver.txt")
 ASSESSOR_SYSTEM_PROMPT: str = load_prompt_text("assessor.txt")
 SAFETY_CLASSIFIER_PROMPT: str = load_prompt_text("safety_classifier.txt")
 EMERGENCY_RESPONSE_TEMPLATE: str = load_prompt_text("emergency_response.txt")

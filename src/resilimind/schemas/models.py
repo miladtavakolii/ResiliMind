@@ -153,6 +153,17 @@ class SignalResolutionOutput(BaseModel):
         description="Exactly one resolved signal for each requested node."
     )
 
+
+class PolarityEvidenceIndexOutput(BaseModel):
+    evidence_index: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Candidate index explicitly supporting the requested polarity, "
+            "or null if no candidate supports it."
+        ),
+    )
+
 class ActiveSignal(BaseModel):
     """
     Represents an individual node detected from user input.
