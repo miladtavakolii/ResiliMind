@@ -130,6 +130,7 @@ def build_extractor_graph_context() -> str:
             f"({node_data.get('domain', '')})\n"
             f"Definition: {node_data.get('description', '')}\n"
             f"Semantic boundary: {node_data.get('semantic_boundary', '')}"
+            f"Explicit exclusions: {node_data.get('exclusions', [])}\n"
         )
 
     return (
@@ -739,7 +740,8 @@ def build_selected_node_context(node_ids: list[str]) -> str:
             f"Definition: {node.get('description', '')}\n"
             f"Semantic boundary: {node.get('semantic_boundary', '')}\n"
             f"Positive cues: {cues.get('positive_keywords', [])}\n"
-            f"Negative cues: {cues.get('negative_keywords', [])}"
+            f"Negative cues: {cues.get('negative_keywords', [])}\n"
+            f"Explicit exclusions: {node.get('exclusions', [])}\n"
         )
 
     return "\n\n".join(blocks)
