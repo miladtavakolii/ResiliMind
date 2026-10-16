@@ -44,10 +44,19 @@ def canonicalize_extraction_result(result: ExtractionOutput) -> ExtractionOutput
         existing_polarity = existing.detected_signal
         new_polarity = signal.detected_signal
 
-        if existing_polarity == new_polarity:
-            merged_polarity = existing_polarity
-        else:
-            merged_polarity = "mixed"
+        if existing_polarity != new_polarity:
+            logger.error(
+                "[Extractor] Conflicting duplicate polarities for node %s: %s vs %s",
+                signal.node_id,
+                existing_polarity,
+                new_polarity,
+            )
+            raise ValueError(
+                f"Conflicting duplicate polarity for {signal.node_id}; "
+                "mixed must be explicitly resolved with polarity evidence"
+            )
+
+        merged_polarity = existing_polarity
 
         existing_evidence = normalize_persian_text(existing.evidence)
         new_evidence = normalize_persian_text(signal.evidence)
