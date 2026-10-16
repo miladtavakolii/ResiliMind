@@ -57,24 +57,25 @@ class ResolvedSignal(BaseModel):
         description="Candidate index supporting the target node."
     )
     positive_evidence_index: int | None = Field(
-        default=None,
+        ...,
         ge=0,
-        description="Candidate index supporting positive polarity."
+        description="Candidate index supporting positive polarity; null when not applicable."
     )
     negative_evidence_index: int | None = Field(
-        default=None,
+        ...,
         ge=0,
-        description="Candidate index supporting negative polarity."
+        description="Candidate index supporting negative polarity; null when not applicable."
     )
 
     @model_validator(mode="after")
     def validate_supported_signal(self):
+        indices = (
+            self.evidence_index,
+            self.positive_evidence_index,
+            self.negative_evidence_index,
+        )
+
         if not self.supported:
-            indices = (
-                self.evidence_index,
-                self.positive_evidence_index,
-                self.negative_evidence_index,
-            )
             if self.detected_signal is not None or any(
                 index is not None for index in indices
             ):
@@ -88,28 +89,24 @@ class ResolvedSignal(BaseModel):
                 "Supported signals require polarity and evidence_index"
             )
 
-        if (
-            self.detected_signal == "positive"
-            and self.negative_evidence_index is not None
-        ):
-            raise ValueError(
-                "Positive polarity cannot contain negative evidence index"
-            )
+        if self.detected_signal == "positive":
+            if self.negative_evidence_index is not None:
+                raise ValueError(
+                    "Positive polarity cannot contain negative evidence index"
+                )
 
-        if (
-            self.detected_signal == "negative"
-            and self.positive_evidence_index is not None
-        ):
-            raise ValueError(
-                "Negative polarity cannot contain positive evidence index"
-            )
+        elif self.detected_signal == "negative":
+            if self.positive_evidence_index is not None:
+                raise ValueError(
+                    "Negative polarity cannot contain positive evidence index"
+                )
 
-        if self.detected_signal == "mixed" and (
-            (self.positive_evidence_index is None)
-            != (self.negative_evidence_index is None)
+        elif (
+            self.positive_evidence_index is None
+            or self.negative_evidence_index is None
         ):
             raise ValueError(
-                "Mixed polarity must provide both evidence indices or neither"
+                "Mixed polarity requires both positive and negative evidence indices"
             )
 
         return self
