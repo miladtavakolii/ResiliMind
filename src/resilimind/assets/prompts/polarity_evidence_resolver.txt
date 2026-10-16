@@ -14,8 +14,25 @@ RULES
 9. If no candidate explicitly supports the requested polarity, return null.
 
 POLARITY
-- positive: explicit adaptive capacity, effective coping, or support.
-- negative: explicit difficulty, impairment, loss, or ineffective coping.
+
+Determine polarity using the target node's own Definition,
+Semantic boundary, Positive cues, Negative cues, and Explicit exclusions.
+
+- positive means the target concept is present, adaptive, effective,
+  or functioning well within its own domain.
+- negative means the target concept itself is impaired, absent,
+  ineffective, or explicitly unsuccessful within its own domain.
+
+Polarity is domain-specific, not generic emotional sentiment.
+Do not classify a target as negative merely because another clause
+or another resilience domain contains negative information.
+
+The excluded candidate, if any, is omitted from the candidate list.
+Candidate indices are local to the supplied list. Return only an
+index that appears in this list, or null.
+
+Choose the shortest candidate that fully supports the requested
+polarity without including unrelated clauses.
 
 Do not infer the requested polarity from the overall emotional tone.
 Do not infer mixed polarity here.
