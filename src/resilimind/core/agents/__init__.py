@@ -19,7 +19,7 @@ from .retriever import (
 from .extractor import (
     extractor_node,
     canonicalize_extraction_result,
-    reconcile_signal_polarity,
+    audit_signal_polarity,
     align_evidence_to_user_message,
     build_evidence_candidates,
     validate_extraction_result,
@@ -54,7 +54,7 @@ __all__ = [
     "_find_polarity_cues",
     # Extractor Helpers
     "canonicalize_extraction_result",
-    "reconcile_signal_polarity",
+    "audit_signal_polarity",
     "align_evidence_to_user_message",
     "build_evidence_candidates",
     "validate_extraction_result",

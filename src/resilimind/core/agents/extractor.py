@@ -107,7 +107,7 @@ def build_extractor_graph_context() -> str:
     )
 
 
-def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
+def audit_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
     """Reconcile LLM-detected polarity with explicit knowledge graph cue evidence.
 
     Cross-references extracted signal evidence against the node's authoritative
@@ -122,50 +122,64 @@ def reconcile_signal_polarity(result: ExtractionOutput) -> ExtractionOutput:
         ExtractionOutput: A updated copy of the extraction output containing
             reconciled polarities for all active signals.
     """
-    reconciled_signals = []
-
     for signal in result.active_signals:
         node_data = resilience_graph.nodes.get(signal.node_id, {})
         cues = node_data.get("cues", {})
+        positive_cues = cues.get("positive_keywords", [])
+        negative_cues = cues.get("negative_keywords", [])
+        polarity_evidence = signal.polarity_evidence
+
+        positive_text = polarity_evidence.get("positive", "")
+        negative_text = polarity_evidence.get("negative", "")
 
         positive_hits = _find_polarity_cues(
-            signal.evidence,
-            cues.get("positive_keywords", []),
+            positive_text,
+            positive_cues,
+        )
+        negative_hits_in_positive = _find_polarity_cues(
+            positive_text,
+            negative_cues,
         )
         negative_hits = _find_polarity_cues(
-            signal.evidence,
-            cues.get("negative_keywords", []),
+            negative_text,
+            negative_cues,
+        )
+        positive_hits_in_negative = _find_polarity_cues(
+            negative_text,
+            positive_cues,
         )
 
-        if positive_hits and negative_hits:
-            inferred_polarity = "mixed"
-        elif positive_hits:
-            inferred_polarity = "positive"
-        elif negative_hits:
-            inferred_polarity = "negative"
+        if signal.detected_signal == "positive":
+            conflict = bool(negative_hits_in_positive) and not positive_hits
+        elif signal.detected_signal == "negative":
+            conflict = bool(positive_hits_in_negative) and not negative_hits
         else:
-            inferred_polarity = signal.detected_signal
+            conflict = (
+                bool(negative_hits_in_positive) and not positive_hits
+            ) or (
+                bool(positive_hits_in_negative) and not negative_hits
+            )
 
-        if inferred_polarity != signal.detected_signal:
+        if conflict:
             logger.warning(
-                "[Extractor] Reconciling polarity for %s: %s -> %s "
-                "(positive_cues=%s, negative_cues=%s)",
+                "[PolarityAudit] Model-cue disagreement for %s: "
+                "polarity=%s, positive_hits=%s, negative_hits=%s",
                 signal.node_id,
                 signal.detected_signal,
-                inferred_polarity,
+                positive_hits,
+                negative_hits,
+            )
+        else:
+            logger.debug(
+                "[PolarityAudit] node=%s polarity=%s "
+                "positive_hits=%s negative_hits=%s",
+                signal.node_id,
+                signal.detected_signal,
                 positive_hits,
                 negative_hits,
             )
 
-        reconciled_signals.append(
-            signal.model_copy(
-                update={"detected_signal": inferred_polarity}
-            )
-        )
-
-    return result.model_copy(
-        update={"active_signals": reconciled_signals}
-    )
+    return result
 
 
 def align_evidence_to_user_message(evidence: str, user_message: str) -> str | None:
@@ -890,7 +904,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
             result=result,
             user_message=user_msg,
         )
-        result = reconcile_signal_polarity(result)
+        result = audit_signal_polarity(result)
 
         return {
             "active_nodes": accepted_nodes,
