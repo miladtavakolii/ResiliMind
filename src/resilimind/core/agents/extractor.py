@@ -429,22 +429,28 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
                 f"{signal.node_id}: {signal.evidence!r}"
             )
 
+        polarity_evidence = dict(signal.polarity_evidence or {})
+
+        if signal.detected_signal in {"positive", "negative"}:
+            if not polarity_evidence:
+                polarity_evidence[signal.detected_signal] = evidence
+
         expected_polarity_keys = {
             "positive": {"positive"},
             "negative": {"negative"},
             "mixed": {"positive", "negative"},
         }[signal.detected_signal]
 
-        if set(signal.polarity_evidence) != expected_polarity_keys:
+        if set(polarity_evidence) != expected_polarity_keys:
             raise ValueError(
                 f"Invalid polarity evidence keys for {signal.node_id}: "
                 f"expected={expected_polarity_keys}, "
-                f"actual={set(signal.polarity_evidence)}"
+                f"actual={set(polarity_evidence)}"
             )
 
         aligned_polarity_evidence = {}
 
-        for polarity, polarity_span in signal.polarity_evidence.items():
+        for polarity, polarity_span in polarity_evidence.items():
             aligned_span = align_evidence_to_user_message(
                 polarity_span,
                 user_message,
