@@ -45,6 +45,8 @@ EVIDENCE
 - Never combine candidates.
 - Select exactly one candidate by index when supported=true.
 - The selected candidate must directly support the target node.
+- Choose the shortest candidate that independently and clearly supports the target node. Do not select the entire message when a shorter candidate provides sufficient evidence.
+- For mixed polarity, evidence_index is the primary concise anchor for the target node. The positive and negative evidence indices separately document the two directions; do not combine unrelated clauses into one unnecessarily broad evidence span.
 
 POLARITY ASSIGNMENT
 
@@ -92,18 +94,33 @@ Never generate or rewrite evidence text.
 SEMANTIC RULES
 
 1. Interpret negation, contrast, tense, and context.
+
 2. A positive-looking word inside a negated statement is not
    sufficient evidence for positive polarity.
+
 3. A negative-looking word inside a quotation, hypothetical
    example, or negated statement is not automatically negative
    polarity for the user.
 4. Do not infer polarity only from the graph's lexical cues.
+
 5. Do not infer mixed polarity merely because both positive and
    negative cue words occur in a long evidence span.
 6. If only one polarity is explicitly supported, choose that polarity.
+
 7. If the node is supported but its polarity genuinely cannot be
    determined, do not invent a direction. Re-evaluate the selected
    candidate and local context before returning the result.
+8. Treat the target node's Semantic boundary and Explicit exclusions
+   as mandatory acceptance constraints, not optional hints.
+
+9. If the only candidate evidence matches an explicit exclusion,
+   return supported=false unless a separate, independent phrase
+   directly supports the target node.
+
+10. One phrase may support multiple nodes only when it independently
+    satisfies each node's definition. Do not activate a node from a
+    shared topic, generic emotion, or evidence belonging primarily
+    to another node.
 
 FINAL CHECK
 
