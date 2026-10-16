@@ -741,6 +741,13 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                         f"Return exactly one signal for {node_id}.\n"
                         "Select exactly one valid evidence_index.\n"
                         "Do not generate or rewrite evidence text.\n"
+                        "Include both polarity evidence index keys in every "
+                        "supported signal; use null only when not applicable.\n"
+                        "For positive or negative polarity, the matching index "
+                        "may equal evidence_index.\n"
+                        "For mixed polarity, both indices must be valid and "
+                        "must support opposite polarities of the SAME node.\n"
+                        "Never return mixed when only one polarity is supported.\n"
                     )
 
                 resolver = llm_engine.get_signal_resolver_runner(
