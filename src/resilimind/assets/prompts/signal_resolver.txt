@@ -42,51 +42,70 @@ EVIDENCE
 
 POLARITY ASSIGNMENT
 
-Determine detected_signal from the meaning of the target node in
-the selected evidence and its local context.
+Classify the polarity of the TARGET NODE, not the overall emotional
+tone of the user's message.
 
-- positive: the target concept is expressed in a favorable,
-  effective, adaptive, or supportive way.
-- negative: the target concept is expressed as a difficulty,
-  impairment, loss, failure, or lack of effective capacity.
-- mixed: both positive and negative aspects are explicitly
-  expressed for the SAME target node.
+Choose exactly one label:
 
-Do NOT infer polarity from the overall emotional tone of the
-entire message.
+positive:
+The target concept is expressed favorably, effectively, adaptively,
+or supportively.
 
-Do NOT assign mixed merely because the message contains positive
-and negative statements about different topics.
+negative:
+The target concept is expressed as a difficulty, impairment, loss,
+failure, or lack of effective capacity.
 
-Respect negation and the actual meaning of the sentence.
-For example, a positive-looking keyword inside a negated statement
-does not automatically indicate positive polarity.
+mixed:
+The user explicitly expresses BOTH positive and negative aspects
+of the SAME target node.
 
-Use the full message only to clarify the meaning of the selected
-evidence. Do not use unrelated sentences to determine its polarity.
+EVIDENCE INDICES
 
-Before returning, verify that the selected evidence supports both
-the target node and the assigned polarity.
+`evidence_index` must identify a candidate supporting the target node.
 
-IMPORTANT
+For positive polarity:
+- `positive_evidence_index` is required.
+- `negative_evidence_index` must be null.
 
-IND_PER_01 requires explicit self-efficacy, persistence, hardiness,
-or explicit inability to overcome a personal challenge.
+For negative polarity:
+- `negative_evidence_index` is required.
+- `positive_evidence_index` must be null.
 
-Generic:
-"گیج شدم"
-"سردرگمم"
-"نمی‌دونم چیکار کنم"
-"درمانده شدم"
-"شرایطم پیچیده شده"
+For mixed polarity:
+- Both `positive_evidence_index` and `negative_evidence_index`
+  are required.
+- Each candidate must independently support the corresponding
+  polarity of the SAME target node.
+- The candidates may be different spans of the same sentence.
+- Do not use a positive statement about one node and a negative
+  statement about another node to justify mixed polarity.
 
-is NOT enough for IND_PER_01.
+Each evidence index must refer to an existing candidate index.
+Never generate or rewrite evidence text.
 
-IND_PER_02 requires explicit anxiety, anger, panic,
-emotional dysregulation, emotional control, or calming effort.
+SEMANTIC RULES
 
-Generic confusion, uncertainty, difficulty, or helplessness
-is NOT enough for IND_PER_02.
+1. Interpret negation, contrast, tense, and context.
+2. A positive-looking word inside a negated statement is not
+   sufficient evidence for positive polarity.
+3. A negative-looking word inside a quotation, hypothetical
+   example, or negated statement is not automatically negative
+   polarity for the user.
+4. Do not infer polarity only from the graph's lexical cues.
+5. Do not infer mixed polarity merely because both positive and
+   negative cue words occur in a long evidence span.
+6. If only one polarity is explicitly supported, choose that polarity.
+7. If the node is supported but its polarity genuinely cannot be
+   determined, do not invent a direction. Re-evaluate the selected
+   candidate and local context before returning the result.
+
+FINAL CHECK
+
+- `evidence_index` supports the target node.
+- The polarity-specific evidence supports the selected polarity.
+- `mixed` has evidence for BOTH directions on the SAME target node.
+- All indices are valid candidate indices.
+- Return only the structured output.
 
 NODE DISTINCTION CHECK
 
