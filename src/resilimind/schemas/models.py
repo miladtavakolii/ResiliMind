@@ -84,33 +84,67 @@ class ResolvedSignal(BaseModel):
                 )
             return self
 
-        if self.detected_signal is None or self.evidence_index is None:
-            raise ValueError(
-                "Supported signals require polarity and evidence_index"
-            )
+        has_positive = self.positive_evidence_index is not None
+        has_negative = self.negative_evidence_index is not None
+
+        if self.detected_signal is None:
+            if has_positive and has_negative:
+                self.detected_signal = "mixed"
+            elif has_positive:
+                self.detected_signal = "positive"
+            elif has_negative:
+                self.detected_signal = "negative"
+            else:
+                raise ValueError(
+                    "Cannot infer polarity without polarity evidence indices"
+                )
 
         if self.detected_signal == "positive":
-            if self.negative_evidence_index is not None:
+            if has_negative:
                 raise ValueError(
                     "Positive polarity cannot contain negative evidence index"
                 )
+            if not has_positive and self.evidence_index is not None:
+                self.positive_evidence_index = self.evidence_index
 
         elif self.detected_signal == "negative":
-            if self.positive_evidence_index is not None:
+            if has_positive:
                 raise ValueError(
                     "Negative polarity cannot contain positive evidence index"
                 )
+            if not has_negative and self.evidence_index is not None:
+                self.negative_evidence_index = self.evidence_index
 
-        elif (
-            self.positive_evidence_index is None
-            or self.negative_evidence_index is None
-        ):
+        elif self.detected_signal == "mixed":
+            if not has_positive or not has_negative:
+                raise ValueError(
+                    "Mixed polarity requires both positive and negative evidence indices"
+                )
+
+        if self.evidence_index is None:
+            if self.detected_signal == "positive":
+                self.evidence_index = self.positive_evidence_index
+            elif self.detected_signal == "negative":
+                self.evidence_index = self.negative_evidence_index
+            else:
+                self.evidence_index = self.positive_evidence_index
+
+        if self.evidence_index is None:
             raise ValueError(
-                "Mixed polarity requires both positive and negative evidence indices"
+                "Supported signals require a valid evidence index"
+            )
+
+        if self.detected_signal == "positive" and not has_positive:
+            raise ValueError(
+                "Positive polarity requires positive evidence"
+            )
+
+        if self.detected_signal == "negative" and not has_negative:
+            raise ValueError(
+                "Negative polarity requires negative evidence"
             )
 
         return self
-
 
 class SignalResolutionOutput(BaseModel):
     signals: List[ResolvedSignal] = Field(
