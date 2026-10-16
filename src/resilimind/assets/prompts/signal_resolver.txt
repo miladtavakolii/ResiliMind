@@ -31,6 +31,12 @@ Then:
 - detected_signal MUST be null.
 - evidence_index MUST be null.
 
+If evidence_index, positive_evidence_index, and
+negative_evidence_index are all null:
+- supported MUST be false.
+- detected_signal MUST be null.
+- Never return supported=true without selecting valid evidence.
+
 EVIDENCE
 
 - Never generate evidence text.
