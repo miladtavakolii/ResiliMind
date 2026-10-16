@@ -23,6 +23,8 @@ from evaluation.runners.common import (
     PROJECT_ROOT,
     DEFAULT_DATASET_PATH,
     DEFAULT_RESULTS_DIR,
+    DEFAULT_RUNS_DIR,
+    DEFAULT_LATEST_LINK,
     DEFAULT_RUNTIME_DIR,
     compute_case_fingerprint,
     load_cases,
@@ -30,6 +32,10 @@ from evaluation.runners.common import (
     write_json,
     build_run_manifest,
     is_manifest_compatible,
+    create_run_directory,
+    update_latest_symlink,
+    setup_run_logging,
+    get_git_commit,
 )
 
 logger = logging.getLogger(__name__)
@@ -261,22 +267,81 @@ def parse_args() -> argparse.Namespace:
         Parsed CLI argument namespace.
     """
     parser = argparse.ArgumentParser(description="Run ResiliMind evaluation benchmark.")
-    parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET_PATH)
-    parser.add_argument("--output", type=Path, default=DEFAULT_RESULTS_DIR / "predictions.jsonl")
-    parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME_DIR)
-    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=DEFAULT_DATASET_PATH,
+        help="Path to evaluation dataset (cases.jsonl).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Explicit output path for predictions.jsonl or run directory. If omitted, a dedicated timestamped run folder is created.",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Optional tag/label appended to the run directory name (e.g. baseline, safety_patch).",
+    )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        default=DEFAULT_RUNS_DIR,
+        help="Base directory where runs are stored (default: evaluation/results/runs).",
+    )
+    parser.add_argument(
+        "--runtime-dir",
+        type=Path,
+        default=DEFAULT_RUNTIME_DIR,
+        help="Directory for isolated benchmark database and runtime files.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of cases to evaluate.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Execute the end-to-end evaluation pipeline from CLI arguments."""
     args = parse_args()
-    run_id = create_run_id()
-    manifest_path = args.output.parent / "run_manifest.json"
-    logger.info("Starting evaluation run: %s", run_id)
 
     if args.limit is not None and args.limit <= 0:
         raise ValueError("--limit must be positive")
+
+    # Resolve run directory, output predictions path, manifest, and log file
+    if args.output is None:
+        run_dir = create_run_directory(base_dir=args.runs_dir, tag=args.tag)
+        output_path = run_dir / "predictions.jsonl"
+    elif args.output.suffix == ".jsonl":
+        output_path = args.output
+        run_dir = output_path.parent
+        run_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        run_dir = args.output
+        run_dir.mkdir(parents=True, exist_ok=True)
+        output_path = run_dir / "predictions.jsonl"
+
+    manifest_path = run_dir / "run_manifest.json"
+    log_path = run_dir / "benchmark.log"
+
+    # Configure dual-target logging (console + benchmark.log)
+    setup_run_logging(log_path)
+    update_latest_symlink(run_dir)
+
+    run_id = create_run_id()
+    git_hash = get_git_commit()
+
+    logger.info("=" * 60)
+    logger.info("Starting ResiliMind Benchmark Run: %s", run_id)
+    logger.info("Run directory: %s", run_dir)
+    logger.info("Git commit:    %s", git_hash)
+    logger.info("Log file:      %s", log_path)
+    logger.info("=" * 60)
 
     configure_evaluation_environment(args.runtime_dir)
 
@@ -296,27 +361,27 @@ def main() -> None:
     failed = 0
 
     can_resume = False
-    if args.output.exists():
+    if output_path.exists():
         if manifest_path.exists():
             try:
                 prev_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 compatible, reason = is_manifest_compatible(prev_manifest, current_manifest)
                 if compatible:
                     can_resume = True
-                    logger.info("Found existing results with compatible manifest. Resuming from %s", args.output)
+                    logger.info("Found existing results with compatible manifest. Resuming from %s", output_path)
                 else:
                     logger.warning(
                         "Cannot resume existing results from %s: %s. Starting fresh run.",
-                        args.output,
+                        output_path,
                         reason,
                     )
             except Exception as exc:
                 logger.warning("Error reading manifest %s: %s. Starting fresh run.", manifest_path, exc)
         else:
-            logger.warning("No run_manifest.json found alongside existing %s. Starting fresh run.", args.output)
+            logger.warning("No run_manifest.json found alongside existing %s. Starting fresh run.", output_path)
 
         if can_resume:
-            with args.output.open("r", encoding="utf-8") as file:
+            with output_path.open("r", encoding="utf-8") as file:
                 for line in file:
                     line = line.strip()
                     if line:
@@ -331,12 +396,12 @@ def main() -> None:
                             pass
         else:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            backup_path = args.output.with_suffix(f".backup_{timestamp}.jsonl")
+            backup_path = output_path.with_suffix(f".backup_{timestamp}.jsonl")
             try:
-                args.output.rename(backup_path)
+                output_path.rename(backup_path)
                 logger.info("Backed up incompatible previous results to %s", backup_path)
             except Exception as e:
-                logger.warning("Could not backup %s: %s", args.output, e)
+                logger.warning("Could not backup %s: %s", output_path, e)
 
     # Persist the current benchmark run manifest
     write_json(current_manifest.model_dump(), manifest_path)
@@ -353,7 +418,7 @@ def main() -> None:
     for index, case in enumerate(cases_to_run, start=1):
         pred = run_case(app, case, case_number=index, total_cases=len(cases_to_run), run_id=run_id)
         
-        write_predictions([pred], args.output)
+        write_predictions([pred], output_path)
 
         if pred.successful:
             successful += 1
@@ -366,16 +431,17 @@ def main() -> None:
     print("=" * 60)
     print("ResiliMind Evaluation")
     print("=" * 60)
-    print(f"Executed: {total_executed}")
-    print(f"Successful: {successful}")
-    print(f"Failed: {failed}")
-    print(f"Predictions: {args.output}")
+    print(f"Run ID:      {run_id}")
+    print(f"Git Commit:  {git_hash}")
+    print(f"Run Dir:     {run_dir}")
+    print(f"Executed:    {total_executed}")
+    print(f"Successful:  {successful}")
+    print(f"Failed:      {failed}")
+    print(f"Predictions: {output_path}")
+    print(f"Manifest:    {manifest_path}")
+    print(f"Log:         {log_path}")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
     main()

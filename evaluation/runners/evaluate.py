@@ -29,6 +29,9 @@ from evaluation.runners.common import (
     DEFAULT_DATASET_PATH,
     DEFAULT_PREDICTIONS_PATH,
     DEFAULT_OUTPUT_DIR,
+    DEFAULT_RUNS_DIR,
+    DEFAULT_LATEST_LINK,
+    setup_run_logging,
     compute_case_fingerprint,
     load_cases,
     load_predictions,
@@ -139,6 +142,12 @@ def parse_args() -> argparse.Namespace:
         description="Evaluate previously generated ResiliMind benchmark predictions."
     )
     parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help="Path to a benchmark run directory (e.g. evaluation/results/runs/... or 'latest'). If specified, automatically sets --predictions and --output-dir.",
+    )
+    parser.add_argument(
         "--dataset",
         type=Path,
         default=DEFAULT_DATASET_PATH,
@@ -188,17 +197,39 @@ def main() -> None:
     args = parse_args()
     load_dotenv()
 
+    if args.run_dir:
+        target_dir = args.run_dir
+        if str(target_dir).lower() == "latest" or target_dir == Path("latest"):
+            target_dir = DEFAULT_LATEST_LINK.resolve()
+        elif not target_dir.is_absolute():
+            # Check relative to runs dir or current dir
+            if (DEFAULT_RUNS_DIR / target_dir).exists():
+                target_dir = DEFAULT_RUNS_DIR / target_dir
+
+        if not target_dir.exists():
+            raise FileNotFoundError(f"Run directory not found: {args.run_dir}")
+
+        args.predictions = target_dir / "predictions.jsonl"
+        args.output_dir = target_dir
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = args.output_dir / "evaluation.log"
+    setup_run_logging(log_file)
+
     cases = load_cases(args.dataset)
     predictions = load_predictions(args.predictions)
 
     validate_alignment(cases, predictions)
     validate_dataset_versions(cases, predictions)
 
-    logger.info(
-        "Evaluating %d cases using predictions from %s",
-        len(cases),
-        args.predictions,
-    )
+    logger.info("=" * 60)
+    logger.info("Starting ResiliMind Evaluation")
+    logger.info("Dataset:     %s", args.dataset)
+    logger.info("Predictions: %s", args.predictions)
+    logger.info("Output Dir:  %s", args.output_dir)
+    logger.info("Log file:    %s", log_file)
+    logger.info("=" * 60)
+
     results_path = args.output_dir / "case_results.jsonl"
     results = evaluate_dataset(
         cases=cases,
@@ -214,7 +245,6 @@ def main() -> None:
     summary = build_final_summary(summary, predictions)
     failures = ErrorAnalyzer().analyze(results)
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     FailureCSVWriter().write(failures, args.output_dir / "failures.csv")
     FinalReportGenerator().generate(summary, failures, args.output_dir / "evaluation_report.json")
 
@@ -223,7 +253,7 @@ def main() -> None:
 
     print()
     print("=" * 60)
-    print("ResiliMind Evaluation")
+    print("ResiliMind Evaluation Complete")
     print("=" * 60)
     print(f"Dataset:     {args.dataset}")
     print(f"Predictions: {args.predictions}")
@@ -233,6 +263,7 @@ def main() -> None:
     print(f"Results:     {args.output_dir / 'case_results.jsonl'}")
     print(f"Failures:    {args.output_dir / 'failures.csv'}")
     print(f"Report:      {args.output_dir / 'evaluation_report.json'}")
+    print(f"Log:         {log_file}")
     print("=" * 60)
 
 
@@ -259,6 +290,8 @@ __all__ = [
     "DEFAULT_DATASET_PATH",
     "DEFAULT_PREDICTIONS_PATH",
     "DEFAULT_OUTPUT_DIR",
+    "DEFAULT_RUNS_DIR",
+    "DEFAULT_LATEST_LINK",
     "PROJECT_ROOT",
 ]
 

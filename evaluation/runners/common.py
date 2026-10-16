@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any
 import urllib.request
 from collections.abc import Sequence
@@ -21,6 +22,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_DATASET_PATH = PROJECT_ROOT / "evaluation" / "datasets" / "v1" / "cases.jsonl"
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "evaluation" / "results"
+DEFAULT_RUNS_DIR = DEFAULT_RESULTS_DIR / "runs"
+DEFAULT_LATEST_LINK = DEFAULT_RESULTS_DIR / "latest"
 DEFAULT_OUTPUT_DIR = DEFAULT_RESULTS_DIR
 DEFAULT_PREDICTIONS_PATH = DEFAULT_RESULTS_DIR / "predictions.jsonl"
 DEFAULT_RUNTIME_DIR = PROJECT_ROOT / "evaluation" / "runtime"
@@ -152,11 +155,19 @@ def write_json(data: Any, output_path: Path) -> None:
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def get_git_commit() -> str:
-    """Retrieve the current Git commit hash."""
+def get_git_commit(short: bool = False) -> str:
+    """Retrieve the current Git commit hash.
+
+    Args:
+        short: If True, return the 7-character short commit hash.
+
+    Returns:
+        Hex commit hash string, or "unknown".
+    """
     try:
+        cmd = ["git", "rev-parse", "--short", "HEAD"] if short else ["git", "rev-parse", "HEAD"]
         res = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            cmd,
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
@@ -164,7 +175,118 @@ def get_git_commit() -> str:
         )
         return res.stdout.strip()
     except Exception:
-        return os.environ.get("GIT_COMMIT", "unknown")
+        commit = os.environ.get("GIT_COMMIT", "unknown")
+        return commit[:7] if short and commit != "unknown" else commit
+
+
+def is_git_dirty() -> bool:
+    """Check if the git working tree has uncommitted changes."""
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return bool(res.stdout.strip())
+    except Exception:
+        return False
+
+
+def create_run_directory(
+    base_dir: Path | None = None,
+    tag: str | None = None,
+    dt: datetime | None = None,
+) -> Path:
+    """Create a unique run directory with timestamp and commit hash.
+
+    Format: YYYY-MM-DD_HH-MM-SS_<short_commit>[-dirty][_<tag>]
+
+    Args:
+        base_dir: Directory where runs are stored (default: DEFAULT_RUNS_DIR).
+        tag: Optional user-supplied tag/label for the run.
+        dt: Optional datetime instance (defaults to current local time).
+
+    Returns:
+        Path to the newly created run directory.
+    """
+    if base_dir is None:
+        base_dir = DEFAULT_RUNS_DIR
+
+    if dt is None:
+        dt = datetime.now()
+
+    timestamp = dt.strftime("%Y-%m-%d_%H-%M-%S")
+    commit = get_git_commit(short=True)
+    dirty_suffix = "-dirty" if is_git_dirty() else ""
+
+    folder_name = f"{timestamp}_{commit}{dirty_suffix}"
+    if tag:
+        safe_tag = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in tag).strip("-_")
+        if safe_tag:
+            folder_name = f"{folder_name}_{safe_tag}"
+
+    run_dir = base_dir / folder_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def update_latest_symlink(run_dir: Path, link_path: Path | None = None) -> None:
+    """Update a 'latest' symlink pointing to the most recent run directory.
+
+    Args:
+        run_dir: Target run directory to link to.
+        link_path: Path of the symlink (default: DEFAULT_LATEST_LINK).
+    """
+    if link_path is None:
+        link_path = DEFAULT_LATEST_LINK
+    try:
+        link_path.parent.mkdir(parents=True, exist_ok=True)
+        if link_path.is_symlink() or link_path.exists():
+            link_path.unlink()
+        rel_target = os.path.relpath(run_dir, link_path.parent)
+        link_path.symlink_to(rel_target)
+    except Exception as exc:
+        logger.debug("Failed to update latest symlink: %s", exc)
+
+
+def setup_run_logging(
+    log_file: Path | None = None,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Configure the root logger to output to both console (stdout) and an optional log file.
+
+    Args:
+        log_file: Destination file path for log entries.
+        level: Logging verbosity level (default: logging.INFO).
+
+    Returns:
+        Configured root logger instance.
+    """
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+
+    # Remove existing handlers to prevent duplicate lines when reconfiguring
+    root_logger.handlers.clear()
+
+    # Console stream handler
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(level)
+    root_logger.addHandler(stream_handler)
+
+    # File handler
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(level)
+        root_logger.addHandler(file_handler)
+
+    return root_logger
 
 
 def compute_file_sha256(path: Path) -> str:
