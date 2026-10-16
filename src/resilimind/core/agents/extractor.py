@@ -854,25 +854,55 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     "negative": signal.negative_evidence_index,
                 }
 
-                invalid_polarity_index = next(
-                    (
-                        index
-                        for index in polarity_indices.values()
-                        if index is not None
-                        and not 0 <= index < len(evidence_candidates)
-                    ),
-                    None,
-                )
+                if signal.detected_signal == "positive":
+                    if polarity_indices["negative"] is not None:
+                        node_last_error = ValueError(
+                            "Positive polarity cannot contain negative evidence"
+                        )
+                        continue
+                    if polarity_indices["positive"] is None:
+                        polarity_indices["positive"] = signal.evidence_index
 
-                if invalid_polarity_index is not None:
+                elif signal.detected_signal == "negative":
+                    if polarity_indices["positive"] is not None:
+                        node_last_error = ValueError(
+                            "Negative polarity cannot contain positive evidence"
+                        )
+                        continue
+                    if polarity_indices["negative"] is None:
+                        polarity_indices["negative"] = signal.evidence_index
+
+                elif (
+                    polarity_indices["positive"] is None
+                    or polarity_indices["negative"] is None
+                ):
                     node_last_error = ValueError(
-                        f"Invalid polarity evidence index for {node_id}: "
-                        f"{invalid_polarity_index}"
+                        "Mixed polarity requires both polarity evidence indices"
                     )
                     logger.warning(
-                        "[Extractor] Invalid polarity evidence index for %s: %s",
+                        "[Extractor] Incomplete mixed-polarity evidence for %s "
+                        "(attempt %d/3)",
                         node_id,
-                        invalid_polarity_index,
+                        resolver_attempt + 1,
+                    )
+                    continue
+
+                invalid_indices = [
+                    index
+                    for index in polarity_indices.values()
+                    if index is not None
+                    and not 0 <= index < len(evidence_candidates)
+                ]
+
+                if invalid_indices:
+                    node_last_error = ValueError(
+                        f"Invalid polarity evidence indices for {node_id}: "
+                        f"{invalid_indices}"
+                    )
+                    logger.warning(
+                        "[Extractor] Invalid polarity evidence for %s: %s",
+                        node_id,
+                        invalid_indices,
                     )
                     continue
 
@@ -881,7 +911,6 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     for polarity, index in polarity_indices.items()
                     if index is not None
                 }
-
                 evidence = evidence_candidates[signal.evidence_index][2]
 
                 logger.info(
