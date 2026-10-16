@@ -12,6 +12,7 @@ from typing import Any
 import urllib.request
 from collections.abc import Sequence
 
+from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from evaluation.schemas import EvaluationCase, CasePrediction, BenchmarkRunManifest
@@ -251,21 +252,36 @@ def update_latest_symlink(run_dir: Path, link_path: Path | None = None) -> None:
         logger.debug("Failed to update latest symlink: %s", exc)
 
 
+def get_configured_log_level() -> int:
+    """Retrieve log level configured via .env or environment variable."""
+    load_dotenv(PROJECT_ROOT / ".env")
+    level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    return getattr(logging, level_name, logging.INFO)
+
+
 def setup_run_logging(
     log_file: Path | None = None,
-    level: int = logging.INFO,
+    level: int | str | None = None,
 ) -> logging.Logger:
     """Configure the root logger to output to both console (stdout) and an optional log file.
 
     Args:
         log_file: Destination file path for log entries.
-        level: Logging verbosity level (default: logging.INFO).
+        level: Logging verbosity level (int, string like 'DEBUG', or None).
+               If None, reads from LOG_LEVEL in .env (default: INFO).
 
     Returns:
         Configured root logger instance.
     """
+    if level is None:
+        numeric_level = get_configured_log_level()
+    elif isinstance(level, str):
+        numeric_level = getattr(logging, level.strip().upper(), logging.INFO)
+    else:
+        numeric_level = level
+
     root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+    root_logger.setLevel(numeric_level)
 
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 
@@ -275,7 +291,7 @@ def setup_run_logging(
     # Console stream handler
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
-    stream_handler.setLevel(level)
+    stream_handler.setLevel(numeric_level)
     root_logger.addHandler(stream_handler)
 
     # File handler
@@ -283,7 +299,7 @@ def setup_run_logging(
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setFormatter(formatter)
-        file_handler.setLevel(level)
+        file_handler.setLevel(numeric_level)
         root_logger.addHandler(file_handler)
 
     return root_logger

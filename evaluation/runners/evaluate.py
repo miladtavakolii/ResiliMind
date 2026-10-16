@@ -184,6 +184,13 @@ def parse_args() -> argparse.Namespace:
         help="Delay between two requests.",
     )
     parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level override (default: read from LOG_LEVEL in .env).",
+    )
+    parser.add_argument(
         "--skip-response-eval",
         action="store_true",
         default=False,
@@ -214,7 +221,7 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     log_file = args.output_dir / "evaluation.log"
-    setup_run_logging(log_file)
+    configured_logger = setup_run_logging(log_file, level=args.log_level)
 
     cases = load_cases(args.dataset)
     predictions = load_predictions(args.predictions)
@@ -228,6 +235,7 @@ def main() -> None:
     logger.info("Predictions: %s", args.predictions)
     logger.info("Output Dir:  %s", args.output_dir)
     logger.info("Log file:    %s", log_file)
+    logger.info("Log level:   %s", logging.getLevelName(configured_logger.level))
     logger.info("=" * 60)
 
     results_path = args.output_dir / "case_results.jsonl"

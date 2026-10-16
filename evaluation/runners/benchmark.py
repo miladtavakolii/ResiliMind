@@ -298,6 +298,13 @@ def parse_args() -> argparse.Namespace:
         help="Directory for isolated benchmark database and runtime files (default: <run_dir>/runtime).",
     )
     parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level override (default: read from LOG_LEVEL in .env).",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -330,8 +337,8 @@ def main() -> None:
     manifest_path = run_dir / "run_manifest.json"
     log_path = run_dir / "benchmark.log"
 
-    # Configure dual-target logging (console + benchmark.log)
-    setup_run_logging(log_path)
+    # Configure dual-target logging (console + benchmark.log) with level from .env or CLI
+    configured_logger = setup_run_logging(log_path, level=args.log_level)
     update_latest_symlink(run_dir)
 
     run_id = create_run_id()
@@ -343,6 +350,7 @@ def main() -> None:
     logger.info("Runtime dir:   %s", runtime_dir)
     logger.info("Git commit:    %s", git_hash)
     logger.info("Log file:      %s", log_path)
+    logger.info("Log level:     %s", logging.getLevelName(configured_logger.level))
     logger.info("=" * 60)
 
     configure_evaluation_environment(runtime_dir)
