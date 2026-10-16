@@ -129,7 +129,7 @@ def build_extractor_graph_context() -> str:
             f"Domain: {node_data.get('domain_fa', '')} "
             f"({node_data.get('domain', '')})\n"
             f"Definition: {node_data.get('description', '')}\n"
-            f"Semantic boundary: {node_data.get('semantic_boundary', '')}"
+            f"Semantic boundary: {node_data.get('semantic_boundary', '')}\n"
             f"Explicit exclusions: {node_data.get('exclusions', [])}\n"
         )
 
