@@ -785,18 +785,31 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
         )
 
         if not selected_nodes:
-            logger.debug("[Extractor] No selector or graph-hinted candidates found.")
-            return {
-                "active_nodes": [],
-                "active_signals": [],
-            }
-
-        if not selected_nodes:
-            logger.debug("[Extractor] Selector returned no nodes. Lexical hints:\n%s",candidate_hints,)
-            return {
-                "active_nodes": [],
-                "active_signals": [],
-            }
+            fallback_prompt = (
+                "You are a second-pass recall-oriented node selector.\n"
+                "Review every node in the catalog independently. "
+                "Do not require lexical cue matches. "
+                "Select a node only when the message directly supports its "
+                "definition and semantic boundary. "
+                "Do not infer a node from generic distress or emotional tone.\n\n"
+                + build_extractor_graph_context()
+            )
+            fallback = llm_engine.get_node_selector_runner(
+                fallback_prompt
+            ).invoke({"user_message": user_msg})
+            if fallback.get("parsed") is not None:
+                selected_nodes = list(dict.fromkeys(
+                    fallback["parsed"].node_ids
+                ))
+                logger.debug(
+                    "[Extractor] Fallback selector nodes=%s",
+                    selected_nodes,
+                )
+            if not selected_nodes:
+                return {
+                    "active_nodes": [],
+                    "active_signals": [],
+                }
 
         resolved_signals = []
         accepted_nodes = []
