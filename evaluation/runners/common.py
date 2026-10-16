@@ -302,6 +302,10 @@ def setup_run_logging(
         file_handler.setLevel(numeric_level)
         root_logger.addHandler(file_handler)
 
+    # Suppress verbose third-party HTTP transport loggers
+    for noisy_logger_name in ("httpx", "httpcore", "urllib3"):
+        logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
+
     return root_logger
 
 
