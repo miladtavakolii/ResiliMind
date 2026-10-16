@@ -403,8 +403,42 @@ def validate_extraction_result(result: ExtractionOutput, user_message: str) -> E
                 f"{signal.node_id}: {signal.evidence!r}"
             )
 
+        expected_polarity_keys = {
+            "positive": {"positive"},
+            "negative": {"negative"},
+            "mixed": {"positive", "negative"},
+        }[signal.detected_signal]
+
+        if set(signal.polarity_evidence) != expected_polarity_keys:
+            raise ValueError(
+                f"Invalid polarity evidence keys for {signal.node_id}: "
+                f"expected={expected_polarity_keys}, "
+                f"actual={set(signal.polarity_evidence)}"
+            )
+
+        aligned_polarity_evidence = {}
+
+        for polarity, polarity_span in signal.polarity_evidence.items():
+            aligned_span = align_evidence_to_user_message(
+                polarity_span,
+                user_message,
+            )
+
+            if aligned_span is None:
+                raise ValueError(
+                    f"Polarity evidence cannot be aligned to user message "
+                    f"for {signal.node_id} ({polarity}): {polarity_span!r}"
+                )
+
+            aligned_polarity_evidence[polarity] = aligned_span
+
         corrected_signals.append(
-            signal.model_copy(update={"evidence": evidence})
+            signal.model_copy(
+                update={
+                    "evidence": evidence,
+                    "polarity_evidence": aligned_polarity_evidence,
+                }
+            )
         )
 
     return result.model_copy(update={"active_signals": corrected_signals})
@@ -651,7 +685,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                 f"{build_selected_node_context([node_id])}\n\n"
                 "=== EVIDENCE CANDIDATES ===\n"
                 + "\n".join(
-                    f"[{index}] {candidate}"
+                    f"[{index}] {candidate[2]}"
                     for index, candidate in enumerate(evidence_candidates)
                 )
                 + "\n\n"
@@ -783,6 +817,39 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     )
                     continue
 
+                polarity_indices = {
+                    "positive": signal.positive_evidence_index,
+                    "negative": signal.negative_evidence_index,
+                }
+
+                invalid_polarity_index = next(
+                    (
+                        index
+                        for index in polarity_indices.values()
+                        if index is not None
+                        and not 0 <= index < len(evidence_candidates)
+                    ),
+                    None,
+                )
+
+                if invalid_polarity_index is not None:
+                    node_last_error = ValueError(
+                        f"Invalid polarity evidence index for {node_id}: "
+                        f"{invalid_polarity_index}"
+                    )
+                    logger.warning(
+                        "[Extractor] Invalid polarity evidence index for %s: %s",
+                        node_id,
+                        invalid_polarity_index,
+                    )
+                    continue
+
+                polarity_evidence = {
+                    polarity: evidence_candidates[index][2]
+                    for polarity, index in polarity_indices.items()
+                    if index is not None
+                }
+
                 evidence = evidence_candidates[signal.evidence_index][2]
 
                 logger.info(
@@ -796,6 +863,7 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                     "node_id": signal.node_id,
                     "detected_signal": signal.detected_signal,
                     "evidence": evidence,
+                    "polarity_evidence": polarity_evidence,
                 }
                 break
 
