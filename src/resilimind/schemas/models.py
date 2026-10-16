@@ -45,17 +45,78 @@ class ResolvedSignal(BaseModel):
     )
     supported: bool = Field(
         ...,
-        description="Whether the target node is explicitly supported by the user message."
+        description="Whether the target node is explicitly supported."
     )
     detected_signal: Literal["positive", "negative", "mixed"] | None = Field(
         default=None,
-        description="Polarity of the target node when supported."
+        description="Polarity of the target node."
     )
     evidence_index: int | None = Field(
         default=None,
         ge=0,
-        description="Index of the evidence candidate when supported."
+        description="Candidate index supporting the target node."
     )
+    positive_evidence_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="Candidate index supporting positive polarity."
+    )
+    negative_evidence_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="Candidate index supporting negative polarity."
+    )
+
+    @model_validator(mode="after")
+    def validate_supported_signal(self):
+        indices = (
+            self.evidence_index,
+            self.positive_evidence_index,
+            self.negative_evidence_index,
+        )
+
+        if not self.supported:
+            if self.detected_signal is not None or any(
+                index is not None for index in indices
+            ):
+                raise ValueError(
+                    "Unsupported signals must have null polarity and evidence indices"
+                )
+            return self
+
+        if self.detected_signal is None or self.evidence_index is None:
+            raise ValueError(
+                "Supported signals require polarity and node evidence"
+            )
+
+        if self.detected_signal == "positive":
+            if (
+                self.positive_evidence_index is None
+                or self.negative_evidence_index is not None
+            ):
+                raise ValueError(
+                    "Positive polarity requires only positive evidence"
+                )
+
+        elif self.detected_signal == "negative":
+            if (
+                self.negative_evidence_index is None
+                or self.positive_evidence_index is not None
+            ):
+                raise ValueError(
+                    "Negative polarity requires only negative evidence"
+                )
+
+        elif self.detected_signal == "mixed":
+            if (
+                self.positive_evidence_index is None
+                or self.negative_evidence_index is None
+            ):
+                raise ValueError(
+                    "Mixed polarity requires both positive and negative evidence"
+                )
+
+        return self
 
     @model_validator(mode="after")
     def validate_supported_signal(self):
@@ -91,15 +152,22 @@ class ActiveSignal(BaseModel):
     """
     node_id: NodeId = Field(
         ...,
-        description="Exact node ID from the knowledge graph. Do not modify, shorten, or invent node IDs."
+        description="Exact node ID from the knowledge graph."
     )
     detected_signal: Literal["positive", "negative", "mixed"] = Field(
-        ..., 
-        description="The emotional or situational polarity detected in the user's statement."
+        ...,
+        description="Polarity of the target concept in the user's message."
     )
     evidence: str = Field(
-        ..., 
-        description="Exact phrase or substring from user message supporting this signal."
+        ...,
+        description="Exact substring supporting the target node."
+    )
+    polarity_evidence: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Exact source substrings supporting positive and/or negative "
+            "polarity. Keys are positive and negative."
+        ),
     )
 
 class ExtractionOutput(BaseModel):
