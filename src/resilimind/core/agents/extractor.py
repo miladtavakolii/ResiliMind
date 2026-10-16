@@ -757,6 +757,11 @@ def extractor_node(state: AgentState) -> dict[str, Any]:
                         "For mixed polarity, both indices must be valid and "
                         "must support opposite polarities of the SAME node.\n"
                         "Never return mixed when only one polarity is supported.\n"
+                        "Do not return mixed unless both polarity evidence indices are valid.\n"
+                        "If only positive evidence is supported, return positive with its index.\n"
+                        "If only negative evidence is supported, return negative with its index.\n"
+                        "If the target node is unsupported, return supported=false and null indices.\n"
+                        "Never use evidence_index as a substitute for both mixed-polarity indices.\n"
                     )
 
                 resolver = llm_engine.get_signal_resolver_runner(

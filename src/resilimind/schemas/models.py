@@ -57,12 +57,12 @@ class ResolvedSignal(BaseModel):
         description="Candidate index supporting the target node."
     )
     positive_evidence_index: int | None = Field(
-        ...,
+        default=None,
         ge=0,
         description="Candidate index supporting positive polarity; null when not applicable."
     )
     negative_evidence_index: int | None = Field(
-        ...,
+        default=None,
         ge=0,
         description="Candidate index supporting negative polarity; null when not applicable."
     )
@@ -131,15 +131,6 @@ class ResolvedSignal(BaseModel):
                         "Negative polarity requires negative evidence"
                     )
                 self.negative_evidence_index = self.evidence_index
-
-        elif self.detected_signal == "mixed":
-            if (
-                self.positive_evidence_index is None
-                or self.negative_evidence_index is None
-            ):
-                raise ValueError(
-                    "Mixed polarity requires both positive and negative evidence indices"
-                )
 
         if self.evidence_index is None:
             if self.detected_signal == "positive":
