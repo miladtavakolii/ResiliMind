@@ -30,11 +30,6 @@ RULES
 12. Do NOT determine polarity.
 13. Do NOT produce evidence.
 
-Explicit exclusions are hard semantic boundaries.
-In overlapping domains, select each node only when its own
-definition is independently supported by the message.
-Do not infer an additional node from the same generic phrase.
-
 CANDIDATE REVIEW
 
 For every Candidate Node in the lexical hints:
