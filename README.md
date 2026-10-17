@@ -1,1054 +1,356 @@
 # 🌱 ResiliMind
 
-### A Knowledge-Graph-Grounded, Stateful LLM Agent for Psychological Resilience Support
+**A Persian-first, knowledge-graph-grounded LLM agent for personalized resilience support**
 
-**ResiliMind** is a research-oriented, Persian-first conversational AI system designed to analyze user messages through a structured resilience framework, maintain longitudinal user context, and generate grounded, personalized responses.
+ResiliMind is a research prototype that turns Persian conversations into structured resilience signals, evidence-aware assessments, and context-grounded responses. Rather than using one LLM call as the entire application, it orchestrates specialized stages with **LangGraph**, validates outputs with **Pydantic**, grounds analysis in a curated **NetworkX knowledge graph**, and stores conversation state and longitudinal resilience history in **SQLite**.
 
-The system combines:
+> [!WARNING]
+> **Research prototype — not clinically validated.** ResiliMind is not a medical device, diagnostic system, crisis service, or replacement for licensed mental-health care. Its scores and responses are experimental outputs and must not be interpreted as clinical measurements or professional advice.
 
-* Large Language Models (LLMs)
-* LangGraph-based stateful workflows
-* Structured Pydantic outputs
-* A curated NetworkX Knowledge Graph
-* Evidence-aware resilience assessment
-* Deterministic score and status computation
-* Short-term conversational memory
-* Long-term temporal resilience history
-* Safety-first routing
-* A modular Streamlit interface
-* Local LLM inference through Ollama
+## At a glance
 
-Rather than treating an LLM as a standalone chatbot, ResiliMind uses the model as one component inside a controlled multi-stage decision pipeline.
+- **Persian-first** conversational interface with RTL styling.
+- **Stateful, multi-stage workflow** with dedicated safety, extraction, retrieval, assessment, clarification, and response stages.
+- **Evidence-linked extraction** with source spans and polarity-specific evidence.
+- **Knowledge-graph grounding** across 6 resilience domains (13 nodes and 15 directed edges in the bundled graph).
+- **Deterministic score aggregation and status thresholds** after LLM-generated rubric values.
+- **Longitudinal structured memory** using LangGraph SQLite checkpoints and a separate SQLite resilience timeline.
+- **Evaluation toolkit** for synthetic scenario generation, Persian conversation rendering, dataset validation, benchmark execution, metric aggregation, failure analysis, and LLM-as-a-judge response scoring.
+- **Local inference by default** through Ollama; Google Gemini is used by optional evaluation dataset-rendering and response-judging steps.
 
-> **Research Prototype Disclaimer**
->
-> ResiliMind is an experimental AI-assisted resilience support system. It is **not** a medical device, diagnostic system, psychotherapy replacement, or clinically validated mental-health assessment tool. Its outputs should not be interpreted as professional psychological or medical advice.
+## Architecture
 
----
+The current workflow is implemented in <code>src/resilimind/core/workflow.py</code> and uses individual agent modules under <code>src/resilimind/core/agents/</code>.
 
-## ✨ Why ResiliMind?
-
-Most LLM-based conversational systems follow a relatively simple pattern:
-
-```text
-User Message
-     ↓
-LLM
-     ↓
-Response
-```
-
-This approach makes it difficult to control reasoning, preserve structured state, maintain longitudinal context, or ensure that generated responses are grounded in an explicit knowledge representation.
-
-ResiliMind follows a different design philosophy:
-
-```text
-User Message
-     ↓
-Safety Gate
-     ↓
-Signal Extraction
-     ↓
-Knowledge Graph Retrieval
-     ↓
-Evidence-Based Assessment
-     ↓
-Confidence / Ambiguity Routing
-     ├── Clarification
-     └── Advice
-     ↓
-Persistent Memory
-```
-
-The core idea is to combine **LLM flexibility** with **structured state, explicit knowledge, deterministic logic, and persistent memory**.
-
----
-
-# 🧠 Core Concepts
-
-ResiliMind is built around five major concepts.
-
-## 1. Structured Signal Extraction
-
-The first language-model stage identifies which resilience-related concepts are expressed in the user's message.
-
-Each extracted signal contains:
-
-* `node_id`
-* `detected_signal`
-* `evidence`
-
-For example:
-
-```json
-{
-  "node_id": "IND_PER_01",
-  "detected_signal": "negative",
-  "evidence": "دیگه از پس این شرایط برنمیام"
-}
-```
-
-The evidence is explicitly linked to an exact substring of the user's message rather than relying exclusively on an abstract LLM interpretation.
-
----
-
-## 2. Knowledge Graph Grounding
-
-Instead of asking the LLM to reason entirely from its parametric knowledge, ResiliMind provides a curated resilience Knowledge Graph.
-
-The graph is implemented with `NetworkX` and contains structured information such as:
-
-* resilience nodes
-* domains
-* Persian and English labels
-* descriptions
-* positive and negative cues
-* status definitions
-* intervention suggestions
-* cross-domain relationships
-
-The graph currently covers six major resilience domains:
-
-| Domain                          | Description                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| Personal Resilience             | Self-efficacy, hardiness, emotional regulation, goals and future orientation    |
-| Political Resilience            | Cognitive immunity, political agency, resistance to polarization and alienation |
-| Economic Resilience             | Financial adaptation, career resilience and economic stress                     |
-| Physical Resilience             | Sleep, nutrition, somatic responses and physical coping                         |
-| Social Resilience               | Family cohesion, peer support and interpersonal resilience                      |
-| Spiritual / Cultural Resilience | Meaning-making, identity and cultural connectedness                             |
-
-The graph acts as a structured knowledge layer between extraction and generation.
-
-```text
-User Message
-     │
-     ▼
-Signal Extraction
-     │
-     ▼
-Active Graph Nodes
-     │
-     ▼
-NetworkX Retrieval
-     │
-     ├── Definitions
-     ├── Status Levels
-     ├── Interventions
-     └── Cross-Domain Relationships
-     │
-     ▼
-LLM Assessment / Advice
-```
-
----
-
-# 🛡️ Safety-First Architecture
-
-Safety is treated as a dedicated stage rather than something delegated entirely to the final conversational model.
-
-Every user message first passes through a **Safety Gate**.
-
-```text
-                    User Message
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │  Safety Gate │
-                  └──────┬───────┘
-                         │
-              ┌──────────┴──────────┐
-              │                     │
-          High Risk               Safe
-              │                     │
-              ▼                     ▼
-     Emergency Response         Extractor
-```
-
-The safety layer combines:
-
-1. Fast heuristic screening
-2. LLM-based structured classification
-3. Explicit high-risk routing
-
-The safety model distinguishes between categories such as:
-
-* `SAFE`
-* `SELF_HARM`
-* `VIOLENCE`
-* `SEVERE_ABUSE`
-
-The system is intentionally conservative around ambiguous high-risk expressions.
-
-## Safety failure handling
-
-Safety classification is treated as a gate before normal resilience analysis.
-
-This prevents the regular Extractor → Retriever → Assessor → Advisor path from being used for messages that may require a dedicated safety response.
-
-> ResiliMind's safety layer is an architectural safeguard, not a clinically validated crisis-detection system.
-
----
-
-# 🧩 Multi-Agent Workflow
-
-The core workflow is implemented with **LangGraph**.
-
-```mermaid
+~~~mermaid
 flowchart TD
+    A[Persian user message] --> B[Safety classifier]
+    B -->|HIGH_RISK| C[Emergency response]
+    B -->|UNAVAILABLE / invalid| D[Service unavailable]
+    B -->|SAFE| E[Extractor]
+    E --> F[Knowledge graph retriever]
+    F --> G[Assessor]
+    G --> H{Disambiguation needed, no assessments, or low confidence?}
+    H -->|Yes| I[Questioner]
+    H -->|No| J[Advisor]
+    C --> K[Final response]
+    D --> K
+    I --> K
+    J --> K
+    J -. reads .-> L[Longitudinal resilience history]
+    G -. assessments persisted by service layer .-> L
+~~~
+
+### Workflow stages
+
+1. **Safety classifier** normalizes Persian text, applies high-recall phrase screening, and performs structured LLM classification. The safety status is tri-state: <code>SAFE</code>, <code>HIGH_RISK</code>, or <code>UNAVAILABLE</code>. The workflow routes high-risk inputs to a dedicated response and fails closed to a service-unavailable response if the safety subsystem is unavailable or returns an invalid status.
+2. **Extractor** selects relevant knowledge-graph nodes and resolves them into structured signals. A signal records the node ID, positive/negative/mixed polarity, a source evidence substring and offsets when available, plus polarity-specific evidence where applicable.
+3. **Graph retriever** builds context from the selected nodes and their graph information, including semantic boundaries, exclusions, cues, status definitions, interventions, and relationships.
+4. **Assessor** validates that assessments correspond to active signals and graph nodes, then generates a structured four-dimension rubric and reasoning. Python derives the total score and status from the rubric.
+5. **Conditional router** sends ambiguous inputs, missing assessments, or low-confidence cases to the **Questioner**. Other assessed cases go to the **Advisor**.
+6. **Advisor** combines the current message, conversation history, graph context, and the user's historical resilience timeline to generate a personalized response.
+7. **Persistence** stores LangGraph conversation checkpoints and writes new resilience assessments to a separate history table through the service layer.
+
+## Knowledge graph
+
+The bundled graph is stored in <code>src/resilimind/assets/final_resilience_graph.json</code> and loaded as a directed NetworkX graph. It currently contains **13 nodes and 15 directed edges** across six domains:
+
+| Domain | Nodes |
+| --- | ---: |
+| Personal resilience | 3 |
+| Political resilience | 2 |
+| Economic resilience | 2 |
+| Physical resilience | 2 |
+| Social resilience | 2 |
+| Spiritual / cultural resilience | 2 |
+| **Total** | **13** |
+
+Each node provides domain and bilingual labels, a description, semantic boundary, polarity cues, candidate keywords, status-level descriptions, and intervention guidance. Edges represent cross-domain relationships. The graph provides explicit grounding for extraction, assessment, and response generation; it is not an external graph database.
+
+## Assessment and routing
 
-    A[User Message] --> B[Safety Classifier]
+### Discrete evidence rubric
 
-    B -->|HIGH_RISK| C[Emergency Response]
-    B -->|SAFE| D[Extractor]
+The LLM supplies four constrained rubric values. The current schema uses **discrete allowed values**, not arbitrary scores from 0 to 25:
 
-    D --> E[Knowledge Graph Retriever]
-    E --> F[Assessor]
+| Dimension | Allowed values | Higher values indicate |
+| --- | --- | --- |
+| Severity | 8, 16, 22 | Less severe distress |
+| Frequency | 8, 16, 22 | Less frequent / more isolated difficulty |
+| Functionality | 6, 12, 18, 24 | Less functional impairment |
+| Coping | 8, 16, 24 | Stronger coping |
 
-    F -->|Ambiguous / Low Confidence| G[Questioner]
-    F -->|Confident| H[Advisor]
+The application sums the dimensions in Python and derives the status:
 
-    C --> I[END]
-    G --> I
-    H --> I
-```
+| Total score | Status |
+| --- | --- |
+| 70 and above | <code>GREEN</code> |
+| 40–69 | <code>YELLOW</code> |
+| Below 40 | <code>RED</code> |
 
-## Agent responsibilities
+Because the rubric uses discrete values, the attainable total is not a continuous 0–100 scale. The score and status are **heuristic indicators designed for this prototype**, not validated psychometric measures.
 
-### Safety Classifier
+### Confidence-aware routing
 
-Determines whether the user message should enter the normal resilience pipeline or the emergency-response path.
+The current composite confidence implementation combines:
 
-### Extractor
+- 50% LLM-reported assessment confidence
+- 30% evidence-quality heuristic
+- 20% consistency between polarity evidence and graph cues
 
-Identifies active resilience nodes and produces structured evidence.
+The default routing threshold is <code>0.70</code> and can be changed with <code>RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD</code>. This composite is a **routing heuristic, not a calibrated probability**.
 
-### Graph Retriever
+## Memory and persistence
 
-Retrieves the relevant graph context for the extracted nodes.
+ResiliMind keeps conversational state separate from longitudinal assessment history:
 
-### Assessor
+- **Conversation/checkpoint memory:** LangGraph's SQLite checkpointer stores workflow state and chat messages in <code>data/checkpoints.db</code>.
+- **Longitudinal structured memory:** <code>data/resilimind.db</code> stores user records and timestamped resilience logs, including node, category, status, score, confidence, and reasoning.
+- **Advisor context:** past assessments for each node are formatted as a chronological timeline and supplied alongside the current graph context.
 
-Evaluates the activated resilience dimensions using:
+This implementation supports temporal tracking of structured resilience assessments. It does **not** yet claim to provide a fully consolidated semantic-memory engine that automatically turns all prior dialogue into validated abstract memories.
 
-* extracted evidence
-* signal polarity
-* current user message
-* graph context
+## Latest evaluation snapshot
 
-### Questioner
+The following figures summarize the evaluation artifacts supplied for the **2026-10-17 local benchmark snapshot**: **100 synthetic cases, 120 Persian conversation turns, and 100/100 cases completing execution**. The reported predictions identify the dataset as <code>v1</code>. These values are a snapshot of one configuration, not a claim of generalization to real-world users.
 
-Handles ambiguity and insufficient confidence by asking a targeted clarification question instead of forcing an assessment.
+| Component | Metric | Result |
+| --- | --- | ---: |
+| Binary safety gate | Precision / recall / F1 | **1.000 / 1.000 / 1.000** |
+| Risk-category classification | Accuracy / macro-F1 | **99.0% / 93.1%** |
+| Signal/node detection | Macro case-level F1 | **92.4%** |
+| Signal/node detection | Micro precision / recall / F1 | **86.3% / 93.5% / 89.8%** |
+| Polarity classification | Accuracy | **85.1%** |
+| Evidence localization | Substring match | **84.7%** |
+| Evidence localization | Exact match / exact-span match | **3.3% / 3.3%** |
+| Evidence localization | Token F1 | **47.3%** |
+| Assessment | Mean MAE / mean RMSE | **2.32 / 4.02 points** |
+| Assessment | Coverage | **94.0%** |
+| Assessment status | Accuracy / macro-F1 | **80.9% / 81.5%** |
+| Conditional routing | Accuracy / macro-F1 | **96.0% / 94.4%** |
+| Questioner routing | Recall | **80.0%** |
+| Response quality (LLM judge) | Mean overall score | **9.56 / 10** |
+| Execution | Successful cases | **100 / 100** |
 
-### Advisor
+The response judge's mean dimension scores were empathy **9.64**, relevance **9.59**, safety **9.81**, actionability **9.48**, consistency **9.68**, and hallucination handling **9.63** (out of 10).
 
-Generates a personalized response using:
+### How to interpret these results
 
-* current graph context
-* current assessments
-* historical resilience trajectory
-* conversational context
+- The binary safety metrics represent **10 high-risk and 90 safe cases**. The risk-category classifier made one category error: a violence case was classified as self-harm. A perfect result on this small high-risk subset is not evidence of validated real-world crisis detection.
+- Node detection is stronger than evidence localization. Despite an 84.7% substring-match result, exact evidence/span match is only 3.3% and token F1 is 47.3%; the extractor still needs to identify more precise supporting spans.
+- Polarity accuracy is 85.1%, and assessment status accuracy is 80.9%. These remain meaningful error sources for downstream personalization and should not be hidden by the higher routing and response-judge averages.
+- The response result is produced by an **LLM-as-a-judge**, not independent human raters. Judge scores can be model-dependent and should be interpreted alongside qualitative review.
+- The report lists 58 evaluator-detected failure events across 37 cases. These are **metric mismatches**, not benchmark execution crashes; the benchmark itself completed all 100 cases.
 
----
+### Evaluation methodology
 
-# 📊 Evidence-Based Resilience Scoring
+The evaluation package is separate from runtime agents. It includes:
 
-The Assessor does not directly generate a final `0–100` score or a `GREEN/YELLOW/RED` status.
+- **Scenario generation:** creates seeded latent synthetic scenarios with target safety labels, active signals, rubric profiles, expected routing, and response criteria.
+- **Persian rendering and evidence audit:** renders scenarios into Persian user messages and validates the rendered evidence against the graph and gold annotations.
+- **Dataset validation:** checks schema and node references before evaluation.
+- **Benchmark runner:** executes each case turn-by-turn through the LangGraph workflow and records predictions, a run manifest, environment metadata, and logs.
+- **Deterministic evaluators:** measure safety, extraction, assessment, and routing.
+- **LLM-as-a-judge response evaluator:** scores response empathy, relevance, safety, actionability, consistency, and hallucination handling.
+- **Reporting and error analysis:** aggregates metrics and writes per-case results, a failure CSV, and a final JSON report.
 
-Instead, the LLM evaluates four independent dimensions.
+Evaluation datasets, runtime databases, and result artifacts are currently excluded by <code>.gitignore</code>. Consequently, the latest figures above are documented benchmark results, but the exact <code>v1</code> dataset and run outputs are not distributed in this repository. Reproducing the same numbers requires the matching dataset, code/model configuration, and judge configuration.
 
-Each dimension is scored from `0` to `25`:
+## Installation
 
-| Dimension     | 0                              | 25                       |
-| ------------- | ------------------------------ | ------------------------ |
-| Severity      | Severe / overwhelming distress | Mild or no distress      |
-| Frequency     | Constant / chronic             | Rare / isolated          |
-| Functionality | Severe impairment              | Fully functional         |
-| Coping        | No coping / surrender          | Strong coping mechanisms |
+### Requirements
 
-The final score is calculated deterministically:
+- Python **3.13+**
+- [uv](https://docs.astral.sh/uv/)
+- [Ollama](https://ollama.com/)
+- Sufficient resources for the configured local model
 
-```text
-Total Score =
-    Severity
-  + Frequency
-  + Functionality
-  + Coping
-```
+### Run the application
 
-The resulting resilience status is then derived in Python:
-
-```text
-70–100  → GREEN
-40–69   → YELLOW
-0–39    → RED
-```
-
-This separation is deliberate:
-
-```text
-LLM
- ↓
-Evidence Dimensions
- ↓
-Python
- ↓
-Total Score
- ↓
-Status
-```
-
-This reduces the amount of business logic delegated to the LLM and makes score aggregation reproducible.
-
----
-
-# 🎯 Confidence and Routing
-
-The system does not rely exclusively on the confidence value reported by the LLM.
-
-A composite confidence heuristic combines:
-
-```text
-30% → LLM self-reported confidence
-30% → Evidence density
-40% → Logical consistency
-```
-
-The resulting confidence is used for workflow routing.
-
-```text
-Assessment
-    │
-    ▼
-Composite Confidence
-    │
-    ├── < 0.70 ──→ Questioner
-    │
-    └── ≥ 0.70 ──→ Advisor
-```
-
-The logical-consistency component considers the relationship between:
-
-* extracted signal polarity
-* assessed resilience status
-
-The confidence value should be understood as a **heuristic routing signal**, not a statistically calibrated probability.
-
----
-
-# 🧠 Memory Architecture
-
-ResiliMind uses multiple forms of state and memory.
-
-## 1. LangGraph Conversational Memory
-
-LangGraph maintains the current conversational state and message history.
-
-The state contains information such as:
-
-```text
-user_id
-user_message
-safety_status
-safety_flag
-active_nodes
-active_signals
-subgraph_context
-assessments
-requires_disambiguation
-final_response
-messages
-```
-
-This allows individual agents to operate on a shared state instead of maintaining isolated context.
-
----
-
-## 2. Persistent Checkpoint Memory
-
-The LangGraph execution state is persisted using SQLite checkpointing.
-
-This allows the workflow to retain conversational state across interactions.
-
----
-
-## 3. Long-Term Resilience History
-
-In addition to conversation history, ResiliMind stores resilience assessments in a separate SQLite database.
-
-Historical assessments can be represented as:
-
-```text
-Node: IND_PER_01
-
-[2026-08-01] RED(25)
-        ↓
-[2026-08-04] YELLOW(52)
-        ↓
-[2026-08-09] YELLOW(63)
-        ↓
-[2026-08-13] GREEN(74)
-```
-
-The Advisor can use this historical trajectory when generating responses.
-
-This enables longitudinal context beyond the current chat message.
-
-### Current memory model
-
-The project currently focuses on **temporal structured resilience history** rather than a fully consolidated semantic-memory engine.
-
-A future direction is to derive higher-level memories such as:
-
-* recurring problems
-* persistent patterns
-* improvement trends
-* worsening trends
-* repeated coping mechanisms
-* intervention outcomes
-* user preferences
-
----
-
-# 🔗 Knowledge Graph Design
-
-The resilience graph is stored as a structured JSON asset and loaded into a `NetworkX.DiGraph`.
-
-Each node can contain:
-
-```text
-name_fa
-name_en
-domain
-domain_fa
-description
-cues
-status_levels
-interventions
-```
-
-Cross-domain relationships are represented using directed graph edges.
-
-Example conceptual structure:
-
-```text
-Economic Stress
-       │
-       ├───────────────┐
-       ▼               ▼
-Emotional Regulation   Self-Efficacy
-       │
-       ▼
-Social Functioning
-```
-
-The Retriever converts the relevant graph information into structured textual context for the language model.
-
-This provides a lightweight form of graph-grounded generation without requiring an external graph database.
-
----
-
-# 🧱 Structured Output Architecture
-
-ResiliMind uses Pydantic models to constrain model outputs.
-
-Key schemas include:
-
-```text
-SafetyOutput
-ActiveSignal
-ExtractionOutput
-EvidenceScores
-NodeAssessment
-AssessmentOutput
-ProcessResult
-```
-
-For example, an extracted signal is constrained to:
-
-```text
-positive
-negative
-mixed
-```
-
-and each score dimension is constrained to:
-
-```text
-0 ≤ score ≤ 25
-```
-
-This is preferable to relying on free-form JSON parsing or unconstrained natural-language responses.
-
----
-
-# 🤖 Local LLM Architecture
-
-ResiliMind uses Ollama for local model inference.
-
-The configured default model is:
-
-```text
-gemma4:e2b
-```
-
-The LLM layer is encapsulated inside `LLMEngine`.
-
-The engine provides specialized model instances for:
-
-```text
-Safety
-Extractor
-Assessor
-Conversation
-```
-
-Task-specific temperatures are used to separate deterministic extraction/classification behavior from more generative conversational behavior.
-
-The LLM engine also caches model instances to avoid unnecessary repeated initialization.
-
----
-
-# 🔧 Centralized Configuration
-
-Configuration is managed through Pydantic Settings.
-
-The following parameters can be configured via environment variables or `.env`:
-
-```env
-RESILIMIND_LLM_MODEL=gemma4:e2b
-RESILIMIND_LLM_TEMPERATURE=0.6
-OLLAMA_BASE_URL=http://localhost:11434
-DATA_DIR=data
-```
-
-## Configuration
-
-| Variable                     | Default                  | Description                               |
-| ---------------------------- | ------------------------ | ----------------------------------------- |
-| `RESILIMIND_LLM_MODEL`       | `gemma4:e2b`             | Ollama model used by ResiliMind           |
-| `RESILIMIND_LLM_TEMPERATURE` | `0.6`                    | Temperature for conversational generation |
-| `OLLAMA_BASE_URL`            | `http://localhost:11434` | Ollama API endpoint                       |
-| `DATA_DIR`                   | `data`                   | Runtime directory for SQLite databases    |
-
-The centralized configuration layer is also responsible for resolving:
-
-```text
-resilimind.db
-checkpoints.db
-```
-
----
-
-# 🖥️ User Interface
-
-The frontend is implemented with Streamlit.
-
-The application is designed primarily for Persian-language interaction and includes:
-
-* RTL interface
-* Authentication
-* Conversational chat
-* Resilience dashboard
-* Current resilience visualization
-* Historical resilience information
-* Evidence inspection
-* Confidence display
-* Interactive Plotly visualizations
-
-The UI is separated into dedicated modules:
-
-```text
-ui/
-├── auth.py
-├── chat.py
-├── dashboard.py
-└── styles.py
-```
-
-The application entry point is intentionally lightweight and delegates functionality to these components.
-
----
-
-# 🏗️ Project Structure
-
-```text
-ResiliMind/
-│
-├── pyproject.toml
-├── uv.lock
-├── .python-version
-├── README.md
-│
-└── src/
-    └── resilimind/
-        │
-        ├── app.py
-        │
-        ├── core/
-        │   ├── agents.py
-        │   ├── config.py
-        │   ├── database.py
-        │   ├── state.py
-        │   └── workflow.py
-        │
-        ├── graph/
-        │   ├── ingestion.py
-        │   └── retriever.py
-        │
-        ├── llm/
-        │   ├── engine.py
-        │   └── prompts.py
-        │
-        ├── schemas/
-        │   └── models.py
-        │
-        ├── services/
-        │   ├── memory_service.py
-        │   └── resilience_service.py
-        │
-        ├── ui/
-        │   ├── auth.py
-        │   ├── chat.py
-        │   ├── dashboard.py
-        │   └── styles.py
-        │
-        └── assets/
-            ├── final_resilience_graph.json
-            └── prompts/
-                ├── extractor.txt
-                ├── assessor.txt
-                ├── advisor.txt
-                ├── questioner.txt
-                ├── safety_classifier.txt
-                └── emergency_response.txt
-```
-
----
-
-# ⚙️ Technology Stack
-
-| Technology        | Role                                    |
-| ----------------- | --------------------------------------- |
-| Python 3.13+      | Application runtime                     |
-| LangGraph         | Stateful workflow orchestration         |
-| LangChain         | LLM integration and runnable pipelines  |
-| Ollama            | Local model serving                     |
-| Gemma             | Default local LLM                       |
-| NetworkX          | Knowledge Graph representation          |
-| Pydantic          | Structured validation and typed outputs |
-| Pydantic Settings | Environment-based configuration         |
-| SQLite            | User data and persistent workflow state |
-| Streamlit         | Web interface                           |
-| Plotly            | Interactive visualization               |
-| uv                | Dependency and environment management   |
-
----
-
-# 🚀 Installation
-
-## Prerequisites
-
-Make sure the following are installed:
-
-* Python `3.13+`
-* Git
-* `uv`
-* Ollama
-
----
-
-## 1. Clone the repository
-
-```bash
+~~~bash
 git clone https://github.com/miladtavakolii/ResiliMind.git
 cd ResiliMind
-```
 
----
-
-## 2. Install Python dependencies
-
-```bash
 uv sync
-```
-
-This creates and manages the project environment according to `pyproject.toml` and `uv.lock`.
-
----
-
-## 3. Start Ollama
-
-Make sure the Ollama service is running:
-
-```bash
-ollama serve
-```
-
----
-
-## 4. Pull the configured model
-
-The default configuration expects:
-
-```text
-gemma4:e2b
-```
-
-Pull it through Ollama:
-
-```bash
+cp .env.example .env
 ollama pull gemma4:e2b
-```
+~~~
 
----
+Make sure the Ollama service is running in another terminal:
 
-## 5. Optional: Configure environment variables
+~~~bash
+ollama serve
+~~~
 
-Create:
+Start the Streamlit app:
 
-```text
-.env
-```
-
-Example:
-
-```env
-RESILIMIND_LLM_MODEL=gemma4:e2b
-RESILIMIND_LLM_TEMPERATURE=0.6
-OLLAMA_BASE_URL=http://localhost:11434
-DATA_DIR=data
-```
-
----
-
-## 6. Run ResiliMind
-
-```bash
+~~~bash
 uv run streamlit run src/resilimind/app.py
-```
+~~~
 
-Or:
+The default configuration uses the local Ollama model <code>gemma4:e2b</code> at <code>http://localhost:11434</code>. Edit <code>.env</code> to override settings:
 
-```bash
-streamlit run src/resilimind/app.py
-```
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| <code>RESILIMIND_LLM_MODEL</code> | <code>gemma4:e2b</code> | Ollama model name |
+| <code>RESILIMIND_LLM_TEMPERATURE</code> | <code>0.6</code> | LLM temperature setting |
+| <code>OLLAMA_BASE_URL</code> | <code>http://localhost:11434</code> | Ollama endpoint |
+| <code>DATA_DIR</code> | <code>data</code> | Directory for SQLite databases |
+| <code>RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD</code> | <code>0.70</code> | Confidence threshold for advisor routing |
+| <code>LOG_LEVEL</code> | <code>INFO</code> | Application logging level |
+| <code>GEMINI_API_KEY</code> | — | Required for evaluation rendering and response judging, not for default local inference |
+| <code>GEMINI_MODEL</code> | Set in <code>.env</code> or renderer CLI | Gemini model for Persian scenario rendering |
+| <code>GEMINI_JUDGE_MODEL</code> | <code>gemini-3.5-flash-lite</code> | Gemini model used by response evaluation |
 
-The application will start locally through Streamlit.
+Do not commit real API keys or local user data.
 
----
+## Running the evaluation pipeline
 
-# 🔄 End-to-End Execution
+The default dataset path is <code>evaluation/datasets/v1/cases.jsonl</code>. The dataset and result folders are git-ignored, so create or obtain the dataset before running these commands.
 
-A typical message goes through the following process:
+### 1. Generate latent scenarios
 
-```text
-┌─────────────────────┐
-│    User Message     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│    Safety Gate      │
-└──────────┬──────────┘
-           │
-      ┌────┴─────┐
-      │          │
-      ▼          ▼
-   HIGH RISK    SAFE
-      │          │
-      ▼          ▼
- Emergency    Extractor
- Response        │
-                 ▼
-        Active Signals
-                 │
-                 ▼
-        Knowledge Graph
-                 │
-                 ▼
-             Assessor
-                 │
-          ┌──────┴──────┐
-          │             │
-       Ambiguous     Confident
-          │             │
-          ▼             ▼
-      Questioner       Advisor
-                        │
-                        ▼
-                 Final Response
-                        │
-                        ▼
-                Persistent Memory
-```
+~~~bash
+uv run python -m evaluation.generators.generator \
+  --count 100 \
+  --seed 42 \
+  --output evaluation/datasets/v1/scenarios.jsonl
+~~~
 
----
+### 2. Render scenarios into Persian conversations
 
-# 🧪 Assessment Pipeline
+Set <code>GEMINI_API_KEY</code> in <code>.env</code>, then render the scenarios:
 
-For each activated resilience node:
+~~~bash
+uv run python -m evaluation.generators.renderer \
+  --input evaluation/datasets/v1/scenarios.jsonl \
+  --output evaluation/datasets/v1/cases.jsonl \
+  --model gemini-2.5-flash
+~~~
 
-```text
-1. Extract evidence
-2. Identify signal polarity
-3. Retrieve graph context
-4. Evaluate four evidence dimensions
-5. Calculate deterministic total score
-6. Determine GREEN/YELLOW/RED status
-7. Calculate composite confidence
-8. Route to Questioner or Advisor
-9. Persist the assessment
-```
+### 3. Validate the dataset
 
-This creates a separation between:
+~~~bash
+uv run python -m evaluation.scripts.validate_dataset \
+  --dataset evaluation/datasets/v1/cases.jsonl
+~~~
 
-```text
-LLM Interpretation
-```
+### 4. Run the benchmark
 
-and
+~~~bash
+uv run python -m evaluation.runners.benchmark \
+  --dataset evaluation/datasets/v1/cases.jsonl \
+  --tag baseline
+~~~
 
-```text
-Deterministic Application Logic
-```
+The runner creates a timestamped directory under <code>evaluation/results/runs/</code> with <code>predictions.jsonl</code>, <code>run_manifest.json</code>, and <code>benchmark.log</code>. Use <code>--limit N</code> to run only the first N cases while debugging.
 
-which is one of the central design principles of the project.
+### 5. Evaluate the saved predictions
 
----
+Response evaluation is enabled by default and requires <code>GEMINI_API_KEY</code>. It uses the configured judge model:
 
-# 📈 Dashboard
+~~~bash
+uv run python -m evaluation.runners.evaluate \
+  --run-dir latest \
+  --dataset evaluation/datasets/v1/cases.jsonl
+~~~
 
-The dashboard is designed to provide a longitudinal overview of the user's resilience profile.
+The run directory receives <code>case_results.jsonl</code>, <code>failures.csv</code>, <code>evaluation_report.json</code>, and <code>evaluation.log</code>. To omit LLM-based response judging:
 
-It can expose information such as:
+~~~bash
+uv run python -m evaluation.runners.evaluate \
+  --run-dir latest \
+  --dataset evaluation/datasets/v1/cases.jsonl \
+  --skip-response-eval
+~~~
 
-* latest resilience status per node
-* aggregate domain scores
-* score trajectories
-* extracted evidence
-* polarity
-* historical assessments
-* confidence
-* reasoning
+Always keep the dataset version and source file consistent between benchmark generation and evaluation. Preserve the run manifest and hashes when comparing runs or preparing research results.
 
-Plotly is used for interactive visualization.
+## Project structure
 
-The dashboard is intended primarily as an exploratory research interface rather than a validated psychological measurement instrument.
+~~~text
+ResiliMind/
+├── src/resilimind/
+│   ├── app.py
+│   ├── core/
+│   │   ├── agents/
+│   │   │   ├── safety.py
+│   │   │   ├── extractor.py
+│   │   │   ├── retriever.py
+│   │   │   ├── assessor.py
+│   │   │   ├── responders.py
+│   │   │   └── text_utils.py
+│   │   ├── database/
+│   │   ├── config.py
+│   │   ├── state.py
+│   │   └── workflow.py
+│   ├── graph/
+│   │   ├── ingestion.py
+│   │   └── retriever.py
+│   ├── llm/
+│   ├── schemas/
+│   ├── services/
+│   │   ├── memory_service.py
+│   │   └── resilience_service.py
+│   ├── ui/
+│   │   ├── auth.py
+│   │   ├── chat.py
+│   │   ├── dashboard.py
+│   │   └── styles.py
+│   └── assets/
+│       └── final_resilience_graph.json
+├── evaluation/
+│   ├── generators/
+│   │   ├── generator/
+│   │   └── renderer/
+│   ├── evaluators/
+│   │   ├── safety.py
+│   │   ├── extraction.py
+│   │   ├── assessment.py
+│   │   ├── routing.py
+│   │   └── response.py
+│   ├── judges/
+│   ├── metrics/
+│   ├── reporting/
+│   ├── runners/
+│   │   ├── benchmark.py
+│   │   └── evaluate.py
+│   ├── schemas.py
+│   └── scripts/
+│       └── validate_dataset.py
+├── pyproject.toml
+├── uv.lock
+└── README.md
+~~~
 
----
+## Technology stack
 
-# 🔐 Data and Privacy
+| Technology | Role |
+| --- | --- |
+| Python 3.13+ | Application and evaluation runtime |
+| LangGraph | Stateful workflow orchestration and SQLite checkpointing |
+| LangChain | LLM integration |
+| Ollama / Gemma | Default local inference |
+| NetworkX | Directed resilience knowledge graph |
+| Pydantic / Pydantic Settings | Structured output schemas and configuration |
+| SQLite | Authentication, conversation checkpoints, and resilience history |
+| Streamlit | Persian conversational UI |
+| Plotly | Dashboard visualizations |
+| Google GenAI SDK | Optional scenario rendering and response judge |
+| uv | Dependency and environment management |
 
-ResiliMind is designed around local-first inference.
+## Research scope and limitations
 
-By default:
+ResiliMind is an experimental platform for studying knowledge-graph-grounded LLM agents, evidence-aware extraction, conditional routing, and longitudinal structured memory in Persian conversations.
 
-```text
-User
- ↓
-Streamlit
- ↓
-Local Python Application
- ↓
-Local Ollama
- ↓
-Local SQLite
-```
+Current limitations include the small synthetic benchmark, limited high-risk sample count, imperfect polarity and status predictions, low exact evidence-span match, model-dependent LLM-judge scores, and the absence of clinical validation. The evaluation results should be treated as a development snapshot rather than evidence of clinical safety or effectiveness. Future research should include independently reviewed annotations, stronger span-level evaluation, baseline and ablation comparisons, repeated runs, and turn-aligned evaluation of longitudinal changes.
 
-No external LLM API is required by the default architecture.
+## Author
 
-Persistent application data is stored locally through SQLite.
-
-The main runtime databases are:
-
-```text
-data/resilimind.db
-data/checkpoints.db
-```
-
-This architecture is particularly useful for experimentation involving sensitive conversational data because model inference can remain local.
-
-> Local inference does not automatically make an application secure. Authentication, password storage, access control, database permissions, transport security, and deployment configuration must still be handled appropriately for real-world use.
-
----
-
-# 🧩 Design Principles
-
-ResiliMind follows several architectural principles.
-
-## Structured over free-form
-
-LLMs are used to produce typed structures wherever possible.
-
-```text
-Natural Language
-      ↓
-Pydantic Schema
-      ↓
-Validated State
-```
-
----
-
-## Grounded over purely generative
-
-The Advisor does not operate exclusively on the current message.
-
-It receives:
-
-```text
-Current User Message
-+
-Graph Knowledge
-+
-Current Assessment
-+
-Historical Resilience Profile
-+
-Conversation Context
-```
+**Milad Tavakoli** · [GitHub](https://github.com/miladtavakolii)
 
 ---
 
-## Deterministic over unnecessary LLM decisions
+## Disclaimer
 
-Where a result can be computed reliably in code, the application does it in code.
-
-For example:
-
-```text
-Dimension Scores
-      ↓
-Python
-      ↓
-Total Score
-      ↓
-Status
-```
-
-rather than asking the LLM to independently generate the final status.
-
----
-
-## Safety before personalization
-
-High-risk messages are routed through a dedicated safety stage before normal resilience analysis.
-
----
-
-## Stateful rather than stateless
-
-The system maintains both:
-
-* conversational state
-* longitudinal resilience history
-
-This allows future responses to incorporate changes over time rather than treating each message as an isolated interaction.
-
----
-
-# 🔬 Research Motivation
-
-ResiliMind is also intended as an experimental platform for studying the intersection of:
-
-* Large Language Models
-* Agentic workflows
-* Knowledge Graphs
-* Semantic memory
-* Longitudinal user modeling
-* Structured reasoning
-* Human-AI interaction
-* Safety-aware conversational AI
-
-The project provides a practical foundation for investigating how external structured knowledge and persistent memory can constrain and improve LLM-based decision pipelines.
-
-A central research direction is the transition from:
-
-```text
-Raw Conversation History
-```
-
-towards:
-
-```text
-Structured + Temporal + Semantic Memory
-```
-
-where the system can represent not only what the user said, but also persistent patterns derived from repeated interactions.
-
----
-
-
-# 📚 Methodological Perspective
-
-ResiliMind can be viewed as a layered intelligent system:
-
-```text
-Layer 1 — Interaction
-Streamlit / Persian Conversational UI
-
-Layer 2 — Safety
-Risk detection and emergency routing
-
-Layer 3 — Semantic Extraction
-LLM-based signal detection
-
-Layer 4 — Knowledge
-Curated resilience Knowledge Graph
-
-Layer 5 — Assessment
-Evidence-based multidimensional scoring
-
-Layer 6 — Decision
-Confidence-aware conditional routing
-
-Layer 7 — Memory
-Conversation + longitudinal resilience history
-
-Layer 8 — Generation
-Grounded personalized response
-```
-
-This separation makes it possible to replace or improve individual components without redesigning the entire application.
-
----
-
-
-# 👨‍💻 Author
-
-**Milad Tavakoli**
-
-GitHub:
-https://github.com/miladtavakolii
-
-Repository:
-https://github.com/miladtavakolii/ResiliMind
-
----
-
-# ⭐ Acknowledgement
-
-ResiliMind is built using the open-source ecosystem around:
-
-* LangGraph
-* LangChain
-* Ollama
-* NetworkX
-* Pydantic
-* Streamlit
-* Plotly
-
-The project is intended as an experimental platform for studying structured, stateful, memory-aware LLM agents.
-
----
-
-# ⚖️ Disclaimer
-
-ResiliMind is an experimental research project.
-
-It does **not** diagnose mental-health conditions, provide professional psychotherapy, or replace licensed psychological or medical care.
-
-Any resilience score, status, recommendation, or generated response should be treated as an experimental AI output rather than a clinical assessment.
-
-In situations involving immediate danger, self-harm, violence, or other emergencies, users should seek appropriate emergency or professional assistance rather than relying on an AI system.
+ResiliMind does not diagnose mental-health conditions, offer professional psychotherapy, or replace licensed psychological or medical care. Do not rely on this experimental system for emergencies or immediate safety decisions. Seek qualified professional or emergency assistance when needed.
