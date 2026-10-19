@@ -13,13 +13,15 @@ class AppConfig(BaseSettings):
     Automatically loads variables from the environment or a .env file.
 
     Attributes:
-        RESILIMIND_LLM_MODEL (str): The specific LLM model name to use via Ollama.
+        RESILIMIND_LLM_PROVIDER (str): The active LLM provider (default: 'ollama').
+        RESILIMIND_LLM_MODEL (str): The specific LLM model name to use via the provider.
         RESILIMIND_LLM_TEMPERATURE (float): The temperature setting for conversational LLM responses.
         OLLAMA_BASE_URL (str): The base URL for the Ollama API connection.
         DATA_DIR (Path): The root directory for storing mutable runtime data (e.g., SQLite DBs).
         model_config (SettingsConfigDict): Pydantic settings configuration object.
     """
     # LLM Settings
+    RESILIMIND_LLM_PROVIDER: str = "ollama"
     RESILIMIND_LLM_MODEL: str = "gemma4:e2b"
     RESILIMIND_LLM_TEMPERATURE: float = 0.6
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -39,7 +41,12 @@ class AppConfig(BaseSettings):
     @model_validator(mode="after")
     def _log_config_initialization(self) -> Self:
         """Logs configuration details at INFO level upon successful initialization."""
-        logger.info("[Config] AppConfig successfully loaded with model '%s' and data directory '%s'.", self.RESILIMIND_LLM_MODEL, self.DATA_DIR)
+        logger.info(
+            "[Config] AppConfig successfully loaded (provider='%s', model='%s', data_dir='%s').",
+            self.RESILIMIND_LLM_PROVIDER,
+            self.RESILIMIND_LLM_MODEL,
+            self.DATA_DIR,
+        )
         return self
 
     @property
