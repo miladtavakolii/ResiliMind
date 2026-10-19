@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Optional
-from langchain_ollama import ChatOllama
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableSerializable
@@ -14,6 +14,8 @@ from ..schemas.models import (
     PolarityEvidenceIndexOutput,
 )
 from ..core.config import settings
+from .providers.base import BaseLLMProvider
+from .providers.factory import LLMProviderFactory
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -21,16 +23,19 @@ logger = logging.getLogger(__name__)
 
 class LLMEngine:
     """
-    True Singleton wrapper class for interacting with the local Gemma model via Ollama.
+    True Singleton facade class for orchestrating LLM interactions across ResiliMind.
 
     Manages the lifecycle of LLM instances to prevent unnecessary object instantiation,
-    memory leaks, and initialization overhead. It provides cached, task-specific runnable 
-    chains (e.g., extraction, assessment, safety) tailored with appropriate temperatures 
-    and structured output schemas. Configuration is dynamically loaded from environment settings.
+    memory leaks, and initialization overhead. It delegates LLM creation to a configured
+    BaseLLMProvider (resolved via LLMProviderFactory) and provides cached, task-specific
+    runnable chains (e.g., extraction, assessment, safety, conversational) tailored with
+    appropriate temperatures and structured output schemas.
 
     Attributes:
-        model_name (str): The name of the underlying Ollama model instance.
-        base_url (str): The endpoint URL for the Ollama service.
+        provider_name (str): The active LLM provider name (e.g. 'ollama', 'openai', 'gemini').
+        provider (BaseLLMProvider): The active provider instance.
+        model_name (str): The name of the underlying model instance.
+        base_url (str): The endpoint URL (for providers that use an HTTP endpoint).
         conversational_temp (float): Temperature parameter for the conversational LLM.
         is_initialized (bool): Flag indicating if the Singleton instance has been set up.
     """
@@ -55,30 +60,37 @@ class LLMEngine:
 
     def __init__(self) -> None:
         """
-        Initializes the LLMEngine variables using centralized environment settings. 
-        Safely prevents re-initialization if the Singleton instance has already been configured 
-        in a previous call.
+        Initializes the LLMEngine using centralized environment settings and the provider factory.
+        Safely prevents re-initialization if the Singleton instance has already been configured.
         """
         if not hasattr(self, 'is_initialized'):
+            self.provider_name: str = settings.RESILIMIND_LLM_PROVIDER
             self.model_name: str = settings.RESILIMIND_LLM_MODEL
             self.base_url: str = settings.OLLAMA_BASE_URL
             self.conversational_temp: float = settings.RESILIMIND_LLM_TEMPERATURE
             
-            # Lazy-loaded, cached LLM instances
+            # Instantiate provider via factory
+            self.provider: BaseLLMProvider = LLMProviderFactory.create(self.provider_name)
+            
+            # Lazy-loaded, cached LLM runnable instances
             self._extractor_llm: Optional[Any] = None
             self._assessor_llm: Optional[Any] = None
             self._safety_llm: Optional[Any] = None
-            self._conversational_llm: Optional[ChatOllama] = None
+            self._conversational_llm: Optional[BaseChatModel] = None
             self._node_selector_llm: Optional[Any] = None
             self._signal_resolver_llm: Optional[Any] = None
             self._polarity_evidence_llm: Optional[Any] = None
             self.is_initialized: bool = True
-            logger.info("[LLMEngine] Initialized engine with model '%s' at URL '%s'.", self.model_name, self.base_url)
+            logger.info(
+                "[LLMEngine] Initialized engine (provider='%s', model='%s').",
+                self.provider_name,
+                self.model_name,
+            )
 
     def get_node_selector_runner(self, system_prompt: str) -> RunnableSerializable[dict[str, Any], Any]:
         """Build and cache the LangChain runnable pipeline for candidate node selection.
 
-        Initializes a structured-output Ollama LLM configured with the `NodeSelectionOutput`
+        Initializes a structured-output LLM configured with the `NodeSelectionOutput`
         JSON schema and binds it to a chat prompt template accepting `user_message`.
 
         Args:
@@ -89,15 +101,11 @@ class LLMEngine:
                 node selection results.
         """
         if self._node_selector_llm is None:
-            self._node_selector_llm = ChatOllama(
-                model=self.model_name,
-                base_url=self.base_url,
+            self._node_selector_llm = self.provider.get_structured_model(
+                schema=NodeSelectionOutput,
                 temperature=0.0,
-                reasoning=False,
                 num_ctx=8192,
                 num_predict=512,
-            ).with_structured_output(
-                NodeSelectionOutput,
                 method="json_schema",
                 include_raw=True,
             )
@@ -111,7 +119,7 @@ class LLMEngine:
     def get_signal_resolver_runner(self, system_prompt: str) -> RunnableSerializable[dict[str, Any], Any]:
         """Build and cache the LangChain runnable pipeline for signal resolution.
 
-        Initializes a structured-output Ollama LLM configured with the `SignalResolutionOutput`
+        Initializes a structured-output LLM configured with the `SignalResolutionOutput`
         JSON schema and binds it to a two-part chat prompt template accepting `user_message`
         and `selected_nodes`.
 
@@ -123,15 +131,11 @@ class LLMEngine:
                 active signals with evidence spans and polarities.
         """
         if self._signal_resolver_llm is None:
-            self._signal_resolver_llm = ChatOllama(
-                model=self.model_name,
-                base_url=self.base_url,
+            self._signal_resolver_llm = self.provider.get_structured_model(
+                schema=SignalResolutionOutput,
                 temperature=0.0,
-                reasoning=False,
                 num_ctx=8192,
                 num_predict=1024,
-            ).with_structured_output(
-                SignalResolutionOutput,
                 method="json_schema",
                 include_raw=True,
             )
@@ -150,16 +154,13 @@ class LLMEngine:
         self,
         system_prompt: str,
     ) -> RunnableSerializable[dict[str, Any], Any]:
+        """Build and cache the LangChain runnable pipeline for polarity evidence index resolution."""
         if self._polarity_evidence_llm is None:
-            self._polarity_evidence_llm = ChatOllama(
-                model=self.model_name,
-                base_url=self.base_url,
+            self._polarity_evidence_llm = self.provider.get_structured_model(
+                schema=PolarityEvidenceIndexOutput,
                 temperature=0.0,
-                reasoning=False,
                 num_ctx=8192,
                 num_predict=256,
-            ).with_structured_output(
-                PolarityEvidenceIndexOutput,
                 method="json_schema",
                 include_raw=True,
             )
@@ -192,13 +193,12 @@ class LLMEngine:
         """
         if self._safety_llm is None:
             logger.debug("[LLMEngine] Initializing cached safety LLM runner (temp=0.0)...")
-            llm: ChatOllama = ChatOllama(
-                model=self.model_name, 
-                base_url=self.base_url, 
+            self._safety_llm = self.provider.get_structured_model(
+                schema=SafetyOutput,
                 temperature=0.0,
-                reasoning=False,
+                method="json_schema",
+                include_raw=True,
             )
-            self._safety_llm = llm.with_structured_output(SafetyOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -220,15 +220,14 @@ class LLMEngine:
         """
         if self._extractor_llm is None:
             logger.debug("[LLMEngine] Initializing cached extractor LLM runner (temp=0.0)...")
-            llm: ChatOllama = ChatOllama(
-                model=self.model_name, 
-                base_url=self.base_url, 
+            self._extractor_llm = self.provider.get_structured_model(
+                schema=ExtractionOutput,
                 temperature=0.0,
-                reasoning=False,
                 num_ctx=8192,
                 num_predict=1024,
+                method="json_schema",
+                include_raw=True,
             )
-            self._extractor_llm = llm.with_structured_output(ExtractionOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -239,8 +238,7 @@ class LLMEngine:
     def get_assessor_runner(self, system_prompt: str) -> Any:
         """
         Creates or retrieves a cached runnable chain for psychological resilience assessment.
-        Uses a low temperature (0.2) to allow slight analytical flexibility while maintaining 
-        strict schema compliance.
+        Uses a low temperature (0.0) to maintain strict schema compliance and reproducibility.
 
         Args:
             system_prompt (str): The system prompt instructions for graph-grounded assessment.
@@ -251,15 +249,14 @@ class LLMEngine:
         """
         if self._assessor_llm is None:
             logger.debug("[LLMEngine] Initializing cached assessor LLM runner (temp=0.0)...")
-            llm: ChatOllama = ChatOllama(
-                model=self.model_name, 
-                base_url=self.base_url, 
+            self._assessor_llm = self.provider.get_structured_model(
+                schema=AssessmentOutput,
                 temperature=0.0,
-                reasoning=False,
                 num_ctx=8192,
                 num_predict=2048,
+                method="json_schema",
+                include_raw=True,
             )
-            self._assessor_llm = llm.with_structured_output(AssessmentOutput, method="json_schema", include_raw=True)
             
         prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -267,22 +264,20 @@ class LLMEngine:
         ])
         return prompt | self._assessor_llm
 
-    def get_conversational_llm(self) -> ChatOllama:
+    def get_conversational_llm(self) -> BaseChatModel:
         """
-        Retrieves a cached ChatOllama instance tuned for natural, empathetic conversational responses.
+        Retrieves a cached BaseChatModel instance tuned for natural, empathetic conversational responses.
         Uses the temperature and model settings defined in the centralized environment configuration.
 
         Returns:
-            ChatOllama: An initialized Ollama LLM instance configured for conversational flow.
+            BaseChatModel: An initialized LLM instance configured for conversational flow.
         """
         if self._conversational_llm is None:
             logger.debug("[LLMEngine] Initializing cached conversational LLM instance (temp=%s)...", self.conversational_temp)
-            self._conversational_llm = ChatOllama(
-                model=self.model_name, 
-                base_url=self.base_url, 
+            self._conversational_llm = self.provider.get_chat_model(
                 temperature=self.conversational_temp,
                 num_predict=-1,
-                num_ctx=10240
+                num_ctx=10240,
             )
             
         return self._conversational_llm
