@@ -4,6 +4,7 @@ from typing import Any, Dict, Type
 from ...core.config import settings
 from .base import BaseLLMProvider
 from .ollama import OllamaProvider
+from .gemini import GeminiProvider
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class LLMProviderFactory:
 
     _registry: Dict[str, Type[BaseLLMProvider]] = {
         "ollama": OllamaProvider,
+        "gemini": GeminiProvider,
     }
 
     @classmethod
