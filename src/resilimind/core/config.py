@@ -25,6 +25,7 @@ class AppConfig(BaseSettings):
     RESILIMIND_LLM_MODEL: str = "gemma4:e2b"
     RESILIMIND_LLM_TEMPERATURE: float = 0.6
     OLLAMA_BASE_URL: str = "http://localhost:11434"
+    GEMINI_API_KEY: str | None = None
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: Path = Path("resilimind.log")
     RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD: float = 0.70
