@@ -15,17 +15,19 @@ class AppConfig(BaseSettings):
     Attributes:
         RESILIMIND_LLM_PROVIDER (str): The active LLM provider (default: 'ollama').
         RESILIMIND_LLM_MODEL (str): The specific LLM model name to use via the provider.
+        RESILIMIND_LLM_API_KEY (str | None): Unified API key for cloud providers.
+        RESILIMIND_LLM_BASE_URL (str | None): Unified base URL endpoint (e.g. for Ollama, vLLM, or reverse proxy).
         RESILIMIND_LLM_TEMPERATURE (float): The temperature setting for conversational LLM responses.
-        OLLAMA_BASE_URL (str): The base URL for the Ollama API connection.
         DATA_DIR (Path): The root directory for storing mutable runtime data (e.g., SQLite DBs).
         model_config (SettingsConfigDict): Pydantic settings configuration object.
     """
-    # LLM Settings
+    # Unified LLM Settings
     RESILIMIND_LLM_PROVIDER: str = "ollama"
     RESILIMIND_LLM_MODEL: str = "gemma4:e2b"
+    RESILIMIND_LLM_API_KEY: str | None = None
+    RESILIMIND_LLM_BASE_URL: str | None = None
     RESILIMIND_LLM_TEMPERATURE: float = 0.6
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    GEMINI_API_KEY: str | None = None
+
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: Path = Path("resilimind.log")
     RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD: float = 0.70

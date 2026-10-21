@@ -66,7 +66,7 @@ class LLMEngine:
         if not hasattr(self, 'is_initialized'):
             self.provider_name: str = settings.RESILIMIND_LLM_PROVIDER
             self.model_name: str = settings.RESILIMIND_LLM_MODEL
-            self.base_url: str = settings.OLLAMA_BASE_URL
+            self.base_url: str | None = settings.RESILIMIND_LLM_BASE_URL
             self.conversational_temp: float = settings.RESILIMIND_LLM_TEMPERATURE
             
             # Instantiate provider via factory

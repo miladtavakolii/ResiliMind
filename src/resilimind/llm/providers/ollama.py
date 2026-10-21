@@ -30,11 +30,15 @@ class OllamaProvider(BaseLLMProvider):
 
         Args:
             model_name: Name of the Ollama model (defaults to settings.RESILIMIND_LLM_MODEL).
-            base_url: Endpoint URL of the Ollama service (defaults to settings.OLLAMA_BASE_URL).
+            base_url: Endpoint URL of the Ollama service (defaults to settings.RESILIMIND_LLM_BASE_URL or 'http://localhost:11434').
             **kwargs: Extra parameters reserved for future extension.
         """
         self.model_name = model_name or settings.RESILIMIND_LLM_MODEL
-        self.base_url = base_url or settings.OLLAMA_BASE_URL
+        self.base_url = (
+            base_url
+            or settings.RESILIMIND_LLM_BASE_URL
+            or "http://localhost:11434"
+        )
         self.extra_kwargs = kwargs
         logger.info(
             "[OllamaProvider] Initialized with model '%s' at '%s'.",

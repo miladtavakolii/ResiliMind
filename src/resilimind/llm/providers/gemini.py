@@ -24,6 +24,7 @@ class GeminiProvider(BaseLLMProvider):
         self,
         model_name: str | None = None,
         api_key: str | None = None,
+        base_url: str | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -32,8 +33,8 @@ class GeminiProvider(BaseLLMProvider):
         Args:
             model_name: Name of the Gemini model. Defaults to settings.RESILIMIND_LLM_MODEL.
                 If set to Ollama's default ('gemma4:e2b'), falls back to 'gemini-2.5-flash'.
-            api_key: Google Gemini API key. Defaults to settings.GEMINI_API_KEY
-                or GEMINI_API_KEY / GOOGLE_API_KEY environment variables.
+            api_key: Google Gemini API key (defaults to settings.RESILIMIND_LLM_API_KEY).
+            base_url: Optional API endpoint base URL (defaults to settings.RESILIMIND_LLM_BASE_URL).
             **kwargs: Extra parameters reserved for future extension.
 
         Raises:
@@ -49,17 +50,13 @@ class GeminiProvider(BaseLLMProvider):
             )
 
         self.model_name: str = resolved_model
-        self.api_key: str | None = (
-            api_key
-            or settings.GEMINI_API_KEY
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
-        )
+        self.api_key: str | None = api_key or settings.RESILIMIND_LLM_API_KEY
+        self.base_url: str | None = base_url or settings.RESILIMIND_LLM_BASE_URL
 
         if not self.api_key:
             raise ValueError(
                 "Gemini API key is required when using the 'gemini' provider. "
-                "Please configure GEMINI_API_KEY in your .env file or environment variables."
+                "Please configure RESILIMIND_LLM_API_KEY in your .env file or environment variables."
             )
 
         self.extra_kwargs = kwargs
@@ -85,6 +82,8 @@ class GeminiProvider(BaseLLMProvider):
         }
         if num_predict is not None and num_predict > 0:
             params["max_output_tokens"] = num_predict
+        if self.base_url:
+            params["base_url"] = self.base_url
 
         params.update(self.extra_kwargs)
         params.update(kwargs)
@@ -111,6 +110,8 @@ class GeminiProvider(BaseLLMProvider):
         }
         if num_predict is not None and num_predict > 0:
             params["max_output_tokens"] = num_predict
+        if self.base_url:
+            params["base_url"] = self.base_url
 
         params.update(self.extra_kwargs)
         params.update(kwargs)
