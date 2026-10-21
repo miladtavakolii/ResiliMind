@@ -5,6 +5,7 @@ from ...core.config import settings
 from .base import BaseLLMProvider
 from .ollama import OllamaProvider
 from .gemini import GeminiProvider
+from .openai import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class LLMProviderFactory:
     _registry: Dict[str, Type[BaseLLMProvider]] = {
         "ollama": OllamaProvider,
         "gemini": GeminiProvider,
+        "openai": OpenAIProvider,
     }
 
     @classmethod
