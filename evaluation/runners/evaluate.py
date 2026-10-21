@@ -22,7 +22,7 @@ from evaluation.reporting.error_analyzer import ErrorAnalyzer
 from evaluation.reporting.failure_writer import FailureCSVWriter
 from evaluation.reporting.final_report import FinalReportGenerator
 from evaluation.evaluators import SafetyEvaluator, ExtractionEvaluator, AssessmentEvaluator, RoutingEvaluator, ResponseEvaluator
-from evaluation.judges.gemini import GeminiJudge
+from evaluation.judges.gemini import ResponseJudge, GeminiJudge
 
 from evaluation.runners.common import (
     PROJECT_ROOT,
@@ -62,6 +62,8 @@ def build_evaluator_runner(
     retry_delay: float,
     request_delay: float,
     include_response_eval: bool = True,
+    judge_provider: str | None = None,
+    judge_model: str | None = None,
 ) -> EvaluationRunner:
     """Instantiate and configure the evaluation pipeline runner with registered evaluators.
 
@@ -70,6 +72,8 @@ def build_evaluator_runner(
         retry_delay: Base delay in seconds between retries.
         request_delay: Delay between two requests.
         include_response_eval: Whether to run ResponseEvaluator with LLM-as-a-Judge.
+        judge_provider: Target LLM provider for the response judge.
+        judge_model: Target model identifier for the response judge.
 
     Returns:
         EvaluationRunner configured with all active evaluators.
@@ -82,14 +86,14 @@ def build_evaluator_runner(
     ]
 
     if include_response_eval:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is required for LLM-as-a-Judge.")
-        model = os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite")
+        resolved_provider = judge_provider or os.getenv("RESILIMIND_LLM_PROVIDER", "gemini")
+        resolved_model = judge_model or os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite")
+        resolved_api_key = os.getenv("RESILIMIND_LLM_API_KEY") or os.getenv("GEMINI_API_KEY")
 
-        judge = GeminiJudge(
-            api_key=api_key,
-            model=model,
+        judge = ResponseJudge(
+            provider=resolved_provider,
+            model=resolved_model,
+            api_key=resolved_api_key,
             max_retries=max_retries,
             retry_delay=retry_delay,
             request_delay=request_delay,
@@ -107,6 +111,8 @@ def evaluate_dataset(
     request_delay: float,
     output_path: Path | str | None = None,
     include_response_eval: bool = True,
+    judge_provider: str | None = None,
+    judge_model: str | None = None,
 ) -> list[CaseEvaluationResult]:
     """Run all registered evaluators over the benchmark dataset.
 
@@ -118,15 +124,19 @@ def evaluate_dataset(
         request_delay: Delay between two requests.
         output_path: Path for saving results.
         include_response_eval: Whether to run ResponseEvaluator.
+        judge_provider: Target LLM provider for the response judge.
+        judge_model: Target model identifier for the response judge.
 
     Returns:
         Per-case evaluation results.
     """
     runner = build_evaluator_runner(
-        max_retries,
-        retry_delay,
-        request_delay,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        request_delay=request_delay,
         include_response_eval=include_response_eval,
+        judge_provider=judge_provider,
+        judge_model=judge_model,
     )
     prediction_map = build_prediction_mapping(predictions)
     return runner.evaluate_dataset(cases=cases, predictions=prediction_map, output_path=output_path)
@@ -196,6 +206,18 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Skip LLM-based response evaluation (ResponseEvaluator).",
     )
+    parser.add_argument(
+        "--judge-provider",
+        type=str,
+        default=os.getenv("RESILIMIND_LLM_PROVIDER", "gemini"),
+        help="LLM provider for response evaluation (default: read from RESILIMIND_LLM_PROVIDER or 'gemini').",
+    )
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
+        help="Model name for response evaluation (default: read from GEMINI_JUDGE_MODEL or default provider model).",
+    )
     return parser.parse_args()
 
 
@@ -236,6 +258,8 @@ def main() -> None:
     logger.info("Output Dir:  %s", args.output_dir)
     logger.info("Log file:    %s", log_file)
     logger.info("Log level:   %s", logging.getLevelName(configured_logger.level))
+    logger.info("Judge Prov:  %s", args.judge_provider)
+    logger.info("Judge Model: %s", args.judge_model)
     logger.info("=" * 60)
 
     results_path = args.output_dir / "case_results.jsonl"
@@ -247,6 +271,8 @@ def main() -> None:
         request_delay=args.request_delay,
         output_path=str(results_path),
         include_response_eval=not args.skip_response_eval,
+        judge_provider=args.judge_provider,
+        judge_model=args.judge_model,
     )
 
     summary = EvaluationAggregator().aggregate(results)

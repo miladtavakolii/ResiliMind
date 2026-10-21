@@ -43,13 +43,19 @@ def parse_args() -> argparse.Namespace:
         help="Path for the rendered cases JSONL file.",
     )
     parser.add_argument(
+        "--provider",
+        type=str,
+        default=os.getenv("RESILIMIND_LLM_PROVIDER", "gemini"),
+        help="LLM provider for scenario rendering (default: read from RESILIMIND_LLM_PROVIDER or 'gemini').",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default=os.getenv(
-            "GEMINI_MODEL",
-            "gemini-2.5-flash",
+            "RESILIMIND_LLM_MODEL",
+            os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         ),
-        help="Gemini model used for scenario rendering.",
+        help="Model used for scenario rendering (default: read from RESILIMIND_LLM_MODEL or 'gemini-2.5-flash').",
     )
     parser.add_argument(
         "--temperature",
@@ -135,6 +141,7 @@ def main() -> None:
         return
 
     renderer = ScenarioRenderer(
+        provider=args.provider,
         model_name=args.model,
         temperature=args.temperature,
         prompt_path=args.prompt,
@@ -155,4 +162,9 @@ def main() -> None:
 
     print(f"Rendered {len(rendered_cases)} cases in this run.")
     print(f"Dataset: {args.output}")
+    print(f"Provider: {args.provider}")
     print(f"Model: {args.model}")
+
+
+if __name__ == "__main__":
+    main()

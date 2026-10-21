@@ -4,7 +4,7 @@ from typing import Any
 from pathlib import Path
 
 from evaluation.evaluators.base import BaseEvaluator
-from evaluation.judges.gemini import GeminiJudge
+from evaluation.judges.gemini import ResponseJudge, GeminiJudge
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,16 +19,16 @@ class ResponseEvaluator(BaseEvaluator):
 
     Attributes:
         name (str): Identifier name for the evaluator.
-        judge (GeminiJudge): LLM-based judge instance used for response evaluation.
+        judge (ResponseJudge): LLM-based judge instance used for response evaluation.
     """
 
     name: str = "response"
 
-    def __init__(self, judge: GeminiJudge) -> None:
+    def __init__(self, judge: ResponseJudge) -> None:
         """Initialize the response evaluator.
 
         Args:
-            judge: GeminiJudge instance configured for LLM-based evaluation.
+            judge: ResponseJudge instance configured for LLM-based evaluation.
         """
         self.judge = judge
         self.prompt_template = (PROMPT_PATH.read_text(encoding="utf-8"))

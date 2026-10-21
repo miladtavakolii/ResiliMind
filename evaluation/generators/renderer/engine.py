@@ -9,9 +9,14 @@ from typing import Any
 
 from google import genai
 from google.genai import types
+from langchain_core.messages import SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 
 from evaluation.schemas import EvaluationCase
 from evaluation.generators.validators import validate_dataset
+from src.resilimind.core.config import settings
+from src.resilimind.llm.providers.base import BaseLLMProvider
+from src.resilimind.llm.providers.factory import LLMProviderFactory
 from .models import ScenarioRenderOutput
 from .evidence import (
     clean_messages,
@@ -59,8 +64,10 @@ class ScenarioRenderer:
     def __init__(
         self,
         *,
-        model_name: str = "gemini-2.5-flash",
+        provider: str | None = None,
+        model_name: str | None = None,
         api_key: str | None = None,
+        base_url: str | None = None,
         temperature: float = 0.4,
         prompt_path: Path = DEFAULT_PROMPT_PATH,
         audit_prompt_path: Path = DEFAULT_AUDIT_PROMPT_PATH,
@@ -72,8 +79,10 @@ class ScenarioRenderer:
         """Initialize the scenario renderer.
 
         Args:
-            model_name: Gemini model name for natural language generation.
-            api_key: Optional Gemini API key. If omitted, fetched from GEMINI_API_KEY.
+            provider: Target LLM provider ('gemini', 'openai', 'anthropic', 'ollama').
+            model_name: Model name for natural language generation.
+            api_key: Optional API key.
+            base_url: Optional API base URL.
             temperature: Sampling temperature for generation diversity.
             prompt_path: Path to the rendering prompt text file.
             audit_prompt_path: Path to the audit prompt text file.
@@ -83,7 +92,7 @@ class ScenarioRenderer:
             request_delay: Delay in seconds before semantic audit and between rendered cases.
 
         Raises:
-            ValueError: If delays or retries are negative, or if the API key is unset.
+            ValueError: If delays or retries are negative, or if required keys are unset.
         """
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
@@ -92,6 +101,11 @@ class ScenarioRenderer:
         if request_delay < 0:
             raise ValueError("request_delay must be >= 0")
 
+        # Determine target provider with fallback
+        target_provider = provider or (
+            "gemini" if (model_name and "gemini" in model_name.lower()) else settings.RESILIMIND_LLM_PROVIDER
+        )
+        self.provider_name = target_provider.strip().lower()
         self.model_name = model_name
         self.temperature = temperature
         self.prompt_path = prompt_path
@@ -103,13 +117,44 @@ class ScenarioRenderer:
         self.graph = self._load_graph()
         self.nodes = self._load_nodes()
 
-        api_key = api_key or os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("Gemini API key is not configured. Set GEMINI_API_KEY in the environment.")
+        factory_kwargs: dict[str, Any] = {}
+        if model_name:
+            factory_kwargs["model_name"] = model_name
+        resolved_api_key = (
+            api_key
+            or os.getenv("RESILIMIND_LLM_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+        )
+        if resolved_api_key:
+            factory_kwargs["api_key"] = resolved_api_key
+        resolved_base_url = (
+            base_url
+            or os.getenv("RESILIMIND_LLM_BASE_URL")
+        )
+        if resolved_base_url:
+            factory_kwargs["base_url"] = resolved_base_url
 
-        self.client = genai.Client(api_key=api_key)
+        self.provider: BaseLLMProvider = LLMProviderFactory.create(
+            self.provider_name,
+            **factory_kwargs,
+        )
+
         self.system_prompt = self._load_prompt()
         self.audit_prompt = self._load_audit_prompt()
+
+        prompt_template = ChatPromptTemplate.from_messages([
+            SystemMessage(content=self.system_prompt),
+            ("human", "{prompt}"),
+        ])
+        self._render_chain = prompt_template | self.provider.get_structured_model(
+            schema=ScenarioRenderOutput,
+            temperature=self.temperature,
+        )
+        logger.info(
+            "[ScenarioRenderer] Initialized renderer with provider '%s'%s.",
+            self.provider_name,
+            f" (model='{self.model_name}')" if self.model_name else "",
+        )
 
     def _load_graph(self) -> dict[str, Any]:
         """Load and validate the knowledge graph from disk.
@@ -177,23 +222,19 @@ class ScenarioRenderer:
 
         for attempt in range(self.max_retries + 1):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=[self.system_prompt, prompt],
-                    config=types.GenerateContentConfig(
-                        temperature=self.temperature,
-                        response_mime_type="application/json",
-                        response_schema=ScenarioRenderOutput,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                            disable=True
-                        ),
-                    ),
-                )
+                raw_response = self._render_chain.invoke({"prompt": prompt})
 
-                if not response.text:
-                    raise ValueError("Gemini returned an empty response")
-
-                return ScenarioRenderOutput.model_validate_json(response.text)
+                if isinstance(raw_response, dict):
+                    if raw_response.get("parsed") is not None:
+                        return raw_response["parsed"]
+                    elif "raw" in raw_response:
+                        raise ValueError(f"Renderer returned invalid structured output: {raw_response.get('raw')!r}")
+                    else:
+                        return ScenarioRenderOutput.model_validate(raw_response)
+                elif isinstance(raw_response, ScenarioRenderOutput):
+                    return raw_response
+                else:
+                    raise ValueError(f"Unexpected response format from renderer: {type(raw_response)}")
 
             except Exception as exc:
                 last_error = exc
@@ -204,7 +245,8 @@ class ScenarioRenderer:
                 delay = self.retry_delay * (2**attempt)
 
                 logger.warning(
-                    "Gemini request failed (attempt %d/%d): %s. Retrying in %.1f seconds...",
+                    "%s request failed (attempt %d/%d): %s. Retrying in %.1f seconds...",
+                    self.provider_name,
                     attempt + 1,
                     self.max_retries + 1,
                     exc,
@@ -214,7 +256,7 @@ class ScenarioRenderer:
                 time.sleep(delay)
 
         raise RuntimeError(
-            f"Gemini request failed after {self.max_retries + 1} attempts"
+            f"{self.provider_name} request failed after {self.max_retries + 1} attempts"
         ) from last_error
 
     def render(self, case: EvaluationCase) -> EvaluationCase:
@@ -259,8 +301,7 @@ class ScenarioRenderer:
                 )
 
                 audit = audit_rendered_output(
-                    client=self.client,
-                    model_name=self.model_name,
+                    provider=self.provider,
                     audit_prompt=self.audit_prompt,
                     case=case,
                     messages=messages,

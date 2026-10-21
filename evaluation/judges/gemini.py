@@ -1,41 +1,46 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
 from typing import Any
 
 from evaluation.schemas import ResponseJudgeResult
-
-from google import genai
-from google.genai import types
+from src.resilimind.core.config import settings
+from src.resilimind.llm.providers.base import BaseLLMProvider
+from src.resilimind.llm.providers.factory import LLMProviderFactory
 
 logger = logging.getLogger(__name__)
 
 
-class GeminiJudge:
-    """Gemini based evaluator for qualitative response assessment.
+class ResponseJudge:
+    """Multi-provider LLM evaluator for qualitative response assessment.
 
-    Uses a separate LLM call to judge advisor responses.
+    Uses an LLM call via ResiliMind's BaseLLMProvider to judge advisor responses
+    with exponential backoff retries and structured output validation.
     """
 
     def __init__(
         self,
         *,
-        api_key: str,
-        model: str = "gemini-3.5-flash-lite",
+        provider: str | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         max_retries: int = 5,
         retry_delay: float = 3.0,
         request_delay: float = 2.0,
     ) -> None:
-        """Initialize the Gemini judge.
+        """Initialize the response judge.
 
         Args:
-            api_key: Google Gemini API key.
-            model: Gemini model identifier used for evaluation.
+            provider: LLM provider name ('gemini', 'openai', 'anthropic', 'ollama').
+                If omitted, falls back to settings.RESILIMIND_LLM_PROVIDER.
+            model: Model identifier used for evaluation.
+            api_key: Optional provider API key.
+            base_url: Optional provider base URL.
             max_retries: Maximum number of retry attempts upon failure.
             retry_delay: Base delay in seconds between retries.
-            request_delay: Delay between two requsets.
+            request_delay: Delay between requests.
         """
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
@@ -44,12 +49,40 @@ class GeminiJudge:
         if request_delay < 0:
             raise ValueError("request_delay must be >= 0")
 
-        self.client = genai.Client(api_key=api_key)
+        # Determine target provider with fallback
+        target_provider = provider or (
+            "gemini" if (model and "gemini" in model.lower()) else settings.RESILIMIND_LLM_PROVIDER
+        )
+        self.provider_name = target_provider.strip().lower()
         self.model = model
+        self.api_key = api_key
+        self.base_url = base_url
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.request_delay = request_delay
 
+        factory_kwargs: dict[str, Any] = {}
+        if model:
+            factory_kwargs["model_name"] = model
+        if api_key:
+            factory_kwargs["api_key"] = api_key
+        if base_url:
+            factory_kwargs["base_url"] = base_url
+
+        self.provider: BaseLLMProvider = LLMProviderFactory.create(
+            self.provider_name,
+            **factory_kwargs,
+        )
+
+        self.runner = self.provider.get_structured_model(
+            schema=ResponseJudgeResult,
+            temperature=0.0,
+        )
+        logger.info(
+            "[ResponseJudge] Initialized judge with provider '%s'%s.",
+            self.provider_name,
+            f" (model='{self.model}')" if self.model else "",
+        )
 
     def _is_retryable_error(self, exc: Exception) -> bool:
         """Return whether an exception represents a transient API failure.
@@ -69,17 +102,18 @@ class GeminiJudge:
             "503",
             "504",
             "rate limit",
+            "ratelimit",
             "resource exhausted",
             "timeout",
             "timed out",
             "temporarily unavailable",
             "connection",
+            "overloaded",
         )
         return any(marker in message for marker in retryable_markers)
 
-
     def evaluate(self, prompt: str) -> dict[str, Any]:
-        """Evaluate a prompt using the Gemini model and return the parsed JSON response.
+        """Evaluate a prompt using the configured model and return the parsed JSON response.
 
         Args:
             prompt: Formatted evaluation prompt string.
@@ -94,33 +128,38 @@ class GeminiJudge:
 
         for attempt in range(self.max_retries + 1):
             try:
-                if attempt == 0:
+                if attempt == 0 and self.request_delay > 0:
                     logger.info(
-                        "Waiting %.1f seconds before Gemini request...",
+                        "Waiting %.1f seconds before %s request...",
                         self.request_delay,
+                        self.provider_name,
                     )
                     time.sleep(self.request_delay)
 
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        temperature=0.0,
-                        response_mime_type="application/json",
-                        response_schema=ResponseJudgeResult,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                            disable=True
-                        ),
-                    ),
-                )
-                if not response.text:
-                    raise ValueError("Gemini returned an empty response")
-                result = ResponseJudgeResult.model_validate_json(response.text)
+                raw_result = self.runner.invoke(prompt)
+
+                if isinstance(raw_result, dict):
+                    if raw_result.get("parsed") is not None:
+                        result: ResponseJudgeResult = raw_result["parsed"]
+                    elif "raw" in raw_result:
+                        raise ValueError(f"Judge model returned invalid structured output: {raw_result.get('raw')!r}")
+                    else:
+                        result = ResponseJudgeResult.model_validate(raw_result)
+                elif isinstance(raw_result, ResponseJudgeResult):
+                    result = raw_result
+                else:
+                    raise ValueError(f"Unexpected response format from judge model: {type(raw_result)}")
+
                 return result.model_dump()
 
             except Exception as exc:
                 last_error = exc
-                logger.warning("Judge failed attempt %d/%d: %s", attempt + 1, self.max_retries + 1, exc)
+                logger.warning(
+                    "Judge failed attempt %d/%d: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                )
 
                 if not self._is_retryable_error(exc):
                     raise
@@ -129,8 +168,13 @@ class GeminiJudge:
                     break
 
                 delay = self.retry_delay * (2**attempt)
-
                 logger.info("Retrying in %.1f seconds...", delay)
                 time.sleep(delay)
 
-        raise RuntimeError(f"Gemini judge failed after {self.max_retries + 1} attempts") from last_error
+        raise RuntimeError(
+            f"{self.provider_name} judge failed after {self.max_retries + 1} attempts"
+        ) from last_error
+
+
+# Backward compatibility alias
+GeminiJudge = ResponseJudge
