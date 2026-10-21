@@ -42,6 +42,7 @@ from evaluation.runners.common import (
     load_cases,
     load_predictions,
 )
+from src.resilimind.core.config import settings
 from evaluation.runners.adapters import (
     validate_alignment,
     validate_dataset_versions,
@@ -92,14 +93,9 @@ def build_evaluator_runner(
     ]
 
     if include_response_eval:
-        resolved_provider = judge_provider or os.getenv("RESILIMIND_LLM_PROVIDER", "gemini")
-        resolved_model = judge_model or os.getenv("RESILIMIND_LLM_MODEL")
-        resolved_api_key = os.getenv("RESILIMIND_LLM_API_KEY")
-
         judge = ResponseJudge(
-            provider=resolved_provider,
-            model=resolved_model,
-            api_key=resolved_api_key,
+            provider=judge_provider,
+            model=judge_model,
             max_retries=max_retries,
             retry_delay=retry_delay,
             request_delay=request_delay,
@@ -215,14 +211,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--judge-provider",
         type=str,
-        default=os.getenv("RESILIMIND_LLM_PROVIDER", "gemini"),
-        help="LLM provider for response evaluation (default: read from RESILIMIND_LLM_PROVIDER or 'gemini').",
+        default=settings.resolved_eval_provider,
+        help=f"LLM provider for response evaluation (default: '{settings.resolved_eval_provider}').",
     )
     parser.add_argument(
         "--judge-model",
         type=str,
-        default=os.getenv("RESILIMIND_LLM_MODEL"),
-        help="Model name for response evaluation (default: read from RESILIMIND_LLM_MODEL or provider default).",
+        default=settings.resolved_eval_model,
+        help=f"Model name for response evaluation (default: '{settings.resolved_eval_model}').",
     )
     return parser.parse_args()
 

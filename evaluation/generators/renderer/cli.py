@@ -8,6 +8,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from src.resilimind.core.config import settings
+
 from .engine import (
     DEFAULT_INPUT_PATH,
     DEFAULT_OUTPUT_PATH,
@@ -45,17 +47,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--provider",
         type=str,
-        default=os.getenv("RESILIMIND_LLM_PROVIDER", "gemini"),
-        help="LLM provider for scenario rendering (default: read from RESILIMIND_LLM_PROVIDER or 'gemini').",
+        default=settings.resolved_eval_provider,
+        help=f"LLM provider for scenario rendering (default: '{settings.resolved_eval_provider}').",
     )
     parser.add_argument(
         "--model",
         type=str,
-        default=os.getenv(
-            "RESILIMIND_LLM_MODEL",
-            os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-        ),
-        help="Model used for scenario rendering (default: read from RESILIMIND_LLM_MODEL or 'gemini-2.5-flash').",
+        default=settings.resolved_eval_model,
+        help=f"Model used for scenario rendering (default: '{settings.resolved_eval_model}').",
     )
     parser.add_argument(
         "--temperature",

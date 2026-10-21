@@ -28,6 +28,12 @@ class AppConfig(BaseSettings):
     RESILIMIND_LLM_BASE_URL: str | None = None
     RESILIMIND_LLM_TEMPERATURE: float = 0.6
 
+    # Dedicated Evaluation LLM Settings (Defaults to None, falling back to unified settings)
+    RESILIMIND_EVAL_PROVIDER: str | None = None
+    RESILIMIND_EVAL_MODEL: str | None = None
+    RESILIMIND_EVAL_API_KEY: str | None = None
+    RESILIMIND_EVAL_BASE_URL: str | None = None
+
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: Path = Path("resilimind.log")
     RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD: float = 0.70
@@ -51,6 +57,26 @@ class AppConfig(BaseSettings):
             self.DATA_DIR,
         )
         return self
+
+    @property
+    def resolved_eval_provider(self) -> str:
+        """Returns the eval provider, falling back to RESILIMIND_LLM_PROVIDER."""
+        return (self.RESILIMIND_EVAL_PROVIDER or self.RESILIMIND_LLM_PROVIDER).strip().lower()
+
+    @property
+    def resolved_eval_model(self) -> str:
+        """Returns the eval model, falling back to RESILIMIND_LLM_MODEL."""
+        return self.RESILIMIND_EVAL_MODEL or self.RESILIMIND_LLM_MODEL
+
+    @property
+    def resolved_eval_api_key(self) -> str | None:
+        """Returns the eval API key, falling back to RESILIMIND_LLM_API_KEY."""
+        return self.RESILIMIND_EVAL_API_KEY or self.RESILIMIND_LLM_API_KEY
+
+    @property
+    def resolved_eval_base_url(self) -> str | None:
+        """Returns the eval base URL, falling back to RESILIMIND_LLM_BASE_URL."""
+        return self.RESILIMIND_EVAL_BASE_URL or self.RESILIMIND_LLM_BASE_URL
 
     @property
     def resolved_log_file_path(self) -> Path:

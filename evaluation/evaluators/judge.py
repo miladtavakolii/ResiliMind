@@ -49,21 +49,21 @@ class ResponseJudge:
         if request_delay < 0:
             raise ValueError("request_delay must be >= 0")
 
-        self.provider_name = (provider or settings.RESILIMIND_LLM_PROVIDER).strip().lower()
-        self.model = model
-        self.api_key = api_key
-        self.base_url = base_url
+        self.provider_name = (provider or settings.resolved_eval_provider).strip().lower()
+        self.model = model or settings.resolved_eval_model
+        self.api_key = api_key or settings.resolved_eval_api_key
+        self.base_url = base_url or settings.resolved_eval_base_url
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.request_delay = request_delay
 
         factory_kwargs: dict[str, Any] = {}
-        if model:
-            factory_kwargs["model_name"] = model
-        if api_key:
-            factory_kwargs["api_key"] = api_key
-        if base_url:
-            factory_kwargs["base_url"] = base_url
+        if self.model:
+            factory_kwargs["model_name"] = self.model
+        if self.api_key:
+            factory_kwargs["api_key"] = self.api_key
+        if self.base_url:
+            factory_kwargs["base_url"] = self.base_url
 
         self.provider: BaseLLMProvider = LLMProviderFactory.create(
             self.provider_name,

@@ -101,12 +101,8 @@ class ScenarioRenderer:
         if request_delay < 0:
             raise ValueError("request_delay must be >= 0")
 
-        # Determine target provider with fallback
-        target_provider = provider or (
-            "gemini" if (model_name and "gemini" in model_name.lower()) else settings.RESILIMIND_LLM_PROVIDER
-        )
-        self.provider_name = target_provider.strip().lower()
-        self.model_name = model_name
+        self.provider_name = (provider or settings.resolved_eval_provider).strip().lower()
+        self.model_name = model_name or settings.resolved_eval_model
         self.temperature = temperature
         self.prompt_path = prompt_path
         self.audit_prompt_path = audit_prompt_path
@@ -118,19 +114,12 @@ class ScenarioRenderer:
         self.nodes = self._load_nodes()
 
         factory_kwargs: dict[str, Any] = {}
-        if model_name:
-            factory_kwargs["model_name"] = model_name
-        resolved_api_key = (
-            api_key
-            or os.getenv("RESILIMIND_LLM_API_KEY")
-            or os.getenv("GEMINI_API_KEY")
-        )
+        if self.model_name:
+            factory_kwargs["model_name"] = self.model_name
+        resolved_api_key = api_key or settings.resolved_eval_api_key
         if resolved_api_key:
             factory_kwargs["api_key"] = resolved_api_key
-        resolved_base_url = (
-            base_url
-            or os.getenv("RESILIMIND_LLM_BASE_URL")
-        )
+        resolved_base_url = base_url or settings.resolved_eval_base_url
         if resolved_base_url:
             factory_kwargs["base_url"] = resolved_base_url
 
