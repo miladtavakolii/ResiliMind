@@ -49,11 +49,7 @@ class ResponseJudge:
         if request_delay < 0:
             raise ValueError("request_delay must be >= 0")
 
-        # Determine target provider with fallback
-        target_provider = provider or (
-            "gemini" if (model and "gemini" in model.lower()) else settings.RESILIMIND_LLM_PROVIDER
-        )
-        self.provider_name = target_provider.strip().lower()
+        self.provider_name = (provider or settings.RESILIMIND_LLM_PROVIDER).strip().lower()
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
@@ -174,7 +170,3 @@ class ResponseJudge:
         raise RuntimeError(
             f"{self.provider_name} judge failed after {self.max_retries + 1} attempts"
         ) from last_error
-
-
-# Backward compatibility alias
-GeminiJudge = ResponseJudge

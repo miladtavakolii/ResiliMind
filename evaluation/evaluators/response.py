@@ -4,7 +4,7 @@ from typing import Any
 from pathlib import Path
 
 from evaluation.evaluators.base import BaseEvaluator
-from evaluation.judges.gemini import ResponseJudge, GeminiJudge
+from .judge import ResponseJudge
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

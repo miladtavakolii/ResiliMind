@@ -21,8 +21,14 @@ from evaluation.reporting.aggregator import EvaluationAggregator
 from evaluation.reporting.error_analyzer import ErrorAnalyzer
 from evaluation.reporting.failure_writer import FailureCSVWriter
 from evaluation.reporting.final_report import FinalReportGenerator
-from evaluation.evaluators import SafetyEvaluator, ExtractionEvaluator, AssessmentEvaluator, RoutingEvaluator, ResponseEvaluator
-from evaluation.judges.gemini import ResponseJudge, GeminiJudge
+from evaluation.evaluators import (
+    SafetyEvaluator,
+    ExtractionEvaluator,
+    AssessmentEvaluator,
+    RoutingEvaluator,
+    ResponseEvaluator,
+    ResponseJudge,
+)
 
 from evaluation.runners.common import (
     PROJECT_ROOT,
@@ -87,8 +93,8 @@ def build_evaluator_runner(
 
     if include_response_eval:
         resolved_provider = judge_provider or os.getenv("RESILIMIND_LLM_PROVIDER", "gemini")
-        resolved_model = judge_model or os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite")
-        resolved_api_key = os.getenv("RESILIMIND_LLM_API_KEY") or os.getenv("GEMINI_API_KEY")
+        resolved_model = judge_model or os.getenv("RESILIMIND_LLM_MODEL")
+        resolved_api_key = os.getenv("RESILIMIND_LLM_API_KEY")
 
         judge = ResponseJudge(
             provider=resolved_provider,
@@ -215,8 +221,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--judge-model",
         type=str,
-        default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.5-flash-lite"),
-        help="Model name for response evaluation (default: read from GEMINI_JUDGE_MODEL or default provider model).",
+        default=os.getenv("RESILIMIND_LLM_MODEL"),
+        help="Model name for response evaluation (default: read from RESILIMIND_LLM_MODEL or provider default).",
     )
     return parser.parse_args()
 
