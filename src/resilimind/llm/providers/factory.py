@@ -6,6 +6,7 @@ from .base import BaseLLMProvider
 from .ollama import OllamaProvider
 from .gemini import GeminiProvider
 from .openai import OpenAIProvider
+from .anthropic import AnthropicProvider
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class LLMProviderFactory:
         "ollama": OllamaProvider,
         "gemini": GeminiProvider,
         "openai": OpenAIProvider,
+        "anthropic": AnthropicProvider,
     }
 
     @classmethod

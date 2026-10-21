@@ -5,6 +5,7 @@ from .providers import (
     OllamaProvider,
     GeminiProvider,
     OpenAIProvider,
+    AnthropicProvider,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "OllamaProvider",
     "GeminiProvider",
     "OpenAIProvider",
+    "AnthropicProvider",
 ]
