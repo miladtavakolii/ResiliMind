@@ -15,8 +15,7 @@ ResiliMind is a research prototype that turns Persian conversations into structu
 - Knowledge-graph grounding across 6 resilience domains (13 nodes and 15 directed edges in the bundled graph).
 - Deterministic score aggregation and status thresholds after LLM-generated rubric values.
 - Longitudinal structured memory using LangGraph SQLite checkpoints and a separate SQLite resilience timeline.
-- A separate evaluation toolkit for synthetic scenario generation, Persian conversation rendering, benchmark execution, metrics, and failure analysis.
-- Local inference by default through Ollama; Gemini is used for optional evaluation dataset rendering and response judging.
+- Modular multi-provider LLM support: local inference by default via Ollama, alongside first-class support for Gemini, OpenAI, Anthropic, and custom OpenAI-compatible endpoints across both runtime agents and evaluation.
 
 ## Architecture
 
@@ -173,16 +172,31 @@ uv run streamlit run src/resilimind/app.py
 
 The default configuration uses the local Ollama model <code>gemma4:e2b</code> at <code>http://localhost:11434</code>. Edit the root <code>.env</code> file to override settings.
 
+### Core Application Settings
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| <code>RESILIMIND_LLM_MODEL</code> | <code>gemma4:e2b</code> | Ollama model name |
-| <code>RESILIMIND_LLM_TEMPERATURE</code> | <code>0.6</code> | LLM temperature setting |
-| <code>OLLAMA_BASE_URL</code> | <code>http://localhost:11434</code> | Ollama endpoint |
-| <code>DATA_DIR</code> | <code>data</code> | Directory for SQLite databases |
+| <code>RESILIMIND_LLM_PROVIDER</code> | <code>ollama</code> | Active LLM provider (<code>ollama</code>, <code>gemini</code>, <code>openai</code>, <code>anthropic</code>) |
+| <code>RESILIMIND_LLM_MODEL</code> | <code>gemma4:e2b</code> | Target model identifier |
+| <code>RESILIMIND_LLM_API_KEY</code> | _None_ | API key for cloud providers (Gemini, OpenAI, Anthropic) |
+| <code>RESILIMIND_LLM_BASE_URL</code> | <code>http://localhost:11434</code> | Unified endpoint URL (for Ollama, vLLM, or custom proxies) |
+| <code>RESILIMIND_LLM_TEMPERATURE</code> | <code>0.6</code> | Sampling temperature for conversational responses |
+| <code>DATA_DIR</code> | <code>data</code> | Directory for SQLite databases and runtime storage |
 | <code>RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD</code> | <code>0.70</code> | Confidence threshold for advisor routing |
 | <code>LOG_LEVEL</code> | <code>INFO</code> | Application logging level |
 
-Gemini configuration (<code>GEMINI_API_KEY</code>, <code>GEMINI_MODEL</code>, and <code>GEMINI_JUDGE_MODEL</code>) is only needed for the evaluation stages that call the Google GenAI API. See the [Evaluation Guide](evaluation/README.md) for setup instructions. Do not commit API keys or local user data.
+### Evaluation & Benchmark Settings (Optional)
+
+Evaluation components (such as scenario rendering and response judging) can be configured independently from the core agent to allow evaluating local models against high-capability cloud judges:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| <code>RESILIMIND_EVAL_PROVIDER</code> | _Falls back to core provider_ | Provider for evaluation judge and scenario renderer |
+| <code>RESILIMIND_EVAL_MODEL</code> | _Falls back to core model_ | Model identifier for evaluation |
+| <code>RESILIMIND_EVAL_API_KEY</code> | _Falls back to core key_ | Dedicated API key for evaluation provider |
+| <code>RESILIMIND_EVAL_BASE_URL</code> | _Falls back to core URL_ | Dedicated base URL for evaluation provider |
+
+See the [Evaluation Guide](evaluation/README.md) for full setup instructions and CLI arguments. Do not commit API keys or local user data.
 
 ## Project structure
 
@@ -198,6 +212,15 @@ ResiliMind/
 │   │   └── workflow.py
 │   ├── graph/
 │   ├── llm/
+│   │   ├── engine.py
+│   │   ├── prompts.py
+│   │   └── providers/
+│   │       ├── base.py
+│   │       ├── factory.py
+│   │       ├── ollama.py
+│   │       ├── gemini.py
+│   │       ├── openai.py
+│   │       └── anthropic.py
 │   ├── schemas/
 │   ├── services/
 │   ├── ui/
@@ -205,8 +228,12 @@ ResiliMind/
 ├── evaluation/
 │   ├── README.md
 │   ├── generators/
+│   │   ├── generator/
+│   │   └── renderer/
 │   ├── evaluators/
-│   ├── judges/
+│   │   ├── base.py
+│   │   ├── judge.py
+│   │   └── response.py
 │   ├── metrics/
 │   ├── reporting/
 │   ├── runners/
@@ -223,15 +250,14 @@ ResiliMind/
 | --- | --- |
 | Python 3.13+ | Application and evaluation runtime |
 | LangGraph | Stateful workflow orchestration and SQLite checkpointing |
-| LangChain | LLM integration |
-| Ollama / Gemma | Default local inference |
+| LangChain | LLM abstraction & provider integrations (Ollama, Gemini, OpenAI, Anthropic) |
+| Multi-Provider LLM Layer | Local inference (Ollama) or Cloud APIs (Gemini, OpenAI, Anthropic) |
 | NetworkX | Directed resilience knowledge graph |
-| Pydantic / Pydantic Settings | Structured output schemas and configuration |
+| Pydantic / Pydantic Settings | Structured output schemas and centralized configuration |
 | SQLite | Authentication, conversation checkpoints, and resilience history |
 | Streamlit | Persian conversational UI |
 | Plotly | Dashboard visualizations |
-| Google GenAI SDK | Optional scenario rendering and response judge |
-| uv | Dependency and environment management |
+| uv | Fast Python dependency and environment management |
 
 ## Research scope and limitations
 

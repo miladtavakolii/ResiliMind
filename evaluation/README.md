@@ -27,16 +27,16 @@ The evaluation pipeline has five main stages:
 2. **Conversation rendering** turns scenarios into Persian messages and attaches evidence annotations. Semantic auditing and validation help check consistency between the rendered messages, evidence, graph, and gold labels.
 3. **Dataset validation** checks case schemas and graph node references before execution.
 4. **Benchmark execution** runs each case through the actual LangGraph workflow, turn by turn, and records predictions, run metadata, and logs.
-5. **Evaluation and reporting** computes safety, extraction, assessment, and routing metrics; optionally uses Gemini as an LLM judge for response quality; then writes aggregate results and a failure CSV.
+5. **Evaluation and reporting** computes safety, extraction, assessment, and routing metrics; optionally uses a multi-provider LLM judge (Gemini, OpenAI, Anthropic, etc.) for response quality; then writes aggregate results and a failure CSV.
 
 ## Requirements
 
 - Python 3.13+
 - Dependencies installed with <code>uv sync</code>
-- A running Ollama service and the model configured for ResiliMind
-- A Gemini API key for Persian scenario rendering and response judging
+- A running Ollama service (if using Ollama as runtime or eval model)
+- Appropriate credentials/API keys if using cloud providers (Gemini, OpenAI, Anthropic) for evaluation
 
-The main application can run with local Ollama inference without a Gemini API key. Gemini is required only for the evaluation steps that call the Google GenAI API.
+The evaluation pipeline uses ResiliMind's unified `LLMProviderFactory`. By default, evaluation components will use `RESILIMIND_EVAL_*` settings, falling back to the main `RESILIMIND_LLM_*` configuration if unset.
 
 Install project dependencies from the repository root:
 
@@ -44,15 +44,15 @@ Install project dependencies from the repository root:
 uv sync
 ~~~
 
-Add your key to the root <code>.env</code> file (do not commit it):
+Add your evaluation configuration to the root <code>.env</code> file (optional; defaults fall back to main LLM settings):
 
 ~~~dotenv
-GEMINI_API_KEY=your-api-key
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_JUDGE_MODEL=gemini-3.5-flash-lite
+# Dedicated Evaluation LLM Settings
+RESILIMIND_EVAL_PROVIDER=gemini
+RESILIMIND_EVAL_MODEL=gemini-2.5-flash
+RESILIMIND_EVAL_API_KEY=your-api-key
+RESILIMIND_EVAL_BASE_URL=
 ~~~
-
-<code>GEMINI_MODEL</code> is used by the conversation renderer unless overridden with <code>--model</code>. Response judging defaults to <code>GEMINI_JUDGE_MODEL</code> or <code>gemini-3.5-flash-lite</code>.
 
 ## Dataset paths
 
@@ -87,10 +87,10 @@ The generator builds the scenario and target labels; its output is not yet a ren
 ## Step 2 — Render scenarios into Persian conversations
 
 ~~~bash
-uv run python -m evaluation.generators.renderer --input evaluation/datasets/v1/scenarios.jsonl --output evaluation/datasets/v1/cases.jsonl --model gemini-2.5-flash
+uv run python -m evaluation.generators.renderer --input evaluation/datasets/v1/scenarios.jsonl --output evaluation/datasets/v1/cases.jsonl --provider gemini --model gemini-2.5-flash
 ~~~
 
-The renderer uses Gemini to generate Persian user messages and then validates/audits the rendered evidence. Override the model with <code>--model</code>, change input/output paths, or use <code>--limit N</code> for a smaller test. API access and model availability are required for this stage.
+The renderer uses an LLM to generate Persian user messages and then validates/audits the rendered evidence. Override the provider and model with <code>--provider</code> and <code>--model</code> (defaults to <code>RESILIMIND_EVAL_PROVIDER</code> and <code>RESILIMIND_EVAL_MODEL</code>), change input/output paths, or use <code>--limit N</code> for a smaller test.
 
 Do not overwrite a dataset associated with a completed benchmark if you need to reproduce or audit that run. Store each dataset revision in a separate versioned path and record its checksum.
 
@@ -144,7 +144,13 @@ Evaluate the most recent run:
 uv run python -m evaluation.runners.evaluate --run-dir latest --dataset evaluation/datasets/v1/cases.jsonl
 ~~~
 
-This reads stored predictions and evaluates them against the supplied gold annotations. Response evaluation is enabled by default and requires <code>GEMINI_API_KEY</code>.
+This reads stored predictions and evaluates them against the supplied gold annotations. Response evaluation (LLM-as-a-judge) is enabled by default using the configured evaluation provider and model.
+
+You can specify the judge provider and model on the command line:
+
+~~~bash
+uv run python -m evaluation.runners.evaluate --run-dir latest --dataset evaluation/datasets/v1/cases.jsonl --judge-provider gemini --judge-model gemini-2.5-flash
+~~~
 
 The run directory receives:
 
@@ -155,7 +161,7 @@ The run directory receives:
 | <code>evaluation_report.json</code> | Aggregated benchmark metrics |
 | <code>evaluation.log</code> | Evaluation log |
 
-To skip the Gemini-based response judge and run the other evaluators only:
+To skip the LLM-based response judge and run the deterministic evaluators only:
 
 ~~~bash
 uv run python -m evaluation.runners.evaluate --run-dir latest --dataset evaluation/datasets/v1/cases.jsonl --skip-response-eval
@@ -191,7 +197,7 @@ Before comparing model or code changes, preserve and record:
 - The Git commit used for benchmark execution.
 - The graph version/checksum.
 - The Ollama model name and, where available, model digest.
-- The Gemini renderer and judge models and their relevant settings.
+- The evaluation renderer and judge models and their relevant settings.
 - The benchmark manifest, predictions, evaluation report, failures CSV, and logs.
 
 **Keep dataset provenance consistent.** The <code>dataset_version</code> recorded in each prediction is not a substitute for preserving the actual dataset. Do not compare or report results if the predictions and gold annotations cannot be shown to come from the same dataset revision.
@@ -200,9 +206,9 @@ For research reporting, document whether gold labels were human-reviewed, synthe
 
 ## Troubleshooting
 
-### <code>GEMINI_API_KEY</code> is required
+### API credentials required for cloud evaluation
 
-Set <code>GEMINI_API_KEY</code> in the root <code>.env</code> file or export it in the shell before running scenario rendering or response evaluation. The application's default Ollama inference does not require the Gemini key.
+When using cloud providers (Gemini, OpenAI, Anthropic) for scenario rendering or response evaluation, ensure the corresponding API key is set via <code>RESILIMIND_EVAL_API_KEY</code> (or <code>RESILIMIND_LLM_API_KEY</code>) in your root <code>.env</code> file or shell environment. Local Ollama inference does not require an API key.
 
 ### Dataset file not found
 
