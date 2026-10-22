@@ -5,8 +5,6 @@ import logging
 import time
 from typing import Any
 
-from google import genai
-from google.genai import types
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -172,16 +170,17 @@ def audit_rendered_output(
     }
 
     active_provider = provider or (client if isinstance(client, BaseLLMProvider) else None)
-    audit_runner = None
-    if active_provider is not None:
-        prompt_tmpl = ChatPromptTemplate.from_messages([
-            SystemMessage(content=audit_prompt),
-            ("human", "{audit_input}"),
-        ])
-        audit_runner = prompt_tmpl | active_provider.get_structured_model(
-            schema=ScenarioRenderAudit,
-            temperature=0.0,
-        )
+    if active_provider is None:
+        raise ValueError("A BaseLLMProvider instance is required for semantic audit.")
+
+    prompt_tmpl = ChatPromptTemplate.from_messages([
+        SystemMessage(content=audit_prompt),
+        ("human", "{audit_input}"),
+    ])
+    audit_runner = prompt_tmpl | active_provider.get_structured_model(
+        schema=ScenarioRenderAudit,
+        temperature=0.0,
+    )
 
     last_error: Exception | None = None
 
@@ -195,57 +194,29 @@ def audit_rendered_output(
                 )
                 time.sleep(request_delay)
 
-            if audit_runner is not None:
-                raw_response = audit_runner.invoke({
-                    "audit_input": json.dumps(
-                        audit_input,
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                })
-
-                if isinstance(raw_response, dict):
-                    if raw_response.get("parsed") is not None:
-                        return raw_response["parsed"]
-                    elif "raw" in raw_response:
-                        raise ValueError(
-                            f"{case.case_id}: semantic audit returned invalid output: {raw_response.get('raw')!r}"
-                        )
-                    else:
-                        return ScenarioRenderAudit.model_validate(raw_response)
-                elif isinstance(raw_response, ScenarioRenderAudit):
-                    return raw_response
-                else:
-                    raise ValueError(
-                        f"{case.case_id}: unexpected semantic audit response type: {type(raw_response)}"
-                    )
-            else:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[
-                        audit_prompt,
-                        json.dumps(
-                            audit_input,
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
-                    ],
-                    config=types.GenerateContentConfig(
-                        temperature=0.0,
-                        response_mime_type="application/json",
-                        response_schema=ScenarioRenderAudit,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                            disable=True
-                        ),
-                    ),
+            raw_response = audit_runner.invoke({
+                "audit_input": json.dumps(
+                    audit_input,
+                    ensure_ascii=False,
+                    indent=2,
                 )
+            })
 
-                if not response.text:
+            if isinstance(raw_response, dict):
+                if raw_response.get("parsed") is not None:
+                    return raw_response["parsed"]
+                elif "raw" in raw_response:
                     raise ValueError(
-                        f"{case.case_id}: semantic audit returned empty response"
+                        f"{case.case_id}: semantic audit returned invalid output: {raw_response.get('raw')!r}"
                     )
-
-                return ScenarioRenderAudit.model_validate_json(response.text)
+                else:
+                    return ScenarioRenderAudit.model_validate(raw_response)
+            elif isinstance(raw_response, ScenarioRenderAudit):
+                return raw_response
+            else:
+                raise ValueError(
+                    f"{case.case_id}: unexpected semantic audit response type: {type(raw_response)}"
+                )
 
         except Exception as exc:
             last_error = exc

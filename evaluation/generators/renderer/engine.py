@@ -7,8 +7,6 @@ from pathlib import Path
 import time
 from typing import Any
 
-from google import genai
-from google.genai import types
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -55,7 +53,7 @@ class ScenarioRenderer:
         max_retries (int): Number of retries on API failure.
         retry_delay (float): Initial backoff delay between retries.
         request_delay (float): Politeness delay before semantic audit and between successive scenario generations.
-        client (genai.Client): Initialized Google GenAI SDK client.
+        provider (BaseLLMProvider): Initialized LLM provider instance.
         system_prompt (str): Loaded rendering prompt instructions.
     """
 

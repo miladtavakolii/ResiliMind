@@ -2033,7 +2033,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
-    { name = "google-genai" },
     { name = "langchain-anthropic" },
     { name = "langchain-community" },
     { name = "langchain-google-genai" },
@@ -2053,7 +2052,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "google-genai", specifier = ">=2.18.1" },
     { name = "langchain-anthropic", specifier = ">=1.7.6" },
     { name = "langchain-community", specifier = ">=0.4.2" },
     { name = "langchain-google-genai", specifier = ">=4.3.7" },
