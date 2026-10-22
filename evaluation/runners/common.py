@@ -355,7 +355,7 @@ def build_run_manifest(
     run_id: str,
     *,
     dataset_path: Path,
-    judge_model: str = "gemini-3.5-flash-lite",
+    judge_model: str | None = None,
 ) -> BenchmarkRunManifest:
     """Construct a BenchmarkRunManifest from the real active environment.
 
@@ -367,17 +367,23 @@ def build_run_manifest(
     Returns:
         BenchmarkRunManifest: Populated manifest capturing code, model, dataset, and prompt hashes.
     """
-    from resilimind.core.config import settings
+    from src.resilimind.core.config import settings
 
     git_hash = get_git_commit()
     graph_path = PROJECT_ROOT / "src" / "resilimind" / "assets" / "final_resilience_graph.json"
 
     model_name = settings.RESILIMIND_LLM_MODEL
-    model_digest = get_model_digest(model_name, settings.OLLAMA_BASE_URL)
+    base_url = settings.RESILIMIND_LLM_BASE_URL
+    model_digest = (
+        get_model_digest(model_name, base_url)
+        if settings.RESILIMIND_LLM_PROVIDER == "ollama"
+        else ""
+    )
 
     generation_config = {
+        "provider": settings.RESILIMIND_LLM_PROVIDER,
         "temperature": settings.RESILIMIND_LLM_TEMPERATURE,
-        "ollama_base_url": settings.OLLAMA_BASE_URL,
+        "base_url": base_url,
         "routing_confidence_threshold": settings.RESILIMIND_ROUTING_CONFIDENCE_THRESHOLD,
     }
 
@@ -391,7 +397,7 @@ def build_run_manifest(
         generation_config=generation_config,
         prompt_hashes=get_prompt_hashes(),
         evaluation_code_commit=git_hash,
-        judge_model=judge_model,
+        judge_model=judge_model or settings.resolved_eval_model,
         created_at=datetime.now(timezone.utc).isoformat(),
     )
 
