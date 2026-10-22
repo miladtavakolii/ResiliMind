@@ -142,5 +142,112 @@ def inject_custom_css() -> None:
             white-space: pre-line !important;
             line-height: 1.7; /* برای خوانایی بهتر متن‌های فارسی */
         }
+
+        /* Crisis & Safety Banners */
+        .crisis-banner-safe {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin-bottom: 20px;
+            font-size: 0.88rem;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .crisis-banner-safe strong {
+            color: #e2e8f0;
+        }
+        .crisis-banner-alert {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(185, 28, 28, 0.35) 100%);
+            border: 1.5px solid #ef4444;
+            border-radius: 14px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+            color: #fecaca;
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
+            animation: pulse-border 2s infinite;
+        }
+        @keyframes pulse-border {
+            0%, 100% { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+            50% { border-color: #f87171; box-shadow: 0 0 25px rgba(239, 68, 68, 0.5); }
+        }
+
+        /* Prompt Starter Chips */
+        .prompt-chips-wrapper {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin: 15px 0 25px 0;
+        }
+        .prompt-chips-title {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        /* Streamlit Status Widget RTL Fixes */
+        [data-testid="stStatusWidget"] {
+            direction: rtl !important;
+            text-align: right !important;
+            font-family: 'Vazirmatn', sans-serif !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background: rgba(15, 23, 42, 0.6) !important;
+            margin-bottom: 15px !important;
+        }
+        [data-testid="stStatusWidget"] summary {
+            font-family: 'Vazirmatn', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 0.92rem !important;
+        }
+        [data-testid="stStatusWidget"] p {
+            font-size: 0.88rem !important;
+            line-height: 1.6 !important;
+            margin: 4px 0 !important;
+        }
+
+        /* Streamlit Expander RTL Fixes */
+        [data-testid="stExpander"] {
+            direction: rtl !important;
+            text-align: right !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            background: rgba(255, 255, 255, 0.02) !important;
+            margin-top: 10px !important;
+        }
+        [data-testid="stExpander"] summary {
+            font-family: 'Vazirmatn', sans-serif !important;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
+            color: #38bdf8 !important;
+        }
+
+        /* Evidence Cards inside Expander */
+        .evidence-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+        }
+        .evidence-quote {
+            border-right: 3px solid #38bdf8;
+            padding-right: 12px;
+            margin: 8px 0;
+            color: #cbd5e1;
+            font-style: italic;
+            font-size: 0.88rem;
+            background: rgba(14, 165, 233, 0.06);
+            border-radius: 0 6px 6px 0;
+            padding: 6px 12px;
+        }
     </style>
     """, unsafe_allow_html=True)

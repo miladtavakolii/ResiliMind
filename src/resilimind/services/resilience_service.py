@@ -15,7 +15,13 @@ class ResilienceService:
     """
 
     @staticmethod
-    def process_message(app: Any, config: Dict[str, Any], user_input: str, user_id: int) -> ProcessResult:
+    def process_message(
+        app: Any,
+        config: Dict[str, Any],
+        user_input: str,
+        user_id: int,
+        stage_callback: Any = None
+    ) -> ProcessResult:
         """
         Executes the LangGraph workflow pipeline, persists assessments, and builds the result.
 
@@ -24,6 +30,7 @@ class ResilienceService:
             config (Dict[str, Any]): The execution thread configuration.
             user_input (str): The raw text message submitted by the user.
             user_id (int): The unique identifier of the authenticated user.
+            stage_callback (Optional[Callable[[str, Dict[str, Any]], None]]): Optional callback invoked after each graph node completion.
 
         Returns:
             ProcessResult: The decoupled container holding the response, assessments, and final state.
@@ -48,7 +55,13 @@ class ResilienceService:
         logger.debug("[Service] Initial state constructed for user_id=%s.", user_id)
 
         try:
-            final_state: Dict[str, Any] = app.invoke(initial_state, config=config)
+            if stage_callback:
+                for event in app.stream(initial_state, config=config, stream_mode="updates"):
+                    for node_name, updates in event.items():
+                        stage_callback(node_name, updates)
+                final_state = app.get_state(config).values
+            else:
+                final_state = app.invoke(initial_state, config=config)
             logger.debug("[Service] LangGraph workflow invoked successfully.")
         except Exception as e:
             logger.exception("[Service] Workflow execution failed: %s", e)
@@ -122,7 +135,13 @@ class ResilienceService:
 
 
 # Backward-compatible functional wrapper for UI invocation
-def process_user_message(app: Any, config: Dict[str, Any], user_input: str, user_id: int) -> ProcessResult:
+def process_user_message(
+    app: Any,
+    config: Dict[str, Any],
+    user_input: str,
+    user_id: int,
+    stage_callback: Any = None
+) -> ProcessResult:
     """Legacy functional wrapper delegating to ResilienceService."""
     logger.debug("[Service] Invoking legacy process_user_message wrapper.")
-    return ResilienceService.process_message(app, config, user_input, user_id)
+    return ResilienceService.process_message(app, config, user_input, user_id, stage_callback=stage_callback)
