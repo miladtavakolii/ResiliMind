@@ -78,15 +78,24 @@ def inject_custom_css() -> None:
             text-align: right;
         }
 
+        /* Page Container Spacing & Full Width */
+        .block-container {
+            padding-top: 4.2rem !important;
+            padding-bottom: 1.2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            max-width: 100% !important;
+        }
+
         /* Header Accent Banner */
         .main-header {
             background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-            border-radius: 18px;
-            padding: 28px;
+            border-radius: 14px;
+            padding: 12px 18px;
             color: #ffffff;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
             border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
            
         /* Styled Input Fields */
@@ -118,17 +127,27 @@ def inject_custom_css() -> None:
             box-shadow: 0 6px 15px rgba(2, 132, 199, 0.4) !important;
         }
 
-        /* Styled Tabs */
+        /* Styled Tabs - Sticky & Permanently Visible */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
-            background-color: rgba(255, 255, 255, 0.02);
+            background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             padding: 6px;
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 10px;
+            direction: rtl !important;
+            justify-content: flex-start !important;
+            display: flex !important;
+            width: 100% !important;
+            position: sticky !important;
+            top: 3.5rem !important;
+            z-index: 100 !important;
         }
         .stTabs [data-baseweb="tab"] {
             border-radius: 8px !important;
-            padding: 10px 20px !important;
+            padding: 8px 18px !important;
             background-color: transparent;
             border: none !important;
             font-weight: 600 !important;
@@ -143,13 +162,53 @@ def inject_custom_css() -> None:
             line-height: 1.7; /* برای خوانایی بهتر متن‌های فارسی */
         }
 
+        /* Dedicated Chat Scrollable Container & Responsive Viewport Height */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]),
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.prompt-chips-wrapper) {
+            height: calc(100vh - 290px) !important;
+            max-height: calc(100vh - 290px) !important;
+            min-height: 440px !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]) > div,
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.prompt-chips-wrapper) > div {
+            height: 100% !important;
+        }
+
+        /* Sleek Scrollbar */
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow: auto"],
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow-y: auto"] {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(56, 189, 248, 0.35) rgba(15, 23, 42, 0.4);
+            scroll-behavior: smooth;
+            padding-right: 8px !important;
+            padding-left: 8px !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow: auto"]::-webkit-scrollbar,
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow-y: auto"]::-webkit-scrollbar {
+            width: 6px;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow: auto"]::-webkit-scrollbar-track,
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow-y: auto"]::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 4px;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow: auto"]::-webkit-scrollbar-thumb,
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.35);
+            border-radius: 4px;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover,
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.65);
+        }
+
         /* Crisis & Safety Banners */
         .crisis-banner-safe {
             background: rgba(15, 23, 42, 0.7);
             border: 1px solid rgba(56, 189, 248, 0.25);
             border-radius: 12px;
-            padding: 10px 16px;
-            margin-bottom: 20px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
             font-size: 0.88rem;
             color: #94a3b8;
             display: flex;

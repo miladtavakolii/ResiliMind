@@ -179,24 +179,28 @@ def render_chat_interface(app: Any, config: Dict[str, Any]) -> None:
     )
     render_crisis_banner(is_crisis=is_crisis)
 
-    # 2. Render message history with evidence expanders
+    # 2. Retrieve session messages and user message count
     messages = st.session_state.get("messages", [])
     user_message_count = sum(1 for m in messages if m.get("role") == "user")
 
-    for message in messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"].replace("\n", "  \n"))
-            if message.get("role") == "assistant":
-                render_evidence_expander(
-                    signals=message.get("signals", []),
-                    assessments=message.get("assessments", [])
-                )
+    # 3. Dedicated scrollable container for chat messages
+    chat_container = st.container(height=580, border=False)
 
-    # 3. Quick Conversation Starter Chips (when no user message has been sent yet)
-    if user_message_count == 0:
-        render_prompt_chips()
+    with chat_container:
+        for message in messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"].replace("\n", "  \n"))
+                if message.get("role") == "assistant":
+                    render_evidence_expander(
+                        signals=message.get("signals", []),
+                        assessments=message.get("assessments", [])
+                    )
 
-    # 4. Input handling: check chat input or queued prompt chip
+        # Quick Conversation Starter Chips (when no user message has been sent yet)
+        if user_message_count == 0:
+            render_prompt_chips()
+
+    # 3. Input handling: check chat input or queued prompt chip
     chat_box_input = st.chat_input("پیام خود را اینجا بنویسید...")
     queued_input = st.session_state.pop("queued_user_input", None)
     user_input = queued_input or chat_box_input
@@ -204,97 +208,98 @@ def render_chat_interface(app: Any, config: Dict[str, Any]) -> None:
     if user_input:
         logger.info("[UI-Chat] Received user input: '%s...' (length: %s)", user_input[:30], len(user_input))
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-        with st.chat_message("assistant"):
-            # 1. Live Reasoning Trace using st.status
-            status_box = st.status("🧠 در حال پردازش پیام و تحلیل تاب‌آوری...", expanded=True)
-            status_box.write("⏳ در حال راه‌اندازی فرآیند ارزیابی هوشمند...")
+            with st.chat_message("assistant"):
+                # 1. Live Reasoning Trace using st.status
+                status_box = st.status("🧠 در حال پردازش پیام و تحلیل تاب‌آوری...", expanded=True)
+                status_box.write("⏳ در حال راه‌اندازی فرآیند ارزیابی هوشمند...")
 
-            def stage_callback(node_name: str, updates: Dict[str, Any]) -> None:
-                """Callback triggered as each workflow node completes execution."""
-                if node_name == "safety_classifier":
-                    status = updates.get("safety_status", "SAFE")
-                    if status == "HIGH_RISK":
-                        status_box.write("🚨 **بررسی ایمنی:** پیام دارای نشانه‌های بحران ارزیابی شد؛ ارجاع به پروتکل اورژانس.")
-                        status_box.update(label="🚨 هشدار ایمنی بحرانی", state="error", expanded=True)
-                    elif status == "SAFE":
-                        status_box.write("✅ **بررسی ایمنی و خطرات فوری:** پیام فاقد مخاطره ارزیابی شد (امن).")
-                    else:
-                        status_box.write("⚠️ **بررسی ایمنی:** وضعیت ایمنی در دسترس نیست.")
-                elif node_name == "extractor":
-                    nodes = updates.get("active_nodes", [])
-                    if nodes:
-                        status_box.write(f"🔍 **استخراج سیگنال‌ها و شواهد متنی:** {len(nodes)} بعد مفهومی تاب‌آوری شناسایی و دسته‌بندی شد.")
-                    else:
-                        status_box.write("🔍 **استخراج سیگنال‌ها:** سیگنال مستقیمی در پیام اولیه یافت نشد.")
-                elif node_name == "retriever":
-                    status_box.write("🕸️ **بازیابی الگوها از گراف دانش:** نودها، محدوده‌ها و روابط علی از گراف استخراج شدند.")
-                elif node_name == "assessor":
-                    assessments = updates.get("assessments", [])
-                    status_box.write(f"📊 **ارزیابی ابعاد چهارگانه تاب‌آوری:** روبیک‌های ۴ گانه (شدت، تکرار، کارکرد، مقابله) محاسبه شدند.")
-                elif node_name == "advisor":
-                    status_box.write("💬 **تدوین پاسخ مشاور:** توصیه‌های روان‌شناختی متناسب با گراف دانش و تاریخچه فرمول‌بندی شدند.")
-                elif node_name == "questioner":
-                    status_box.write("💬 **طرح پرسش شفاف‌ساز:** جهت شفافیت بیشتر وضعیت، پرسشی همدلانه تنظیم شد.")
-                elif node_name == "emergency_response":
-                    status_box.write("🚨 **پاسخ اورژانس:** راهنمای تماس فوری و مراکز بحران آماده‌سازی شد.")
-                elif node_name == "service_unavailable":
-                    status_box.write("⚠️ **وضعیت سرویس:** سیستم به صورت موقت امکان ارائه پاسخ کامل ندارد.")
+                def stage_callback(node_name: str, updates: Dict[str, Any]) -> None:
+                    """Callback triggered as each workflow node completes execution."""
+                    if node_name == "safety_classifier":
+                        status = updates.get("safety_status", "SAFE")
+                        if status == "HIGH_RISK":
+                            status_box.write("🚨 **بررسی ایمنی:** پیام دارای نشانه‌های بحران ارزیابی شد؛ ارجاع به پروتکل اورژانس.")
+                            status_box.update(label="🚨 هشدار ایمنی بحرانی", state="error", expanded=True)
+                        elif status == "SAFE":
+                            status_box.write("✅ **بررسی ایمنی و خطرات فوری:** پیام فاقد مخاطره ارزیابی شد (امن).")
+                        else:
+                            status_box.write("⚠️ **بررسی ایمنی:** وضعیت ایمنی در دسترس نیست.")
+                    elif node_name == "extractor":
+                        nodes = updates.get("active_nodes", [])
+                        if nodes:
+                            status_box.write(f"🔍 **استخراج سیگنال‌ها و شواهد متنی:** {len(nodes)} بعد مفهومی تاب‌آوری شناسایی و دسته‌بندی شد.")
+                        else:
+                            status_box.write("🔍 **استخراج سیگنال‌ها:** سیگنال مستقیمی در پیام اولیه یافت نشد.")
+                    elif node_name == "retriever":
+                        status_box.write("🕸️ **بازیابی الگوها از گراف دانش:** نودها، محدوده‌ها و روابط علی از گراف استخراج شدند.")
+                    elif node_name == "assessor":
+                        assessments = updates.get("assessments", [])
+                        status_box.write(f"📊 **ارزیابی ابعاد چهارگانه تاب‌آوری:** روبیک‌های ۴ گانه (شدت، تکرار، کارکرد، مقابله) محاسبه شدند.")
+                    elif node_name == "advisor":
+                        status_box.write("💬 **تدوین پاسخ مشاور:** توصیه‌های روان‌شناختی متناسب با گراف دانش و تاریخچه فرمول‌بندی شدند.")
+                    elif node_name == "questioner":
+                        status_box.write("💬 **طرح پرسش شفاف‌ساز:** جهت شفافیت بیشتر وضعیت، پرسشی همدلانه تنظیم شد.")
+                    elif node_name == "emergency_response":
+                        status_box.write("🚨 **پاسخ اورژانس:** راهنمای تماس فوری و مراکز بحران آماده‌سازی شد.")
+                    elif node_name == "service_unavailable":
+                        status_box.write("⚠️ **وضعیت سرویس:** سیستم به صورت موقت امکان ارائه پاسخ کامل ندارد.")
 
-            # 2. Response placeholder OUTSIDE the status box (in main chat flow)
-            message_placeholder = st.empty()
-            stream_handler = StreamlitStreamHandler(message_placeholder)
+                # 2. Response placeholder OUTSIDE the status box (in main chat flow)
+                message_placeholder = st.empty()
+                stream_handler = StreamlitStreamHandler(message_placeholder)
 
-            if "configurable" not in config:
-                config["configurable"] = {}
-            config["configurable"]["stream_handler"] = stream_handler
+                if "configurable" not in config:
+                    config["configurable"] = {}
+                config["configurable"]["stream_handler"] = stream_handler
 
-            logger.debug("[UI-Chat] Invoking process_user_message service layer with live reasoning trace...")
+                logger.debug("[UI-Chat] Invoking process_user_message service layer with live reasoning trace...")
 
-            result = process_user_message(
-                app=app,
-                config=config,
-                user_input=user_input,
-                user_id=st.session_state.user_id,
-                stage_callback=stage_callback
-            )
-            st.session_state.last_state = result.state
+                result = process_user_message(
+                    app=app,
+                    config=config,
+                    user_input=user_input,
+                    user_id=st.session_state.user_id,
+                    stage_callback=stage_callback
+                )
+                st.session_state.last_state = result.state
 
-            response_text = result.final_response
-            if not response_text:
-                response_text = result.state.get("final_response", "")
+                response_text = result.final_response
+                if not response_text:
+                    response_text = result.state.get("final_response", "")
 
-            if not response_text:
-                response_text = "⚠️ **خطا در سیستم:** فرآیند تحلیل انجام شد اما پاسخی تولید نگردید."
-                logger.error("[UI-Chat] Empty response text. Graph State Dump: %s", result.state.keys())
+                if not response_text:
+                    response_text = "⚠️ **خطا در سیستم:** فرآیند تحلیل انجام شد اما پاسخی تولید نگردید."
+                    logger.error("[UI-Chat] Empty response text. Graph State Dump: %s", result.state.keys())
 
-            # Finalize status box display
-            is_result_high_risk = result.state.get("safety_status") == "HIGH_RISK"
-            if is_result_high_risk:
-                status_box.update(label="🚨 پروتکل ایمنی و ارجاع بحران فعال شد", state="error", expanded=False)
-            else:
-                status_box.update(label="✨ تحلیل چندبعدی و تدوین پاسخ کامل شد", state="complete", expanded=False)
+                # Finalize status box display
+                is_result_high_risk = result.state.get("safety_status") == "HIGH_RISK"
+                if is_result_high_risk:
+                    status_box.update(label="🚨 پروتکل ایمنی و ارجاع بحران فعال شد", state="error", expanded=False)
+                else:
+                    status_box.update(label="✨ تحلیل چندبعدی و تدوین پاسخ کامل شد", state="complete", expanded=False)
 
-            # Render final formatted text in chat flow
-            formatted_response = response_text.replace("\n", "  \n")
-            message_placeholder.markdown(formatted_response)
+                # Render final formatted text in chat flow
+                formatted_response = response_text.replace("\n", "  \n")
+                message_placeholder.markdown(formatted_response)
 
-            active_signals = result.state.get("active_signals", [])
-            assessments = result.new_assessments or result.state.get("assessments", [])
+                active_signals = result.state.get("active_signals", [])
+                assessments = result.new_assessments or result.state.get("assessments", [])
 
-            # 3. Render evidence expander directly under the assistant response (OUTSIDE status box)
-            render_evidence_expander(signals=active_signals, assessments=assessments)
+                # 3. Render evidence expander directly under the assistant response (OUTSIDE status box)
+                render_evidence_expander(signals=active_signals, assessments=assessments)
 
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response_text,
-                "signals": active_signals,
-                "assessments": assessments,
-                "safety_status": result.state.get("safety_status", "SAFE")
-            })
-            logger.info("[UI-Chat] Assistant streaming and evidence logging completed.")
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response_text,
+                    "signals": active_signals,
+                    "assessments": assessments,
+                    "safety_status": result.state.get("safety_status", "SAFE")
+                })
+                logger.info("[UI-Chat] Assistant streaming and evidence logging completed.")
 
-            if is_result_high_risk:
-                st.rerun()
+                if is_result_high_risk:
+                    st.rerun()
