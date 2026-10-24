@@ -19,60 +19,122 @@ def init_session_state() -> None:
 
 
 def render_auth_page() -> None:
-    """Renders the login and registration interface."""
-    logger.info("[UI-Auth] Rendering authentication page...")
-    st.markdown("<div style='margin-top: 10vh;'></div>", unsafe_allow_html=True)
+    """Renders a modern, glassmorphic login and registration interface."""
+    logger.info("[UI-Auth] Rendering modern authentication portal...")
     
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
+    # Hide empty sidebar and center layout on authentication screen
+    st.markdown("""
+    <style>
+        /* Hide empty sidebar on login/auth page */
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        /* Clean vertical spacing */
+        .block-container {
+            max-width: 960px !important;
+            padding-top: 5vh !important;
+            padding-bottom: 3rem !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    _, center_col, _ = st.columns([1, 1.6, 1])
+    
+    with center_col:
+        # Header & Branding Badge
         st.markdown("""
-        <div style="text-align: center; margin-bottom: 2.5rem;">
-            <div style="font-size: 3.5rem; margin-bottom: 0.5rem; animation: float 3s ease-in-out infinite;">🌱</div>
-            <h1 style="font-weight: 700; color: #f8fafc; font-size: 2.2rem; margin-bottom: 0.5rem;">ResiliMind</h1>
-            <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0;">پلتفرم هوشمند مشاوره و ارزیابی تاب‌آوری</p>
+        <div class="auth-card-header">
+            <div class="auth-logo-badge">🌱</div>
+            <h1 class="auth-title">ResiliMind</h1>
+            <p class="auth-subtitle">سامانه هوشمند پایش و ارزیابی چندبعدی تاب‌آوری روان‌شناختی</p>
+            <div class="auth-badges-row">
+                <span class="auth-badge">🧠 مدل تحلیلی تاب‌آوری</span>
+                <span class="auth-badge">🕸️ گراف دانش پویا</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        tab1, tab2 = st.tabs(["🔑 ورود به حساب", "📝 ثبت‌نام جدید"])
-        
-        with tab1:
-            st.markdown("<br>", unsafe_allow_html=True)
-            login_user: str = st.text_input("👤 نام کاربری", key="log_user")
-            login_pass: str = st.text_input("🔒 رمز عبور", type="password", key="log_pass")
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.button("ورود به سامانه", width="stretch"):
+
+        tab_login, tab_register = st.tabs(["🔑 ورود به سامانه", "📝 ثبت‌نام کاربر جدید"])
+
+        # Tab 1: Login
+        with tab_login:
+            st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+            with st.form("login_form", clear_on_submit=False):
+                login_user = st.text_input(
+                    "👤 نام کاربری",
+                    placeholder="نام کاربری خود را وارد کنید...",
+                    key="log_user"
+                )
+                login_pass = st.text_input(
+                    "🔒 رمز عبور",
+                    type="password",
+                    placeholder="رمز عبور...",
+                    key="log_pass"
+                )
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                login_submit = st.form_submit_button("ورود به سامانه 🚀", use_container_width=True)
+
+            if login_submit:
                 logger.debug("[UI-Auth] Login attempt initiated for user: %s", login_user)
-                if login_user and login_pass:
-                    user_id: Optional[int] = authenticate_user(login_user, login_pass)
+                clean_user = login_user.strip()
+                clean_pass = login_pass.strip()
+                if clean_user and clean_pass:
+                    user_id: Optional[int] = authenticate_user(clean_user, clean_pass)
                     if user_id:
-                        logger.info("[UI-Auth] User '%s' authenticated successfully (id=%s).", login_user, user_id)
+                        logger.info("[UI-Auth] User '%s' authenticated successfully (id=%s).", clean_user, user_id)
                         st.session_state.user_id = user_id
-                        st.session_state.username = login_user
-                        st.success("ورود موفقیت‌آمیز بود! در حال انتقال...")
+                        st.session_state.username = clean_user
+                        st.success("ورود موفقیت‌آمیز بود! در حال انتقال به سامانه...")
                         st.rerun()
                     else:
-                        logger.warning("[UI-Auth] Failed login attempt for user: %s", login_user)
+                        logger.warning("[UI-Auth] Failed login attempt for user: %s", clean_user)
                         st.error("نام کاربری یا رمز عبور اشتباه است.")
                 else:
                     logger.warning("[UI-Auth] Login attempted with empty fields.")
                     st.warning("لطفاً همه فیلدها را پر کنید.")
-                    
-        with tab2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            reg_user: str = st.text_input("👤 نام کاربری دلخواه", key="reg_user")
-            reg_pass: str = st.text_input("🔒 رمز عبور", type="password", key="reg_pass")
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.button("ایجاد حساب کاربری", width="stretch"):
+
+        # Tab 2: Register
+        with tab_register:
+            st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+            with st.form("register_form", clear_on_submit=False):
+                reg_user = st.text_input(
+                    "👤 نام کاربری دلخواه",
+                    placeholder="حداقل ۳ نویسه (مثال: mohammad)",
+                    key="reg_user"
+                )
+                reg_pass = st.text_input(
+                    "🔒 رمز عبور",
+                    type="password",
+                    placeholder="حداقل ۴ نویسه ایمن...",
+                    key="reg_pass"
+                )
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                reg_submit = st.form_submit_button("ایجاد حساب کاربری ✨", use_container_width=True)
+
+            if reg_submit:
                 logger.debug("[UI-Auth] Registration attempt initiated for user: %s", reg_user)
-                if reg_user and reg_pass:
-                    if register_user(reg_user, reg_pass):
-                        logger.info("[UI-Auth] User '%s' registered successfully.", reg_user)
-                        st.success("حساب کاربری با موفقیت ایجاد شد! اکنون می‌توانید از تب ورود استفاده کنید.")
+                clean_reg_user = reg_user.strip()
+                clean_reg_pass = reg_pass.strip()
+                if clean_reg_user and clean_reg_pass:
+                    if len(clean_reg_user) < 3:
+                        st.warning("نام کاربری باید حداقل ۳ کاراکتر باشد.")
+                    elif len(clean_reg_pass) < 4:
+                        st.warning("رمز عبور باید حداقل ۴ کاراکتر باشد.")
+                    elif register_user(clean_reg_user, clean_reg_pass):
+                        logger.info("[UI-Auth] User '%s' registered successfully.", clean_reg_user)
+                        st.success("حساب کاربری با موفقیت ساخته شد! اکنون از تب «ورود به سامانه» وارد شوید.")
                     else:
-                        logger.warning("[UI-Auth] Registration failed: Username '%s' already exists.", reg_user)
+                        logger.warning("[UI-Auth] Registration failed: Username '%s' already exists.", clean_reg_user)
                         st.error("این نام کاربری قبلاً ثبت شده است. لطفاً نام دیگری انتخاب کنید.")
                 else:
                     logger.warning("[UI-Auth] Registration attempted with empty fields.")
                     st.warning("لطفاً همه فیلدها را پر کنید.")
+
+        # Footer Disclaimer & Helpline
+        st.markdown("""
+        <div class="auth-footer-disclaimer">
+            🛡️ سامانه پژوهشی دانشگاهی ResiliMind • حریم خصوصی و امنیت داده‌های مکالمه محفوظ است.<br>
+            در شرایط بحرانی فوری، با اورژانس اجتماعی (۱۲۳) یا صدای مشاور (۱۴۸۰) تماس بگیرید.
+        </div>
+        """, unsafe_allow_html=True)

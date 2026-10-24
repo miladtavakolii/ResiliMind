@@ -249,5 +249,87 @@ def inject_custom_css() -> None:
             border-radius: 0 6px 6px 0;
             padding: 6px 12px;
         }
+
+        /* ----------------------------------------------------
+           Hide Streamlit default "Press Enter to apply" hint
+           ---------------------------------------------------- */
+        div[data-testid="InputInstructions"],
+        div[data-testid="stTextInputInstructions"],
+        .stTextInput small,
+        [data-testid="stTextInput"] [data-testid="InputInstructions"] {
+            display: none !important;
+        }
+
+        /* ----------------------------------------------------
+           Modern Authentication Portal & Glassmorphic Styling
+           ---------------------------------------------------- */
+        .auth-card-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-logo-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 72px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(14, 165, 233, 0.05) 100%);
+            border: 1.5px solid rgba(56, 189, 248, 0.4);
+            border-radius: 22px;
+            font-size: 2.3rem;
+            margin-bottom: 14px;
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.25);
+            animation: pulse-logo 3.5s ease-in-out infinite;
+        }
+        @keyframes pulse-logo {
+            0%, 100% { transform: translateY(0); box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); }
+            50% { transform: translateY(-4px); box-shadow: 0 0 35px rgba(56, 189, 248, 0.4); }
+        }
+        .auth-title {
+            font-weight: 800;
+            color: #f8fafc;
+            font-size: 2.2rem;
+            margin: 0 0 6px 0;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .auth-subtitle {
+            color: #94a3b8;
+            font-size: 0.96rem;
+            margin-top: 0;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        .auth-badges-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .auth-badge {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+        }
+        .auth-footer-disclaimer {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-top: 28px;
+            line-height: 1.6;
+        }
+
+        /* Form submit button hover & sizing */
+        div[data-testid="stForm"] {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
     </style>
     """, unsafe_allow_html=True)
