@@ -99,6 +99,7 @@ def render_sidebar_dashboard() -> None:
                             st.markdown(f"🧭 **جهت‌گیری:** {polarity}")
                             if evidence:
                                 st.caption(f'💬 **شاهد:** "{evidence}"')
+                    st.caption("🕸️ *نودهای شناسایی‌شده در تب **«کاوشگر تعاملی گراف دانش»** هایلایت شده‌اند.*")
                 else:
                     st.caption("سیگنال مستقیمی در آخرین پیام شناسایی نشد.")
 

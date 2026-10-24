@@ -142,6 +142,8 @@ def render_evidence_expander(signals: List[Dict[str, Any]], assessments: List[Di
                     if reasoning:
                         st.markdown(f'<div class="evidence-quote">🧠 <strong>استدلال ارزیاب:</strong> {reasoning}</div>', unsafe_allow_html=True)
 
+        st.caption("💡 *برای مشاهده اثرات متقابل و ارتباط این مفاهیم با سایر حوزه‌ها، تب **«🕸️ کاوشگر تعاملی گراف دانش»** را بررسی کنید.*")
+
 
 class StreamlitStreamHandler:
     """Handles real-time streaming tokens from the LLM into a designated placeholder."""

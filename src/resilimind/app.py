@@ -8,6 +8,7 @@ from resilimind.ui.styles import inject_custom_css
 from resilimind.ui.auth import init_session_state, render_auth_page
 from resilimind.ui.dashboard import render_sidebar_dashboard
 from resilimind.ui.chat import render_chat_interface
+from resilimind.ui.graph_viewer import render_knowledge_graph_view
 from resilimind.services.memory_service import sync_chat_history
 from resilimind.core.config import settings
 
@@ -72,7 +73,18 @@ logger.debug("[Main] Synchronizing chat history with graph state...")
 sync_chat_history(current_graph_state)
 
 # 4. Render Main Interface
-logger.info("[Main] Rendering main application interface (sidebar & chat)...")
+logger.info("[Main] Rendering main application interface (sidebar & tabs)...")
 render_sidebar_dashboard()
-render_chat_interface(app, config)
+
+tab_chat, tab_graph = st.tabs([
+    "💬 اتاق گفت‌وگو و مشاوره",
+    "🕸️ کاوشگر تعاملی گراف دانش"
+])
+
+with tab_chat:
+    render_chat_interface(app, config)
+
+with tab_graph:
+    render_knowledge_graph_view()
+
 logger.debug("[Main] Main application interface successfully rendered.")
