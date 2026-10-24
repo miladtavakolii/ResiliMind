@@ -545,13 +545,17 @@ def render_cross_domain_ripples_view(active_nodes: List[str]) -> None:
 
 def render_knowledge_graph_view() -> None:
     """Renders the executive, completely redesigned Knowledge Graph view."""
-    # Top Header
+    # Top Header (Compact & Crisp)
     st.markdown("""
-    <div class="main-header" style="background: linear-gradient(135deg, #091e3a 0%, #172554 100%);">
-        <h2 style="margin:0; font-weight:700;">🌱 اطلس شبکه گراف دانش تاب‌آوری (Resilience Knowledge Atlas)</h2>
-        <p style="margin:6px 0 0 0; opacity:0.85; font-size:0.95rem;">
-            شبکه علی ۱۳ نودی و ۱۵ یال بین‌حوزه‌ای در ۶ بعد اصلی؛ مدل‌سازی چندبعدی پدیده‌های روانی بر مبنای گراف دانش
-        </p>
+    <div class="main-header" style="background: linear-gradient(135deg, #091e3a 0%, #172554 100%); padding: 12px 18px; margin-bottom: 8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="margin:0; font-weight:700; color:#f8fafc; font-size:1.15rem;">
+                🌱 اطلس شبکه گراف دانش تاب‌آوری (Resilience Knowledge Atlas)
+            </h3>
+            <span style="font-size:0.78rem; padding:3px 10px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); border-radius:8px; font-weight:700;">
+                ۱۳ نود • ۱۵ یال علی
+            </span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -561,11 +565,11 @@ def render_knowledge_graph_view() -> None:
     assessments: List[Dict[str, Any]] = last_state.get("assessments", [])
     assessments_by_node = {a.get("node_id", ""): a for a in assessments}
 
-    # Active Session Alert Banner
+    # Active Session Alert Banner (Compact)
     if active_nodes:
         st.markdown(
-            f"<div style='margin-bottom:20px; padding:12px 18px; background:rgba(56,189,248,0.12); "
-            f"border:1.5px solid #38bdf8; border-radius:12px; color:#f8fafc; font-size:0.95rem;'>"
+            f"<div style='margin-bottom:10px; padding:8px 14px; background:rgba(56,189,248,0.12); "
+            f"border:1.5px solid #38bdf8; border-radius:12px; color:#f8fafc; font-size:0.88rem;'>"
             f"⚡ <strong>وضعیت فعال نشست جاری:</strong> <code>{len(active_nodes)} بعد تاب‌آوری</code> در پیام اخیر شما شناسایی شد: "
             f"<span style='color:#38bdf8; font-weight:700;'>{', '.join(active_nodes)}</span>"
             f"</div>",
@@ -573,9 +577,9 @@ def render_knowledge_graph_view() -> None:
         )
     else:
         st.markdown(
-            "<div style='margin-bottom:20px; padding:10px 16px; background:rgba(255,255,255,0.03); "
-            "border:1px solid rgba(255,255,255,0.08); border-radius:12px; color:#94a3b8; font-size:0.9rem;'>"
-            "ℹ️ <strong>حالت پایه:</strong> تمام ۱۳ نود و پیوندهای علی در وضعیت پیش‌فرض نمایش داده شده‌اند. با ارسال پیام در تب گفتگو، نودهای مرتبط به صورت زنده هایلایت می‌شوند."
+            "<div style='margin-bottom:10px; padding:8px 14px; background:rgba(255,255,255,0.03); "
+            "border:1px solid rgba(255,255,255,0.08); border-radius:12px; color:#94a3b8; font-size:0.88rem;'>"
+            "ℹ️ <strong>حالت پایه:</strong> تمام ۱۳ نود و پیوندهای علی در وضعیت پیش‌فرض نمایش داده شده‌اند. با ارسال پیام در تب گفتگو، نودهای مرتبط هایلایت می‌شوند."
             "</div>",
             unsafe_allow_html=True
         )
@@ -588,28 +592,31 @@ def render_knowledge_graph_view() -> None:
     ])
 
     with view_tab1:
-        col_ctrl1, col_ctrl2 = st.columns([1.5, 2.5])
-        domain_options = ["همه حوزه‌ها"] + [meta["name_fa"] for meta in DOMAIN_CONFIG.values()]
-        with col_ctrl1:
-            selected_domain = st.selectbox("🎯 فیلتر نمایش حوزه:", domain_options, index=0)
-        with col_ctrl2:
-            st.markdown(
-                "<div style='padding-top:25px; font-size:0.85rem; color:#94a3b8;'>"
-                "💡 با نشانگر ماوس روی هر نود بروید تا کارت خلاصه ارزیابی و تعریف آن را به زبان فارسی مشاهده کنید."
-                "</div>",
-                unsafe_allow_html=True
-            )
+        with st.container(height=660, border=False):
+            col_ctrl1, col_ctrl2 = st.columns([1.5, 2.5])
+            domain_options = ["همه حوزه‌ها"] + [meta["name_fa"] for meta in DOMAIN_CONFIG.values()]
+            with col_ctrl1:
+                selected_domain = st.selectbox("🎯 فیلتر نمایش حوزه:", domain_options, index=0)
+            with col_ctrl2:
+                st.markdown(
+                    "<div style='padding-top:25px; font-size:0.85rem; color:#94a3b8;'>"
+                    "💡 با نشانگر ماوس روی هر نود بروید تا کارت خلاصه ارزیابی و تعریف آن را به زبان فارسی مشاهده کنید."
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
-        # Plotly Network Map
-        fig = build_resilience_network_figure(
-            active_nodes=active_nodes,
-            assessments_by_node=assessments_by_node,
-            domain_filter=selected_domain
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            # Plotly Network Map
+            fig = build_resilience_network_figure(
+                active_nodes=active_nodes,
+                assessments_by_node=assessments_by_node,
+                domain_filter=selected_domain
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with view_tab2:
-        render_domain_matrix_view(active_nodes, assessments_by_node)
+        with st.container(height=660, border=False):
+            render_domain_matrix_view(active_nodes, assessments_by_node)
 
     with view_tab3:
-        render_cross_domain_ripples_view(active_nodes)
+        with st.container(height=660, border=False):
+            render_cross_domain_ripples_view(active_nodes)
